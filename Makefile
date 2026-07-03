@@ -5,10 +5,18 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
-.PHONY: fmt test
+BIN_DIR := bin
+BINARY := $(BIN_DIR)/dfmicro
+
+.PHONY: vet fmt build
+
+vet:
+	go vet ./...
 
 fmt:
 	go fmt ./...
 
-test:
-	go test ./...
+build: fmt vet
+	mkdir -p $(BIN_DIR)
+	go build -o $(BINARY) ./cmd/dfmicro
+
