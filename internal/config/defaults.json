@@ -1,0 +1,7 @@
+{
+  "image": "microshift-okd",
+  "kubeconfig": "",
+  "lvmVolSize": "10G",
+  "apiServerPort": 6443,
+  "exposeKubeAPI": true
+}
