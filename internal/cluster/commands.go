@@ -45,6 +45,10 @@ func createFlags() []cli.Flag {
 			Name:  "no-expose-kubeapi",
 			Usage: "Disable exposing the Kubernetes API server on the host",
 		},
+		&cli.Float32Flag{
+			Name:  "overprovision-ratio",
+			Usage: "TopoLVM thin pool overprovision ratio",
+		},
 	}
 }
 

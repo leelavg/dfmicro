@@ -42,6 +42,9 @@ func NewConfigFromCommand(cmd *cli.Command) (Config, error) {
 	if cmd.IsSet("no-expose-kubeapi") {
 		cfg.ExposeKubeAPI = !cmd.Bool("no-expose-kubeapi")
 	}
+	if cmd.IsSet("overprovision-ratio") {
+		cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
+	}
 
 	return cfg, nil
 }
