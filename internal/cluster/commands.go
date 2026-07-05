@@ -120,6 +120,25 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 					return printClusterConfig(cmd.String("name"))
 				},
 			},
+			{
+				Name:  "exec",
+				Usage: "Execute a shell in a running container",
+				Flags: []cli.Flag{
+					nameFlag(),
+					&cli.StringFlag{
+						Name:  "container",
+						Usage: "Container name (defaults to first running container)",
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					cfg, err := readClusterConfig(cmd.String("name"))
+					if err != nil {
+						return err
+					}
+					manager := NewManager(cfg, logger, runner)
+					return manager.Exec(ctx, cmd.String("container"))
+				},
+			},
 		},
 	}
 }
