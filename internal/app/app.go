@@ -9,9 +9,29 @@ import (
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/perms"
 
 	"github.com/urfave/cli/v3"
 )
+
+func configCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "config",
+		Usage: "Print top-level embedded config",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			cfg := rootconfig.Load()
+
+			data, err := json.MarshalIndent(cfg, "", "  ")
+			if err != nil {
+				return err
+			}
+			data = append(data, '\n')
+
+			_, err = os.Stdout.Write(data)
+			return err
+		},
+	}
+}
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
@@ -21,23 +41,9 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			return cli.ShowAppHelp(cmd)
 		},
 		Commands: []*cli.Command{
-			{
-				Name:  "config",
-				Usage: "Print top-level embedded config",
-				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg := rootconfig.Load()
-
-					data, err := json.MarshalIndent(cfg, "", "  ")
-					if err != nil {
-						return err
-					}
-					data = append(data, '\n')
-
-					_, err = os.Stdout.Write(data)
-					return err
-				},
-			},
+			configCommand(),
 			cluster.Command(logger, runner),
+			perms.Command(logger, runner),
 		},
 	}
 }

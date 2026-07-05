@@ -20,21 +20,29 @@ import (
 
 var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
 var runPodmanCommand func(context.Context, execx.Runner, ...string) (execx.Result, error)
+var runPodmanInteractive func(context.Context, execx.Runner, ...string) error
+
+func checkMacOSRootful() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
+	result, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to inspect podman machine (is podman machine running?): %v\n", err)
+		os.Exit(1)
+	}
+
+	if strings.TrimSpace(string(result)) != "true" {
+		fmt.Fprintln(os.Stderr, "Error: podman machine must be running in rootful mode")
+		fmt.Fprintln(os.Stderr, "Please recreate with: podman machine init --rootful")
+		os.Exit(1)
+	}
+}
 
 func init() {
 	if runtime.GOOS == "darwin" {
-		result, err := exec.Command("podman", "machine", "inspect", "--format", "{{.Rootful}}").Output()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to inspect podman machine (is podman machine running?): %v\n", err)
-			os.Exit(1)
-		}
-
-		rootful := strings.TrimSpace(string(result))
-		if rootful != "true" {
-			fmt.Fprintln(os.Stderr, "Error: podman machine must be running in rootful mode")
-			fmt.Fprintln(os.Stderr, "Please recreate with: podman machine init --rootful")
-			os.Exit(1)
-		}
+		checkMacOSRootful()
 
 		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
 			newArgs := append([]string{"machine", "ssh", "sudo", cmd}, args...)
@@ -43,12 +51,19 @@ func init() {
 		runPodmanCommand = func(ctx context.Context, runner execx.Runner, args ...string) (execx.Result, error) {
 			return execx.Run(ctx, runner, "podman", args...)
 		}
+		runPodmanInteractive = func(ctx context.Context, runner execx.Runner, args ...string) error {
+			return runner.RunInteractive(ctx, "podman", args...)
+		}
 	} else {
 		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
 			return execx.RunSudo(ctx, runner, cmd, args...)
 		}
 		runPodmanCommand = func(ctx context.Context, runner execx.Runner, args ...string) (execx.Result, error) {
 			return execx.RunSudo(ctx, runner, "podman", args...)
+		}
+		runPodmanInteractive = func(ctx context.Context, runner execx.Runner, args ...string) error {
+			sudoArgs := append([]string{"podman"}, args...)
+			return runner.RunInteractive(ctx, "sudo", sudoArgs...)
 		}
 	}
 }
@@ -71,7 +86,9 @@ data:
 `
 
 type podmanContainer struct {
+	ID     string            `json:"Id"`
 	Names  []string          `json:"Names"`
+	State  string            `json:"State"`
 	Labels map[string]string `json:"Labels"`
 }
 
@@ -667,4 +684,56 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 	}
 
 	return nil
+}
+
+func (m *Manager) Exec(ctx context.Context, containerName string) error {
+	result, err := runPodmanCommand(ctx, m.runner, "ps", "-a", "--filter", "label=part-of="+m.cfg.Name, "--format=json")
+	if err != nil {
+		return err
+	}
+
+	var containers []podmanContainer
+	if err := json.Unmarshal([]byte(result.Stdout), &containers); err != nil {
+		return fmt.Errorf("parse podman ps json: %w", err)
+	}
+
+	var targetContainer string
+	if containerName != "" {
+		// Use specified container
+		found := false
+		for _, c := range containers {
+			for _, name := range c.Names {
+				if name == containerName {
+					if c.State != "running" {
+						return fmt.Errorf("container %s is not running (state: %s)", containerName, c.State)
+					}
+					targetContainer = name
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("container %s not found in cluster %s", containerName, m.cfg.Name)
+		}
+	} else {
+		// Use first running container
+		for _, c := range containers {
+			if c.State == "running" && len(c.Names) > 0 {
+				targetContainer = c.Names[0]
+				break
+			}
+		}
+		if targetContainer == "" {
+			return fmt.Errorf("no running containers found in cluster %s", m.cfg.Name)
+		}
+	}
+
+	m.logger.Info("executing shell in container", "container", targetContainer)
+
+	args := []string{"exec", "-it", targetContainer, "sh"}
+	return runPodmanInteractive(ctx, m.runner, args...)
 }

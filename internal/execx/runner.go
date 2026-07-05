@@ -3,6 +3,7 @@ package execx
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -14,6 +15,7 @@ type Result struct {
 
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (Result, error)
+	RunInteractive(ctx context.Context, name string, args ...string) error
 }
 
 type CommandError struct {
@@ -82,4 +84,12 @@ func Run(ctx context.Context, runner Runner, name string, args ...string) (Resul
 func RunSudo(ctx context.Context, runner Runner, name string, args ...string) (Result, error) {
 	sudoArgs := append([]string{name}, args...)
 	return runner.Run(ctx, "sudo", sudoArgs...)
+}
+
+func (OSRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

@@ -78,7 +78,17 @@ func readClusterConfig(name string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return readConfigFile(path)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
 func writeClusterConfig(cfg Config) error {
@@ -98,19 +108,6 @@ func writeClusterConfig(cfg Config) error {
 	data = append(data, '\n')
 
 	return os.WriteFile(path, data, 0o644)
-}
-
-func readConfigFile(path string) (Config, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
 }
 
 func printClusterConfig(name string) error {
