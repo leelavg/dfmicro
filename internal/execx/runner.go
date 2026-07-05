@@ -75,6 +75,10 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, e
 	return result, nil
 }
 
+func Run(ctx context.Context, runner Runner, name string, args ...string) (Result, error) {
+	return runner.Run(ctx, name, args...)
+}
+
 func RunSudo(ctx context.Context, runner Runner, name string, args ...string) (Result, error) {
 	sudoArgs := append([]string{name}, args...)
 	return runner.Run(ctx, "sudo", sudoArgs...)
