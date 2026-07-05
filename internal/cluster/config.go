@@ -24,7 +24,7 @@ type Config struct {
 	VGName                string `json:"vgName,omitempty"`
 }
 
-func NewConfigFromCommand(cmd *cli.Command) (Config, error) {
+func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	defaults := rootconfig.Load()
 
 	name := cmd.String("name")
@@ -64,7 +64,7 @@ func deriveConfig(defaults rootconfig.Config, name string) Config {
 	}
 }
 
-func ClusterConfigPath(name string) (string, error) {
+func clusterConfigPath(name string) (string, error) {
 	return filepath.Join(configDir(), name, configFileName), nil
 }
 
@@ -73,16 +73,16 @@ func configDir() string {
 	return filepath.Join(dir, "dfmicro")
 }
 
-func ReadClusterConfig(name string) (Config, error) {
-	path, err := ClusterConfigPath(name)
+func readClusterConfig(name string) (Config, error) {
+	path, err := clusterConfigPath(name)
 	if err != nil {
 		return Config{}, err
 	}
 	return readConfigFile(path)
 }
 
-func WriteClusterConfig(cfg Config) error {
-	path, err := ClusterConfigPath(cfg.Name)
+func writeClusterConfig(cfg Config) error {
+	path, err := clusterConfigPath(cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -111,4 +111,20 @@ func readConfigFile(path string) (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+func printClusterConfig(name string) error {
+	cfg, err := readClusterConfig(name)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+
+	_, err = os.Stdout.Write(data)
+	return err
 }

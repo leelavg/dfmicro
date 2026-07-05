@@ -2,10 +2,8 @@ package cluster
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"dfmicro/internal/execx"
 
@@ -58,7 +56,7 @@ func clusterFlags() []cli.Flag {
 
 func commandAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *Manager) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		cfg, err := NewConfigFromCommand(cmd)
+		cfg, err := newConfigFromCommand(cmd)
 		if err != nil {
 			return err
 		}
@@ -78,9 +76,10 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage:   "List cluster status",
-				Flags:   clusterFlags(),
-				Action:  commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Status(ctx) }),
+				Usage:   "List all dfmicro clusters",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return listAll(ctx, logger, runner)
+				},
 			},
 			{
 				Name:   "create",
@@ -118,19 +117,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := ReadClusterConfig(cmd.String("name"))
-					if err != nil {
-						return err
-					}
-
-					data, err := json.MarshalIndent(cfg, "", "  ")
-					if err != nil {
-						return err
-					}
-					data = append(data, '\n')
-
-					_, err = os.Stdout.Write(data)
-					return err
+					return printClusterConfig(cmd.String("name"))
 				},
 			},
 		},
