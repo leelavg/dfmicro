@@ -30,7 +30,7 @@ data:
             spare-gb: 0
             thin-pool:
               name: thin
-              overprovision-ratio: 10.0
+              overprovision-ratio: %.1f
 `
 
 type podmanContainer struct {
@@ -383,12 +383,12 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 	args = append(args, "--network", networkName, "--ip", ipAddress, "--dns-search=.")
 
 	lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
-	lvmdConfig := fmt.Sprintf(lvmdConfigTemplate, m.cfg.Name)
+	lvmdConfig := fmt.Sprintf(lvmdConfigTemplate, m.cfg.Name, m.cfg.OverprovisionRatio)
 	if err := os.WriteFile(lvmdConfigPath, []byte(lvmdConfig), 0o644); err != nil {
 		return err
 	}
 	args = append(args,
-		"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-topolvm.yaml:ro",
+		"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
 	)
 
 	if m.cfg.ExposeKubeAPI {
@@ -415,6 +415,7 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		m.cfg.Image,
 	)
 
+	m.logger.Info("starting container (downloading base image if not cached, ~2GB, may take time)", "name", name, "image", m.cfg.Image)
 	if _, err := execx.RunSudo(ctx, m.runner, args[0], args[1:]...); err != nil {
 		return err
 	}

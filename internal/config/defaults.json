@@ -1,7 +1,7 @@
 {
-  "image": "microshift-okd",
-  "kubeconfig": "",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202607050937_g45630c7b1_5.0.0_okd_scos.ec.4",
   "lvmVolSize": "10G",
   "apiServerPort": 6443,
-  "exposeKubeAPI": true
+  "exposeKubeAPI": true,
+  "overprovisionRatio": 10.0
 }
