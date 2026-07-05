@@ -1,9 +1,0 @@
-feat: add cut-1 dfmicro cluster CLI
-
-review-1
-1. Avoid unnecessary abstractions. Do not add wrapper structs, proxy functions, or extra layers unless they solve a concrete problem already present in scope.
-2. Keep responsibility boundaries strict. If the caller is supposed to provide dependencies or validated inputs, do not silently compensate in callees with nil fallbacks or duplicated defaulting.
-3. Prefer existing capabilities before custom code. Reuse what the CLI library, stdlib, or underlying tool already provides for defaults, parsing, validation, and structured output before adding bespoke helpers or manual parsing.
-
-review-2
-1. When review points imply checking library docs and then fixing the code, do the full loop: consult the docs, apply the intended fix, add the obvious make targets, and run formatting before considering the review addressed.

@@ -9,12 +9,28 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"dfmicro/internal/execx"
 )
+
+var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
+
+func init() {
+	if runtime.GOOS == "darwin" {
+		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
+			newArgs := append([]string{"machine", "ssh", "sudo", cmd}, args...)
+			return execx.RunSudo(ctx, runner, "podman", newArgs...)
+		}
+	} else {
+		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
+			return execx.RunSudo(ctx, runner, cmd, args...)
+		}
+	}
+}
 
 const lvmdConfigTemplate = `apiVersion: v1
 kind: ConfigMap
@@ -34,7 +50,8 @@ data:
 `
 
 type podmanContainer struct {
-	Names []string `json:"Names"`
+	Names  []string          `json:"Names"`
+	Labels map[string]string `json:"Labels"`
 }
 
 type Manager struct {
@@ -46,7 +63,7 @@ type Manager struct {
 func NewManager(cfg Config, logger *slog.Logger, runner execx.Runner) *Manager {
 	return &Manager{
 		cfg:    cfg,
-		logger: logger.With("component", "cluster"),
+		logger: logger,
 		runner: runner,
 	}
 }
@@ -92,7 +109,7 @@ func (m *Manager) Create(ctx context.Context) error {
 	if err := m.copyKubeconfig(ctx, containerName); err != nil {
 		return err
 	}
-	if err := WriteClusterConfig(m.cfg); err != nil {
+	if err := writeClusterConfig(m.cfg); err != nil {
 		return err
 	}
 
@@ -229,9 +246,15 @@ func (m *Manager) Status(ctx context.Context) error {
 }
 
 func (m *Manager) createTopoLVMBackend(ctx context.Context) error {
+	imageExists := false
 	if _, err := os.Stat(m.cfg.LVMDisk); err == nil {
-		m.logger.Info("reusing existing topolvm backend", "path", m.cfg.LVMDisk)
-		return nil
+		imageExists = true
+		result, err := runLVMCommand(ctx, m.runner, "vgs", "--noheadings", "-o", "vg_name", m.cfg.VGName)
+		if err == nil && strings.TrimSpace(result.Stdout) == m.cfg.VGName {
+			m.logger.Info("reusing existing topolvm backend", "path", m.cfg.LVMDisk, "vg", m.cfg.VGName)
+			return nil
+		}
+		m.logger.Info("image exists but volume group missing, recreating LVM stack", "path", m.cfg.LVMDisk, "vg", m.cfg.VGName)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -240,11 +263,13 @@ func (m *Manager) createTopoLVMBackend(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := execx.RunSudo(ctx, m.runner, "truncate", "--size="+m.cfg.LVMVolSize, m.cfg.LVMDisk); err != nil {
-		return err
+	if !imageExists {
+		if _, err := runLVMCommand(ctx, m.runner, "truncate", "--size="+m.cfg.LVMVolSize, m.cfg.LVMDisk); err != nil {
+			return err
+		}
 	}
 
-	result, err := execx.RunSudo(ctx, m.runner, "losetup", "--find", "--show", "--nooverlap", m.cfg.LVMDisk)
+	result, err := runLVMCommand(ctx, m.runner, "losetup", "--find", "--show", "--nooverlap", m.cfg.LVMDisk)
 	if err != nil {
 		return err
 	}
@@ -253,10 +278,10 @@ func (m *Manager) createTopoLVMBackend(ctx context.Context) error {
 		return errors.New("losetup did not return a device name")
 	}
 
-	if _, err := execx.RunSudo(ctx, m.runner, "vgcreate", "-f", "-y", m.cfg.VGName, deviceName); err != nil {
+	if _, err := runLVMCommand(ctx, m.runner, "vgcreate", "-f", "-y", m.cfg.VGName, deviceName); err != nil {
 		return err
 	}
-	if _, err := execx.RunSudo(ctx, m.runner, "lvcreate", "-l", "99%FREE", "--thinpool", "thin", m.cfg.VGName); err != nil {
+	if _, err := runLVMCommand(ctx, m.runner, "lvcreate", "-l", "99%FREE", "--thinpool", "thin", m.cfg.VGName); err != nil {
 		return err
 	}
 
@@ -272,18 +297,18 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 
 	m.logger.Info("deleting topolvm backend", "path", m.cfg.LVMDisk)
 
-	if _, err := execx.RunSudo(ctx, m.runner, "lvremove", "-y", m.cfg.VGName); err != nil {
+	if _, err := runLVMCommand(ctx, m.runner, "lvremove", "-y", m.cfg.VGName); err != nil {
 		m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
 	}
-	if _, err := execx.RunSudo(ctx, m.runner, "vgremove", "-y", m.cfg.VGName); err != nil {
+	if _, err := runLVMCommand(ctx, m.runner, "vgremove", "-y", m.cfg.VGName); err != nil {
 		m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
 	}
 
-	result, err := execx.RunSudo(ctx, m.runner, "losetup", "-j", m.cfg.LVMDisk)
+	result, err := runLVMCommand(ctx, m.runner, "losetup", "--associated", m.cfg.LVMDisk, "--output", "NAME", "--noheadings")
 	if err == nil {
-		deviceName := parseLoopDevice(result.Stdout)
+		deviceName := strings.TrimSpace(result.Stdout)
 		if deviceName != "" {
-			if _, err := execx.RunSudo(ctx, m.runner, "losetup", "-d", deviceName); err != nil {
+			if _, err := runLVMCommand(ctx, m.runner, "losetup", "--detach", deviceName); err != nil {
 				m.logger.Warn("failed to detach loop device", "device", deviceName, "error", err)
 			}
 		}
@@ -410,6 +435,7 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 
 	args = append(args,
 		"--label", "part-of="+m.cfg.Name,
+		"--label", "created-by=dfmicro",
 		"--name", name,
 		"--hostname", name,
 		m.cfg.Image,
@@ -570,22 +596,54 @@ func (m *Manager) listContainers(ctx context.Context, all bool) ([]string, error
 	return names, nil
 }
 
-func parseLoopDevice(output string) string {
-	line := strings.TrimSpace(output)
-	if line == "" {
-		return ""
-	}
-	device, _, found := strings.Cut(line, ":")
-	if !found {
-		return ""
-	}
-	return strings.TrimSpace(device)
-}
-
 func (m *Manager) systemdSubState(ctx context.Context, containerName, unit string) (string, error) {
 	result, err := execx.RunSudo(ctx, m.runner, "podman", "exec", "-i", containerName, "systemctl", "show", "--property=SubState", "--value", unit)
 	if err != nil {
 		return "unknown", nil
 	}
 	return strings.TrimSpace(result.Stdout), nil
+}
+
+func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
+	result, err := execx.RunSudo(ctx, runner, "podman", "ps", "-a", "--filter", "label=created-by=dfmicro", "--format=json")
+	if err != nil {
+		return err
+	}
+
+	var containers []struct {
+		Names  []string          `json:"Names"`
+		Labels map[string]string `json:"Labels"`
+		State  string            `json:"State"`
+	}
+	if err := json.Unmarshal([]byte(result.Stdout), &containers); err != nil {
+		return err
+	}
+
+	if len(containers) == 0 {
+		return nil
+	}
+
+	clusterMap := make(map[string]struct {
+		running []string
+		stopped []string
+	})
+
+	for _, container := range containers {
+		clusterName := container.Labels["part-of"]
+		info := clusterMap[clusterName]
+		for _, name := range container.Names {
+			if container.State == "running" {
+				info.running = append(info.running, name)
+			} else {
+				info.stopped = append(info.stopped, name)
+			}
+		}
+		clusterMap[clusterName] = info
+	}
+
+	for clusterName, info := range clusterMap {
+		logger.Info("found cluster", "name", clusterName, "running", info.running, "stopped", info.stopped)
+	}
+
+	return nil
 }

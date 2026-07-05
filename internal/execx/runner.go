@@ -3,7 +3,6 @@ package execx
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -77,10 +76,6 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, e
 }
 
 func RunSudo(ctx context.Context, runner Runner, name string, args ...string) (Result, error) {
-	if runner == nil {
-		return Result{}, fmt.Errorf("runner is nil")
-	}
-
 	sudoArgs := append([]string{name}, args...)
 	return runner.Run(ctx, "sudo", sudoArgs...)
 }
