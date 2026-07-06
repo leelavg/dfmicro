@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"runtime"
 
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -36,17 +36,13 @@ func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 		return fmt.Errorf("USER environment variable not set")
 	}
 
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	binaryName := filepath.Base(exe)
+	binaryName := support.BinaryName
 	content := fmt.Sprintf(sudoersTemplate, username, binaryName)
 	sudoersPath := fmt.Sprintf("/etc/sudoers.d/%s", binaryName)
 
 	logger.Info("creating sudoers configuration", "path", sudoersPath, "user", username)
 
-	tmpFile := "/tmp/dfmicro-sudoers"
+	tmpFile := "/tmp/" + binaryName + "-sudoers"
 	if err := os.WriteFile(tmpFile, []byte(content), 0440); err != nil {
 		return fmt.Errorf("failed to write temp sudoers file: %w", err)
 	}
@@ -62,7 +58,7 @@ func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 	}
 
 	logger.Info("sudoers configuration created", "path", sudoersPath)
-	logger.Info("you can now run dfmicro commands without password prompts")
+	logger.Info("you can now run " + binaryName + " commands without password prompts")
 	return nil
 }
 
@@ -72,11 +68,7 @@ func deletePerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 		return nil
 	}
 
-	exe, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to get executable path: %w", err)
-	}
-	binaryName := filepath.Base(exe)
+	binaryName := support.BinaryName
 	sudoersPath := fmt.Sprintf("/etc/sudoers.d/%s", binaryName)
 	if _, err := os.Stat(sudoersPath); os.IsNotExist(err) {
 		logger.Info("sudoers configuration not found", "path", sudoersPath)
@@ -96,7 +88,7 @@ func deletePerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "perms",
-		Usage: "Manage sudo permissions for dfmicro (Linux only)",
+		Usage: "Manage sudo permissions for " + support.BinaryName + " (Linux only)",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowSubcommandHelp(cmd)
 		},

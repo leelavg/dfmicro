@@ -3,5 +3,6 @@
   "lvmVolSize": "10G",
   "apiServerPort": 6443,
   "exposeKubeAPI": true,
-  "overprovisionRatio": 10.0
+  "overprovisionRatio": 10.0,
+  "shareHostContainers": true
 }

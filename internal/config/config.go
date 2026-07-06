@@ -11,11 +11,12 @@ import (
 var embeddedConfig []byte
 
 type Config struct {
-	Image              string  `json:"image"`
-	LVMVolSize         string  `json:"lvmVolSize"`
-	APIServerPort      int     `json:"apiServerPort"`
-	ExposeKubeAPI      bool    `json:"exposeKubeAPI"`
-	OverprovisionRatio float32 `json:"overprovisionRatio"`
+	Image               string  `json:"image"`
+	LVMVolSize          string  `json:"lvmVolSize"`
+	APIServerPort       int     `json:"apiServerPort"`
+	ExposeKubeAPI       bool    `json:"exposeKubeAPI"`
+	OverprovisionRatio  float32 `json:"overprovisionRatio"`
+	ShareHostContainers bool    `json:"shareHostContainers"`
 }
 
 func Load() Config {

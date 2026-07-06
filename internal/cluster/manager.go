@@ -434,7 +434,10 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		"--ulimit", "nofile=524288:524288",
 		"--tty",
 		"--volume", "/dev:/dev",
-		"--volume", "/var/lib/containers:/var/lib/containers",
+	}
+
+	if m.cfg.ShareHostContainers {
+		args = append(args, "--volume", "/var/lib/containers:/var/lib/containers")
 	}
 
 	for _, device := range []string{"input", "snd", "dri"} {
