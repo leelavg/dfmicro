@@ -8,7 +8,7 @@ MAKEFLAGS += --no-builtin-rules
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
 
-.PHONY: vet fmt build build-release
+.PHONY: vet fmt generate build build-release
 
 vet:
 	go vet ./...
@@ -16,11 +16,14 @@ vet:
 fmt:
 	go fmt ./...
 
-build: fmt vet
+generate:
+	go generate ./internal/docs
+
+build: fmt vet generate
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -o $(BINARY) ./cmd/dfmicro
 
-build-release: fmt vet
+build-release: fmt vet generate
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BINARY) ./cmd/dfmicro
 

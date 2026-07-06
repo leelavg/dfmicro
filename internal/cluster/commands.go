@@ -80,7 +80,6 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "cluster",
 		Usage: "Manage cluster lifecycle",
-		Flags: clusterFlags(),
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowSubcommandHelp(cmd)
 		},

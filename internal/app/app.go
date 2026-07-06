@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"dfmicro/internal/buildinfo"
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
+	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/perms"
 	"dfmicro/internal/support"
@@ -47,15 +49,24 @@ func sortAll(cmd *cli.Command) {
 	}
 }
 
-func Command(logger *slog.Logger, runner execx.Runner, version string) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	cmd := &cli.Command{
-		Name:    support.BinaryName,
-		Usage:   "Manage " + support.BinaryName + " clusters",
-		Version: version,
+		Name:                  support.BinaryName,
+		Usage:                 "Manage " + support.BinaryName + " clusters",
+		Version:               buildinfo.String(),
+		EnableShellCompletion: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowAppHelp(cmd)
 		},
 		Commands: []*cli.Command{
+			{
+				Name:  "docs",
+				Usage: "Print full command reference as markdown",
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					_, err := os.Stdout.WriteString(docs.CLI)
+					return err
+				},
+			},
 			configCommand(),
 			cluster.Command(logger, runner),
 			perms.Command(logger, runner),
