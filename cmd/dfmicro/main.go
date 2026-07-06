@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -10,6 +11,11 @@ import (
 
 	"dfmicro/internal/app"
 	"dfmicro/internal/execx"
+)
+
+var (
+	version = "dev"
+	commit  = "none"
 )
 
 func main() {
@@ -28,7 +34,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cmd := app.Command(logger, execx.OSRunner{})
+	cmd := app.Command(logger, execx.OSRunner{}, fmt.Sprintf("%s (%s)", version, commit))
 	if err := cmd.Run(ctx, os.Args); err != nil {
 		logger.Error("command failed", "error", err)
 		os.Exit(1)

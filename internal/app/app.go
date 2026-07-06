@@ -47,10 +47,11 @@ func sortAll(cmd *cli.Command) {
 	}
 }
 
-func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner, version string) *cli.Command {
 	cmd := &cli.Command{
-		Name:  support.BinaryName,
-		Usage: "Manage " + support.BinaryName + " clusters",
+		Name:    support.BinaryName,
+		Usage:   "Manage " + support.BinaryName + " clusters",
+		Version: version,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowAppHelp(cmd)
 		},
