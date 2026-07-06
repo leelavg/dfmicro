@@ -24,21 +24,35 @@ func nameFlag() cli.Flag {
 
 func createFlags() []cli.Flag {
 	return []cli.Flag{
-		nameFlag(),
 		&cli.StringFlag{
-			Name:  "image",
-			Usage: "Container image to run for cluster nodes",
-			Value: defaultRootConfig.Image,
+			Name:     "name",
+			Usage:    "Cluster name",
+			Value:    "cluster",
+			Category: "Cluster:",
 		},
 		&cli.StringFlag{
-			Name:  "lvm-volsize",
-			Usage: "Size of the sparse disk image used for TopoLVM",
-			Value: defaultRootConfig.LVMVolSize,
+			Name:     "image",
+			Usage:    "Container image to run for cluster nodes",
+			Value:    defaultRootConfig.Image,
+			Category: "Cluster:",
+		},
+		&cli.StringFlag{
+			Name:     "lvm-volsize",
+			Usage:    "Size of the sparse disk image used for TopoLVM",
+			Value:    defaultRootConfig.LVMVolSize,
+			Category: "Storage:",
+		},
+		&cli.Float32Flag{
+			Name:     "overprovision-ratio",
+			Usage:    "TopoLVM thin pool overprovision ratio",
+			Value:    defaultRootConfig.OverprovisionRatio,
+			Category: "Storage:",
 		},
 		&cli.IntFlag{
-			Name:  "api-server-port",
-			Usage: "Host port to expose the Kubernetes API server on",
-			Value: defaultRootConfig.APIServerPort,
+			Name:     "api-server-port",
+			Usage:    "Host port to expose the Kubernetes API server on",
+			Value:    defaultRootConfig.APIServerPort,
+			Category: "Network:",
 			Validator: func(v int) error {
 				if v < 1024 || v > 65535 {
 					return fmt.Errorf("api server port must be between 1024 and 65535: %d", v)
@@ -47,17 +61,29 @@ func createFlags() []cli.Flag {
 			},
 		},
 		&cli.BoolFlag{
-			Name:  "no-expose-kubeapi",
-			Usage: "Disable exposing the Kubernetes API server on the host",
-		},
-		&cli.Float32Flag{
-			Name:  "overprovision-ratio",
-			Usage: "TopoLVM thin pool overprovision ratio",
-			Value: defaultRootConfig.OverprovisionRatio,
+			Name:     "no-expose-kubeapi",
+			Usage:    "Disable exposing the Kubernetes API server on the host",
+			Category: "Network:",
 		},
 		&cli.BoolFlag{
-			Name:  "no-share-host-containers",
-			Usage: "Disable mounting host /var/lib/containers for image reuse",
+			Name:     "no-share-host-containers",
+			Usage:    "Disable mounting host /var/lib/containers for image reuse",
+			Category: "Mounts:",
+		},
+		&cli.StringFlag{
+			Name:     "pull-secret",
+			Usage:    "Path to pull secret file",
+			Category: "Mounts:",
+		},
+		&cli.StringSliceFlag{
+			Name:     "idms",
+			Usage:    "Path(s) to ImageDigestMirrorSet yaml files for mirror registries, merged in order",
+			Category: "Mounts:",
+		},
+		&cli.StringSliceFlag{
+			Name:     "mount",
+			Usage:    "Extra volume mounts in podman format: /host/path:/container/path[:opts]",
+			Category: "Mounts:",
 		},
 	}
 }

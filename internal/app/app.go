@@ -20,6 +20,17 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func docsCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "docs",
+		Usage: "Print full command reference as markdown",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			_, err := os.Stdout.WriteString(docs.CLI)
+			return err
+		},
+	}
+}
+
 func configCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "config",
@@ -59,15 +70,8 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			return cli.ShowAppHelp(cmd)
 		},
 		Commands: []*cli.Command{
-			{
-				Name:  "docs",
-				Usage: "Print full command reference as markdown",
-				Action: func(ctx context.Context, cmd *cli.Command) error {
-					_, err := os.Stdout.WriteString(docs.CLI)
-					return err
-				},
-			},
 			configCommand(),
+			docsCommand(),
 			cluster.Command(logger, runner),
 			perms.Command(logger, runner),
 		},
