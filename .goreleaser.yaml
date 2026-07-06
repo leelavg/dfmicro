@@ -1,11 +1,15 @@
 version: 2
 
+before:
+  hooks:
+    - go generate ./internal/docs
+
 builds:
   - main: ./cmd/dfmicro
     env:
       - CGO_ENABLED=0
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}}
+      - -s -w -X dfmicro/internal/buildinfo.Version={{.Version}} -X dfmicro/internal/buildinfo.Commit={{.ShortCommit}}
     goos:
       - linux
       - darwin
@@ -16,6 +20,9 @@ builds:
 archives:
   - formats:
       - tar.gz
+
+release:
+  prerelease: auto
 
 signs:
   - cmd: cosign
@@ -28,3 +35,4 @@ signs:
 
 changelog:
   sort: asc
+  abbrev_length: 7

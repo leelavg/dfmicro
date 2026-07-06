@@ -59,6 +59,7 @@ func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 
 	logger.Info("sudoers configuration created", "path", sudoersPath)
 	logger.Info("you can now run " + binaryName + " commands without password prompts")
+	logger.Warn("note: these rules grant passwordless sudo for the listed binaries regardless of caller; any process running as your user can invoke them without a password prompt")
 	return nil
 }
 

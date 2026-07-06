@@ -63,7 +63,10 @@ func clusterConfigPath(name string) (string, error) {
 }
 
 func configDir() string {
-	dir := support.Must(os.UserConfigDir())
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		dir = support.Must(os.UserHomeDir())
+	}
 	return filepath.Join(dir, "dfmicro")
 }
 

@@ -49,6 +49,16 @@ func (e *CommandError) Unwrap() error {
 	return e.Err
 }
 
+type PanicRunner struct{}
+
+func (PanicRunner) Run(_ context.Context, name string, args ...string) (Result, error) {
+	panic("PanicRunner: unexpected call to Run: " + name)
+}
+
+func (PanicRunner) RunInteractive(_ context.Context, name string, args ...string) error {
+	panic("PanicRunner: unexpected call to RunInteractive: " + name)
+}
+
 type OSRunner struct{}
 
 func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, error) {
