@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
+
+var defaultRootConfig = rootconfig.Load()
 
 func nameFlag() cli.Flag {
 	return &cli.StringFlag{
@@ -24,17 +28,20 @@ func createFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:  "image",
 			Usage: "Container image to run for cluster nodes",
+			Value: defaultRootConfig.Image,
 		},
 		&cli.StringFlag{
 			Name:  "lvm-volsize",
 			Usage: "Size of the sparse disk image used for TopoLVM",
+			Value: defaultRootConfig.LVMVolSize,
 		},
 		&cli.IntFlag{
 			Name:  "api-server-port",
 			Usage: "Host port to expose the Kubernetes API server on",
+			Value: defaultRootConfig.APIServerPort,
 			Validator: func(v int) error {
-				if v < 1 || v > 65535 {
-					return fmt.Errorf("api server port must be between 1 and 65535: %d", v)
+				if v < 1024 || v > 65535 {
+					return fmt.Errorf("api server port must be between 1024 and 65535: %d", v)
 				}
 				return nil
 			},
@@ -46,6 +53,11 @@ func createFlags() []cli.Flag {
 		&cli.Float32Flag{
 			Name:  "overprovision-ratio",
 			Usage: "TopoLVM thin pool overprovision ratio",
+			Value: defaultRootConfig.OverprovisionRatio,
+		},
+		&cli.BoolFlag{
+			Name:  "no-share-host-containers",
+			Usage: "Disable mounting host /var/lib/containers for image reuse",
 		},
 	}
 }
@@ -76,7 +88,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage:   "List all dfmicro clusters",
+				Usage:   "List all " + support.BinaryName + " clusters",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return listAll(ctx, logger, runner)
 				},

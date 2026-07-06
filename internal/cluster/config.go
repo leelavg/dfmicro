@@ -25,25 +25,19 @@ type Config struct {
 }
 
 func newConfigFromCommand(cmd *cli.Command) (Config, error) {
-	defaults := rootconfig.Load()
-
 	name := cmd.String("name")
-	cfg := deriveConfig(defaults, name)
+	cfg := deriveConfig(defaultRootConfig, name)
 
-	if cmd.IsSet("image") {
-		cfg.Image = cmd.String("image")
-	}
-	if cmd.IsSet("lvm-volsize") {
-		cfg.LVMVolSize = cmd.String("lvm-volsize")
-	}
-	if cmd.IsSet("api-server-port") {
-		cfg.APIServerPort = cmd.Int("api-server-port")
-	}
+	cfg.Image = cmd.String("image")
+	cfg.LVMVolSize = cmd.String("lvm-volsize")
+	cfg.APIServerPort = cmd.Int("api-server-port")
+	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
+
 	if cmd.IsSet("no-expose-kubeapi") {
 		cfg.ExposeKubeAPI = !cmd.Bool("no-expose-kubeapi")
 	}
-	if cmd.IsSet("overprovision-ratio") {
-		cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
+	if cmd.IsSet("no-share-host-containers") {
+		cfg.ShareHostContainers = !cmd.Bool("no-share-host-containers")
 	}
 
 	return cfg, nil

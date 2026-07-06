@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"slices"
+	"sort"
+	"strings"
 
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/perms"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -33,10 +37,20 @@ func configCommand() *cli.Command {
 	}
 }
 
+func sortAll(cmd *cli.Command) {
+	sort.Sort(cli.FlagsByName(cmd.Flags))
+	slices.SortFunc(cmd.Commands, func(a, b *cli.Command) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	for _, subCmd := range cmd.Commands {
+		sortAll(subCmd)
+	}
+}
+
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
-	return &cli.Command{
-		Name:  "dfmicro",
-		Usage: "Manage dfmicro clusters",
+	cmd := &cli.Command{
+		Name:  support.BinaryName,
+		Usage: "Manage " + support.BinaryName + " clusters",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowAppHelp(cmd)
 		},
@@ -46,4 +60,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			perms.Command(logger, runner),
 		},
 	}
+
+	sortAll(cmd)
+	return cmd
 }
