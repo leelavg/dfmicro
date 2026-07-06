@@ -107,7 +107,7 @@ func NewManager(cfg Config, logger *slog.Logger, runner execx.Runner) *Manager {
 }
 
 func (m *Manager) Create(ctx context.Context) error {
-	containerName := m.cfg.Name + "1"
+	containerName := m.cfg.Name + "-1"
 
 	exists, err := m.containerExists(ctx, containerName)
 	if err != nil {
@@ -472,6 +472,26 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 			"-p", fmt.Sprintf("%d:%d", m.cfg.APIServerPort, m.cfg.APIServerPort),
 			"--volume", m.cfg.ExtraConfig+":/etc/microshift/config.d/api_server.yaml:ro",
 		)
+	}
+
+	if m.cfg.PullSecret != "" {
+		args = append(args, "--volume", m.cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")
+	}
+
+	if len(m.cfg.IDMSFiles) > 0 {
+		registriesConf, err := convertIDMSFiles(m.cfg.IDMSFiles)
+		if err != nil {
+			return err
+		}
+		registriesConfPath := filepath.Join(m.cfg.StateDir, "99-mirrors.conf")
+		if err := os.WriteFile(registriesConfPath, []byte(registriesConf), 0o644); err != nil {
+			return err
+		}
+		args = append(args, "--volume", registriesConfPath+":/etc/containers/registries.conf.d/99-mirrors.conf:ro")
+	}
+
+	for _, mount := range m.cfg.ExtraMounts {
+		args = append(args, "--volume", mount)
 	}
 
 	args = append(args,

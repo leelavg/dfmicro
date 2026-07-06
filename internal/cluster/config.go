@@ -15,13 +15,16 @@ const configFileName = "config.json"
 
 type Config struct {
 	rootconfig.Config
-	Name                  string `json:"name,omitempty"`
-	Network               string `json:"network,omitempty"`
-	StateDir              string `json:"stateDir,omitempty"`
-	LVMDisk               string `json:"lvmDisk,omitempty"`
-	ExtraConfig           string `json:"extraConfig,omitempty"`
-	DefaultKubeconfigPath string `json:"defaultKubeconfig,omitempty"`
-	VGName                string `json:"vgName,omitempty"`
+	Name                  string   `json:"name,omitempty"`
+	Network               string   `json:"network,omitempty"`
+	StateDir              string   `json:"stateDir,omitempty"`
+	LVMDisk               string   `json:"lvmDisk,omitempty"`
+	ExtraConfig           string   `json:"extraConfig,omitempty"`
+	DefaultKubeconfigPath string   `json:"defaultKubeconfig,omitempty"`
+	VGName                string   `json:"vgName,omitempty"`
+	PullSecret            string   `json:"pullSecret,omitempty"`
+	IDMSFiles             []string `json:"idmsFiles,omitempty"`
+	ExtraMounts           []string `json:"extraMounts,omitempty"`
 }
 
 func newConfigFromCommand(cmd *cli.Command) (Config, error) {
@@ -32,6 +35,9 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
 	cfg.APIServerPort = cmd.Int("api-server-port")
 	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
+	cfg.PullSecret = cmd.String("pull-secret")
+	cfg.IDMSFiles = cmd.StringSlice("idms")
+	cfg.ExtraMounts = cmd.StringSlice("mount")
 
 	if cmd.IsSet("no-expose-kubeapi") {
 		cfg.ExposeKubeAPI = !cmd.Bool("no-expose-kubeapi")
