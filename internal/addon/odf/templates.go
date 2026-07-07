@@ -1,5 +1,25 @@
 package odf
 
+const packageManifestTmpl = `apiVersion: packages.operators.coreos.com/v1
+kind: PackageManifest
+metadata:
+  name: {{.Package}}
+  namespace: openshift-storage
+  labels:
+    catalog: odf-catsrc
+    catalog-namespace: openshift-marketplace
+status:
+  packageName: {{.Package}}
+  catalogSource: odf-catsrc
+  catalogSourceNamespace: openshift-marketplace
+  defaultChannel: {{.Channel}}
+  channels:
+    - name: {{.Channel}}
+      currentCSV: {{.CSV}}
+      entries:
+        - name: {{.CSV}}
+`
+
 const clusterVersionTmpl = `apiVersion: config.openshift.io/v1
 kind: ClusterVersion
 metadata:
@@ -56,104 +76,4 @@ spec:
   name: {{.SubName}}
   source: odf-catsrc
   sourceNamespace: openshift-marketplace
-{{- if .SingleNode}}
-  config:
-    env:
-      - name: SINGLE_NODE
-        value: "true"
-{{- end}}
-`
-
-const storageClusterYAML = `apiVersion: ocs.openshift.io/v1
-kind: StorageCluster
-metadata:
-  name: ocs-storagecluster
-  namespace: openshift-storage
-spec:
-  managedResources:
-    cephObjectStores:
-      reconcileStrategy: ignore
-    cephObjectStoreUsers:
-      reconcileStrategy: ignore
-  multiCloudGateway:
-    reconcileStrategy: ignore
-  monPVCTemplate:
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 2Gi
-  placement:
-    mon: {}
-    mds: {}
-    mgr: {}
-    rbd-mirror: {}
-    rgw: {}
-    nfs: {}
-    noobaa-core: {}
-    noobaa-standalone: {}
-    osd-prepare: {}
-  resources:
-    mon:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    mds:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    mgr:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    mgr-sidecar:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    nfs:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    noobaa-core:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    noobaa-db:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    noobaa-db-vol:
-      requests:
-        storage: 10Gi
-    noobaa-endpoint:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    rbd-mirror:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-    rgw:
-      requests:
-        cpu: 125m
-        memory: 128Mi
-  storageDeviceSets:
-    - count: 1
-      name: ocs-deviceset
-      dataPVCTemplate:
-        spec:
-          accessModes:
-            - ReadWriteOnce
-          resources:
-            requests:
-              storage: 5Gi
-          volumeMode: Block
-      placement: {}
-      portable: false
-      replica: 3
-      resources:
-        requests:
-          cpu: 125m
-          memory: 128Mi
 `

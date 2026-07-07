@@ -1,0 +1,11 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: topolvm-provisioner-immediate
+provisioner: topolvm.io
+parameters:
+  csi.storage.k8s.io/fstype: xfs
+  topolvm.io/device-class: ssd
+reclaimPolicy: Delete
+volumeBindingMode: Immediate
+allowVolumeExpansion: true

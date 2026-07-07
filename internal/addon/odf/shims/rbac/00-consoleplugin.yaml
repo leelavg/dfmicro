@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: odf-consoleplugin-manager
+rules:
+- apiGroups:
+  - console.openshift.io
+  resources:
+  - consoleplugins
+  - consoleclidownloads
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: odf-consoleplugin-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: odf-consoleplugin-manager
+subjects:
+- kind: ServiceAccount
+  name: odf-operator-controller-manager
+  namespace: openshift-storage
+

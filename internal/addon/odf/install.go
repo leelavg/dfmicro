@@ -7,8 +7,8 @@ import (
 	"dfmicro/internal/support"
 )
 
-//go:embed shims/crd/*.yaml shims/cr/*.yaml
-var shimsFS embed.FS
+//go:embed shims/crd/*.yaml shims/cr/*.yaml shims/rbac/*.yaml shims/oauth/*.yaml resources/*.yaml
+var odfFS embed.FS
 
 type installConfig struct {
 	CatalogImage string
@@ -19,7 +19,7 @@ type installConfig struct {
 
 func (o *odf) Install(ctx context.Context, cfg installConfig) error {
 	o.logger.Info("applying shim CRDs")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, shimsFS, "shims/crd"); err != nil {
+	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/crd"); err != nil {
 		return err
 	}
 
@@ -52,17 +52,23 @@ func (o *odf) Install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying shim CRs")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, shimsFS, "shims/cr"); err != nil {
+	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/cr"); err != nil {
+		return err
+	}
+
+	o.logger.Info("applying OCP implicit RBAC")
+	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/rbac"); err != nil {
+		return err
+	}
+
+	o.logger.Info("applying OAuth shims")
+	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/oauth"); err != nil {
 		return err
 	}
 
 	for _, sub := range cfg.SubNames {
 		o.logger.Info("applying subscription", "name", sub)
-		singleNode := ""
-		if sub == "ocs-operator" {
-			singleNode = "true"
-		}
-		s, err := support.Render(subscriptionTmpl, map[string]string{"SubName": sub, "Channel": cfg.Channel, "SingleNode": singleNode})
+		s, err := support.Render(subscriptionTmpl, map[string]string{"SubName": sub, "Channel": cfg.Channel})
 		if err != nil {
 			return err
 		}
@@ -70,12 +76,5 @@ func (o *odf) Install(ctx context.Context, cfg installConfig) error {
 			return err
 		}
 	}
-
-	o.logger.Info("labeling nodes")
-	args := []string{"label", "nodes", "--all", "cluster.ocs.openshift.io/openshift-storage=", "--overwrite"}
-	if o.kubeconfig != "" {
-		args = append(args, "--kubeconfig", o.kubeconfig)
-	}
-	_, err = o.runner.Run(ctx, o.kubectl, args...)
-	return err
+	return nil
 }
