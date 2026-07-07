@@ -22,31 +22,39 @@ var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.
 var runPodmanCommand func(context.Context, execx.Runner, ...string) (execx.Result, error)
 var runPodmanInteractive func(context.Context, execx.Runner, ...string) error
 
-func checkMacOSRootful() {
+func checkMacOSRootful() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
 	result, err := cmd.Output()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to inspect podman machine (is podman machine running?): %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to inspect podman machine (is podman machine running?): %w", err)
 	}
 
 	if strings.TrimSpace(string(result)) != "true" {
-		fmt.Fprintln(os.Stderr, "Error: podman machine must be running in rootful mode")
-		fmt.Fprintln(os.Stderr, "Please recreate with: podman machine init --rootful")
-		os.Exit(1)
+		return fmt.Errorf("podman machine must be running in rootful mode\nPlease recreate with: podman machine init --rootful")
 	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func sshCmd(cmd string, args ...string) string {
+	parts := make([]string, 0, len(args)+1)
+	parts = append(parts, cmd)
+	for _, a := range args {
+		parts = append(parts, shellQuote(a))
+	}
+	return strings.Join(parts, " ")
 }
 
 func init() {
 	if runtime.GOOS == "darwin" {
-		checkMacOSRootful()
-
 		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
-			newArgs := append([]string{"machine", "ssh", "sudo", cmd}, args...)
-			return execx.Run(ctx, runner, "podman", newArgs...)
+			return execx.Run(ctx, runner, "podman", "machine", "ssh", "sudo", sshCmd(cmd, args...))
 		}
 		runPodmanCommand = func(ctx context.Context, runner execx.Runner, args ...string) (execx.Result, error) {
 			return execx.Run(ctx, runner, "podman", args...)

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -67,6 +68,18 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Version:               buildinfo.String(),
 		EnableShellCompletion: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if name := cmd.Args().First(); name != "" {
+				var matches []string
+				for _, sub := range cmd.Commands {
+					if strings.HasPrefix(sub.Name, name[:1]) {
+						matches = append(matches, sub.Name)
+					}
+				}
+				if len(matches) > 0 {
+					return fmt.Errorf("unknown command %q, did you mean: %s", name, strings.Join(matches, ", "))
+				}
+				return fmt.Errorf("unknown command %q", name)
+			}
 			return cli.ShowAppHelp(cmd)
 		},
 		Commands: []*cli.Command{
