@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 )
 
 var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
@@ -40,15 +41,11 @@ func checkMacOSRootful() error {
 	return nil
 }
 
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 func sshCmd(cmd string, args ...string) string {
 	parts := make([]string, 0, len(args)+1)
 	parts = append(parts, cmd)
 	for _, a := range args {
-		parts = append(parts, shellQuote(a))
+		parts = append(parts, support.ShellQuote(a))
 	}
 	return strings.Join(parts, " ")
 }
@@ -328,10 +325,32 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 
 	m.logger.Info("deleting topolvm backend", "path", m.cfg.LVMDisk)
 
-	if _, err := runLVMCommand(ctx, m.runner, "lvremove", "-y", m.cfg.VGName); err != nil {
+	// force-remove dm entries for LVs that belong to our VG and are still held by topolvm PVCs;
+	// cross-check against lvs output to avoid accidentally touching unrelated dm devices
+	if lvResult, err := runLVMCommand(ctx, m.runner, "lvs", "--noheadings", "-o", "lv_name", m.cfg.VGName); err == nil {
+		knownLVs := map[string]bool{}
+		for _, lv := range strings.Split(strings.TrimSpace(lvResult.Stdout), "\n") {
+			lv = strings.TrimSpace(lv)
+			if lv != "" {
+				knownLVs[m.cfg.VGName+"-"+lv] = true
+			}
+		}
+		if dmResult, err := runLVMCommand(ctx, m.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name"); err == nil {
+			for _, name := range strings.Split(strings.TrimSpace(dmResult.Stdout), "\n") {
+				name = strings.TrimSpace(name)
+				if knownLVs[name] {
+					if _, err := runLVMCommand(ctx, m.runner, "dmsetup", "remove", "--force", name); err != nil {
+						m.logger.Warn("failed to remove dm device", "device", name, "error", err)
+					}
+				}
+			}
+		}
+	}
+
+	if _, err := runLVMCommand(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
 		m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
 	}
-	if _, err := runLVMCommand(ctx, m.runner, "vgremove", "-y", m.cfg.VGName); err != nil {
+	if _, err := runLVMCommand(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
 		m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
 	}
 
@@ -475,15 +494,22 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 	}
 
 	if len(m.cfg.IDMSFiles) > 0 {
-		registriesConf, err := convertIDMSFiles(m.cfg.IDMSFiles)
+		result, err := convertIDMSFiles(m.cfg.IDMSFiles)
 		if err != nil {
 			return err
 		}
-		registriesConfPath := filepath.Join(m.cfg.StateDir, "99-mirrors.conf")
-		if err := os.WriteFile(registriesConfPath, []byte(registriesConf), 0o644); err != nil {
+		mirrorsPath := filepath.Join(m.cfg.StateDir, "99-mirrors.conf")
+		if err := os.WriteFile(mirrorsPath, []byte(result.registriesConf), 0o644); err != nil {
 			return err
 		}
-		args = append(args, "--volume", registriesConfPath+":/etc/containers/registries.conf.d/99-mirrors.conf:ro")
+		policyPath := filepath.Join(m.cfg.StateDir, "policy.json")
+		if err := os.WriteFile(policyPath, []byte(result.policyJSON), 0o644); err != nil {
+			return err
+		}
+		args = append(args,
+			"--volume", mirrorsPath+":/etc/containers/registries.conf.d/99-mirrors.conf:ro",
+			"--volume", policyPath+":/etc/containers/policy.json:ro",
+		)
 	}
 
 	for _, mount := range m.cfg.ExtraMounts {
@@ -568,6 +594,24 @@ func (m *Manager) waitReady(ctx context.Context) error {
 	}
 
 	return errors.New("cluster did not become ready within 10 minutes")
+}
+
+func (m *Manager) PrintKubeconfig(ctx context.Context) error {
+	data, err := os.ReadFile(m.cfg.DefaultKubeconfigPath)
+	if err == nil {
+		_, err = os.Stdout.Write(data)
+		return err
+	}
+
+	m.logger.Info("kubeconfig not found in StateDir, trying container", "path", m.cfg.DefaultKubeconfigPath)
+	containers, err := m.getRunningContainers(ctx)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		return fmt.Errorf("cluster %q has no running containers and no kubeconfig in StateDir", m.cfg.Name)
+	}
+	return m.copyKubeconfig(ctx, containers[0])
 }
 
 func (m *Manager) copyKubeconfig(ctx context.Context, containerName string) error {

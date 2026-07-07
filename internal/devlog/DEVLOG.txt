@@ -1,0 +1,24 @@
+## Do
+
+- Skip reapply option for resources already present, keyed by GVK + namespaced name
+- API connection from host drops after prolonged cluster usage (likely port-forward idle timeout)
+- LoadBalancer services stuck in Pending: investigate missing cloud-provider or MetalLB/keepalived setup on MicroShift
+- StorageCluster configuration: expose key fields (sizing, device class, placement) as configure flags
+- Multus configuration: secondary network attachment for storage traffic isolation
+- Hub and spoke: multi-cluster topology with a hub managing spoke MicroShift clusters
+- Infrastructure configuration: node labeling, machine config, kernel module management
+- ODF Disaster Recovery: Regional-DR and Metro-DR using Ramen/ACM on MicroShift
+
+## Done
+
+- Cluster lifecycle: create, start, stop, delete, list, exec, kubeconfig
+- LVM thin pool backend for TopoLVM with loop device; force cleanup of dm devices on delete
+- Podman network per cluster; IDMS mirror support with generated registries.conf and policy.json
+- ODF addon: install (shim CRDs/CRs/RBAC/oauth, catalog, subscriptions), configure, uninstall
+- ODF configure: SINGLE_NODE patch via jsonpath discovery, node labeling, resources/ applied
+- Shim and resource files numbered for predictable apply order
+- perms create/delete: sudoers for passwordless sudo including modprobe and install
+- addon odf modules load/unload: writes modules-load.d conf and loads rbd/ceph/nbd immediately
+- support.RunPrivileged/WritePrivileged: single OS-aware privileged execution abstraction
+- Default API port 7443 (avoids VPN interception of 6443)
+- devlog command (hidden) for this log; config, docs commands

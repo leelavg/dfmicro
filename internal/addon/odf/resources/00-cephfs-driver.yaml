@@ -1,0 +1,95 @@
+apiVersion: csi.ceph.io/v1
+kind: Driver
+metadata:
+  name: openshift-storage.cephfs.csi.ceph.com
+  namespace: openshift-storage
+spec:
+  controllerPlugin:
+    replicas: 1
+    resources:
+      addons:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      attacher:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      logRotator:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      omapGenerator:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      plugin:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      provisioner:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      resizer:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      snapshotter:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+  nodePlugin:
+    resources:
+      addons:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      logRotator:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      plugin:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi
+      registrar:
+        limits:
+          cpu: 50m
+          memory: 100Mi
+        requests:
+          cpu: 50m
+          memory: 100Mi

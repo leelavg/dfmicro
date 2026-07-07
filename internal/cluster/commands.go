@@ -19,7 +19,7 @@ func nameFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:  "name",
 		Usage: "Cluster name",
-		Value: "cluster",
+		Value: defaultRootConfig.Name,
 	}
 }
 
@@ -28,7 +28,7 @@ func createFlags() []cli.Flag {
 		&cli.StringFlag{
 			Name:     "name",
 			Usage:    "Cluster name",
-			Value:    "cluster",
+			Value:    defaultRootConfig.Name,
 			Category: "Cluster:",
 		},
 		&cli.StringFlag{
@@ -51,7 +51,7 @@ func createFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:     "api-server-port",
-			Usage:    "Host port to expose the Kubernetes API server on",
+			Usage:    "Host port to expose the Kubernetes API server on (default avoids 6443 which VPNs commonly intercept)",
 			Value:    defaultRootConfig.APIServerPort,
 			Category: "Network:",
 			Validator: func(v int) error {
@@ -163,6 +163,14 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return printClusterConfig(cmd.String("name"))
 				},
+			},
+			{
+				Name:  "kubeconfig",
+				Usage: "Print kubeconfig for a cluster",
+				Flags: []cli.Flag{nameFlag()},
+				Action: commandAction(logger, runner, func(ctx context.Context, manager *Manager) error {
+					return manager.PrintKubeconfig(ctx)
+				}),
 			},
 			{
 				Name:  "exec",

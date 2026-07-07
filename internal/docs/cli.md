@@ -22,9 +22,13 @@ Manage cluster addons
 
 Manage OpenShift Data Foundation
 
+>dfmicro addon odf [options] <command>  # options must precede the subcommand
+
 **--kubeconfig**="": Path to kubeconfig file
 
 **--kubectl**: Use kubectl instead of oc
+
+**--name**="": Cluster name to resolve kubeconfig from (default: "cluster")
 
 #### configure
 
@@ -96,6 +100,12 @@ Execute a shell in a running container
 
 **--name**="": Cluster name (default: "cluster")
 
+### kubeconfig
+
+Print kubeconfig for a cluster (reads StateDir, falls back to container)
+
+**--name**="": Cluster name (default: "cluster")
+
 ### list, ls
 
 List all dfmicro clusters
@@ -131,3 +141,7 @@ Create sudoers configuration for passwordless sudo
 ### delete
 
 Remove sudoers configuration
+
+## todo
+
+Print known issues and planned features

@@ -22,12 +22,16 @@ const sudoersTemplate = `# %[2]s - passwordless sudo for cluster management
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/lvremove
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/vgremove
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/vgs
+%[1]s ALL=(root) NOPASSWD: /usr/sbin/lvs
+%[1]s ALL=(root) NOPASSWD: /usr/sbin/dmsetup
 %[1]s ALL=(root) NOPASSWD: /usr/bin/truncate
+%[1]s ALL=(root) NOPASSWD: /usr/sbin/modprobe
+%[1]s ALL=(root) NOPASSWD: /usr/bin/install
 `
 
 func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
 	if runtime.GOOS == "darwin" {
-		logger.Info("macOS detected - sudo configuration not needed")
+		logger.Info("macOS detected - sudoers not needed, podman machine runs rootful")
 		return nil
 	}
 
@@ -58,7 +62,6 @@ func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 	}
 
 	logger.Info("sudoers configuration created", "path", sudoersPath)
-	logger.Info("you can now run " + binaryName + " commands without password prompts")
 	logger.Warn("note: these rules grant passwordless sudo for the listed binaries regardless of caller; any process running as your user can invoke them without a password prompt")
 	return nil
 }
@@ -77,22 +80,18 @@ func deletePerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 	}
 
 	logger.Info("removing sudoers configuration", "path", sudoersPath)
-
 	if _, err := execx.RunSudo(ctx, runner, "rm", "-f", sudoersPath); err != nil {
 		return fmt.Errorf("failed to remove sudoers file: %w", err)
 	}
-
 	logger.Info("sudoers configuration removed")
 	return nil
 }
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
-		Name:  "perms",
-		Usage: "Manage sudo permissions for " + support.BinaryName + " (Linux only)",
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return cli.ShowSubcommandHelp(cmd)
-		},
+		Name:   "perms",
+		Usage:  "Manage sudo permissions for " + support.BinaryName + " (Linux only)",
+		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			{
 				Name:  "create",

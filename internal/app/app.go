@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -14,6 +13,7 @@ import (
 	"dfmicro/internal/buildinfo"
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
+	"dfmicro/internal/devlog"
 	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/perms"
@@ -21,6 +21,18 @@ import (
 
 	"github.com/urfave/cli/v3"
 )
+
+func devlogCommand() *cli.Command {
+	return &cli.Command{
+		Name:   "devlog",
+		Usage:  "Print development log",
+		Hidden: true,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			_, err := os.Stdout.WriteString(devlog.Content)
+			return err
+		},
+	}
+}
 
 func docsCommand() *cli.Command {
 	return &cli.Command{
@@ -68,25 +80,12 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Usage:                 "Manage " + support.BinaryName + " clusters",
 		Version:               buildinfo.String(),
 		EnableShellCompletion: true,
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			if name := cmd.Args().First(); name != "" {
-				var matches []string
-				for _, sub := range cmd.Commands {
-					if strings.HasPrefix(sub.Name, name[:1]) {
-						matches = append(matches, sub.Name)
-					}
-				}
-				if len(matches) > 0 {
-					return fmt.Errorf("unknown command %q, did you mean: %s", name, strings.Join(matches, ", "))
-				}
-				return fmt.Errorf("unknown command %q", name)
-			}
-			return cli.ShowAppHelp(cmd)
-		},
+		Action:                support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			addon.Command(logger, runner),
 			configCommand(),
 			docsCommand(),
+			devlogCommand(),
 			cluster.Command(logger, runner),
 			perms.Command(logger, runner),
 		},
