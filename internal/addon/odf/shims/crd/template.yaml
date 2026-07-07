@@ -1,0 +1,31 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: templates.template.openshift.io
+spec:
+  group: template.openshift.io
+  names:
+    kind: Template
+    listKind: TemplateList
+    plural: templates
+    singular: template
+  scope: Namespaced
+  versions:
+  - name: v1
+    served: true
+    storage: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          objects:
+            type: array
+            items:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+          parameters:
+            type: array
+            items:
+              type: object
+              x-kubernetes-preserve-unknown-fields: true
+

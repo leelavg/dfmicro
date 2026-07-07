@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"dfmicro/internal/addon"
 	"dfmicro/internal/buildinfo"
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
@@ -83,6 +84,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			return cli.ShowAppHelp(cmd)
 		},
 		Commands: []*cli.Command{
+			addon.Command(logger, runner),
 			configCommand(),
 			docsCommand(),
 			cluster.Command(logger, runner),

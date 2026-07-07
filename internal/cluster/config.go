@@ -76,6 +76,14 @@ func configDir() string {
 	return filepath.Join(dir, "dfmicro")
 }
 
+func Kubeconfig(name string) (string, error) {
+	cfg, err := readClusterConfig(name)
+	if err != nil {
+		return "", err
+	}
+	return cfg.DefaultKubeconfigPath, nil
+}
+
 func readClusterConfig(name string) (Config, error) {
 	path, err := clusterConfigPath(name)
 	if err != nil {
