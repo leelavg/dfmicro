@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
@@ -119,9 +120,15 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				},
 			},
 			{
-				Name:   "create",
-				Usage:  "Create a cluster, wait until ready, and write kubeconfig",
-				Flags:  createFlags(),
+				Name:  "create",
+				Usage: "Create a cluster, wait until ready, and write kubeconfig",
+				Flags: createFlags(),
+				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					if runtime.GOOS == "darwin" {
+						return ctx, checkMacOSRootful()
+					}
+					return ctx, nil
+				},
 				Action: commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Create(ctx) }),
 			},
 			{
