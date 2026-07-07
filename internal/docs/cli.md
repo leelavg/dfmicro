@@ -14,6 +14,40 @@ dfmicro [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 
 # COMMANDS
 
+## addon
+
+Manage cluster addons
+
+### odf
+
+Manage OpenShift Data Foundation
+
+**--kubeconfig**="": Path to kubeconfig file
+
+**--kubectl**: Use kubectl instead of oc
+
+#### configure
+
+Deploy StorageCluster after operator is ready
+
+#### install
+
+Install ODF operator and shim resources
+
+**--catalog-image**="": Catalog source image
+
+**--channel**="": Subscription channel
+
+**--sub-name**="": Subscription name (default: "odf-operator")
+
+**--version**="": OCP version (e.g. 4.16.0)
+
+#### uninstall
+
+Uninstall ODF (prints commands by default)
+
+**--attempt**: Actually run the delete commands (best-effort)
+
 ## cluster
 
 Manage cluster lifecycle

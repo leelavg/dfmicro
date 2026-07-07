@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"dfmicro/internal/execx"
@@ -75,23 +77,6 @@ func init() {
 		}
 	}
 }
-
-const lvmdConfigTemplate = `apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: topolvm-lvmd-0
-  namespace: topolvm-system
-data:
-  lvmd.yaml: |
-        device-classes:
-          - name: ssd
-            volume-group: %s
-            type: thin
-            spare-gb: 0
-            thin-pool:
-              name: thin
-              overprovision-ratio: %.1f
-`
 
 type podmanContainer struct {
 	ID     string            `json:"Id"`
@@ -457,8 +442,11 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 	args = append(args, "--network", networkName, "--ip", ipAddress, "--dns-search=.")
 
 	lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
-	lvmdConfig := fmt.Sprintf(lvmdConfigTemplate, m.cfg.Name, m.cfg.OverprovisionRatio)
-	if err := os.WriteFile(lvmdConfigPath, []byte(lvmdConfig), 0o644); err != nil {
+	var lvmdBuf bytes.Buffer
+	if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
+		return err
+	}
+	if err := os.WriteFile(lvmdConfigPath, lvmdBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
 	args = append(args,

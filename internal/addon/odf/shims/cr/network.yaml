@@ -1,0 +1,16 @@
+apiVersion: config.openshift.io/v1
+kind: Network
+metadata:
+  name: cluster
+spec:
+  clusterNetwork:
+  - cidr: 10.42.0.0/16
+  serviceNetwork:
+  - 10.43.0.0/16
+status:
+  clusterNetwork:
+  - cidr: 10.42.0.0/16
+  serviceNetwork:
+  - 10.43.0.0/16
+  clusterNetworkMTU: 1500
+
