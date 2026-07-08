@@ -25,31 +25,6 @@ var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.
 var runPodmanCommand func(context.Context, execx.Runner, ...string) (execx.Result, error)
 var runPodmanInteractive func(context.Context, execx.Runner, ...string) error
 
-func checkMacOSRootful() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
-	result, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("failed to inspect podman machine (is podman machine running?): %w", err)
-	}
-
-	if strings.TrimSpace(string(result)) != "true" {
-		return fmt.Errorf("podman machine must be running in rootful mode\nPlease recreate with: podman machine init --rootful")
-	}
-	return nil
-}
-
-func sshCmd(cmd string, args ...string) string {
-	parts := make([]string, 0, len(args)+1)
-	parts = append(parts, cmd)
-	for _, a := range args {
-		parts = append(parts, support.ShellQuote(a))
-	}
-	return strings.Join(parts, " ")
-}
-
 func init() {
 	if runtime.GOOS == "darwin" {
 		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
@@ -73,6 +48,31 @@ func init() {
 			return runner.RunInteractive(ctx, "sudo", sudoArgs...)
 		}
 	}
+}
+
+func checkMacOSRootful() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
+	result, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to inspect podman machine (is podman machine running?): %w", err)
+	}
+
+	if strings.TrimSpace(string(result)) != "true" {
+		return fmt.Errorf("podman machine must be running in rootful mode\nPlease recreate with: podman machine init --rootful")
+	}
+	return nil
+}
+
+func sshCmd(cmd string, args ...string) string {
+	parts := make([]string, 0, len(args)+1)
+	parts = append(parts, cmd)
+	for _, a := range args {
+		parts = append(parts, support.ShellQuote(a))
+	}
+	return strings.Join(parts, " ")
 }
 
 type podmanContainer struct {
@@ -345,13 +345,13 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 				}
 			}
 		}
-	}
 
-	if _, err := runLVMCommand(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
-		m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
-	}
-	if _, err := runLVMCommand(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
-		m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
+		if _, err := runLVMCommand(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
+			m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
+		}
+		if _, err := runLVMCommand(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
+			m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
+		}
 	}
 
 	result, err := runLVMCommand(ctx, m.runner, "losetup", "--associated", m.cfg.LVMDisk, "--output", "NAME", "--noheadings")

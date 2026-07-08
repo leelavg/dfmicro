@@ -30,6 +30,9 @@ func unloadModules(ctx context.Context, logger *slog.Logger, runner execx.Runner
 	if _, err := support.RunPrivileged(ctx, runner, "rm", "-f", odfModulesPath); err != nil {
 		return fmt.Errorf("failed to remove modules-load.d config: %w", err)
 	}
-	logger.Info("modules-load.d configuration removed")
+	logger.Info("unloading kernel modules from current session")
+	if _, err := support.RunPrivileged(ctx, runner, "modprobe", "-r", "nbd", "ceph", "rbd"); err != nil {
+		logger.Warn("failed to unload kernel modules", "error", err)
+	}
 	return nil
 }

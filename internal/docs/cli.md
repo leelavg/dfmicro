@@ -144,14 +144,28 @@ Print top-level embedded config
 
 Print full command reference as markdown
 
-## perms
+## ops
+
+Operational utilities for running clusters
+
+### resources
+
+Show CPU and memory requests, limits, and usage per container (experimental)
+
+**--name**="": Cluster name (default: "cluster")
+
+**--namespace**="": Namespace to inspect (omit for all namespaces)
+
+**--node**="": Node name to inspect (omit for all nodes)
+
+### sudoers
 
 Manage sudo permissions for dfmicro (Linux only)
 
-### create
+#### create
 
 Create sudoers configuration for passwordless sudo
 
-### delete
+#### delete
 
 Remove sudoers configuration

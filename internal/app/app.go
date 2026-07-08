@@ -16,7 +16,7 @@ import (
 	"dfmicro/internal/devlog"
 	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
-	"dfmicro/internal/perms"
+	"dfmicro/internal/ops"
 	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
@@ -87,7 +87,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			docsCommand(),
 			devlogCommand(),
 			cluster.Command(logger, runner),
-			perms.Command(logger, runner),
+			ops.Command(logger, runner),
 		},
 	}
 

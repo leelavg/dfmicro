@@ -11,8 +11,8 @@ import (
 )
 
 var RunPrivileged func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
-
 var WritePrivileged func(context.Context, execx.Runner, string, string, os.FileMode) error
+var RunPodman func(context.Context, execx.Runner, ...string) (execx.Result, error)
 
 func init() {
 	if runtime.GOOS == "darwin" {
@@ -24,6 +24,9 @@ func init() {
 				fmt.Sprintf("printf '%%s' %s | sudo tee %s > /dev/null && sudo chmod %04o %s",
 					ShellQuote(content), path, mode, path))
 			return err
+		}
+		RunPodman = func(ctx context.Context, runner execx.Runner, args ...string) (execx.Result, error) {
+			return execx.Run(ctx, runner, "podman", args...)
 		}
 	} else {
 		RunPrivileged = execx.RunSudo
@@ -39,6 +42,9 @@ func init() {
 			f.Close()
 			_, err = execx.RunSudo(ctx, runner, "install", fmt.Sprintf("-m%04o", mode), f.Name(), path)
 			return err
+		}
+		RunPodman = func(ctx context.Context, runner execx.Runner, args ...string) (execx.Result, error) {
+			return execx.RunSudo(ctx, runner, "podman", args...)
 		}
 	}
 }
