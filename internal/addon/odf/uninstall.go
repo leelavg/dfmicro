@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 )
 
 var uninstallCmds = []string{
@@ -32,6 +33,7 @@ func (o *odf) Uninstall(ctx context.Context, attempt bool) error {
 		if _, err := o.runner.Run(ctx, o.kubectl, args...); err != nil {
 			o.logger.Warn("failed", "cmd", c, "error", err)
 		}
+		time.Sleep(time.Second)
 	}
 	return nil
 }

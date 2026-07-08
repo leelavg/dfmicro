@@ -46,6 +46,18 @@ Install ODF operator and shim resources
 
 **--version**="": OCP version (e.g. 4.16.0)
 
+#### modules
+
+Manage ODF kernel module auto-load configuration
+
+##### load
+
+Configure rbd, ceph, nbd modules to load at boot
+
+##### unload
+
+Remove ODF kernel module auto-load configuration
+
 #### uninstall
 
 Uninstall ODF (prints commands by default)
@@ -78,11 +90,13 @@ Create a cluster, wait until ready, and write kubeconfig
 
 **--name**="": Cluster name (default: "cluster")
 
+**--network-subnet**="": Subnet for the podman network in CIDR notation (default: "172.20.0.0/24")
+
 **--no-expose-kubeapi**: Disable exposing the Kubernetes API server on the host
 
 **--no-share-host-containers**: Disable mounting host /var/lib/containers for image reuse
 
-**--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 10)
+**--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
 **--pull-secret**="": Path to pull secret file
 
@@ -102,7 +116,7 @@ Execute a shell in a running container
 
 ### kubeconfig
 
-Print kubeconfig for a cluster (reads StateDir, falls back to container)
+Print kubeconfig for a cluster
 
 **--name**="": Cluster name (default: "cluster")
 
@@ -141,7 +155,3 @@ Create sudoers configuration for passwordless sudo
 ### delete
 
 Remove sudoers configuration
-
-## todo
-
-Print known issues and planned features

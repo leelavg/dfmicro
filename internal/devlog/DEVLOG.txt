@@ -1,6 +1,10 @@
 ## Do
 
+- VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
 - Skip reapply option for resources already present, keyed by GVK + namespaced name
+- ops resources: CPU and memory requests/limits per pod/container, filterable by namespace or cluster-wide
+- addon odf modules unload: also unload modules from current session (modprobe -r)
+- force-conflicts flag on server-side apply for configure (needs apply.go refactor)
 - API connection from host drops after prolonged cluster usage (likely port-forward idle timeout)
 - LoadBalancer services stuck in Pending: investigate missing cloud-provider or MetalLB/keepalived setup on MicroShift
 - StorageCluster configuration: expose key fields (sizing, device class, placement) as configure flags
@@ -20,5 +24,6 @@
 - perms create/delete: sudoers for passwordless sudo including modprobe and install
 - addon odf modules load/unload: writes modules-load.d conf and loads rbd/ceph/nbd immediately
 - support.RunPrivileged/WritePrivileged: single OS-aware privileged execution abstraction
-- Default API port 7443 (avoids VPN interception of 6443)
+- Custom network subnet via --network-subnet (default 172.20.0.0/24, avoids common VPN ranges)
+- Kubeconfig port rewrite: server URL updated to match --api-server-port after copy from container
 - devlog command (hidden) for this log; config, docs commands

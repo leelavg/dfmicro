@@ -51,7 +51,7 @@ func createFlags() []cli.Flag {
 		},
 		&cli.IntFlag{
 			Name:     "api-server-port",
-			Usage:    "Host port to expose the Kubernetes API server on (default avoids 6443 which VPNs commonly intercept)",
+			Usage:    "Host port to expose the Kubernetes API server on",
 			Value:    defaultRootConfig.APIServerPort,
 			Category: "Network:",
 			Validator: func(v int) error {
@@ -61,6 +61,12 @@ func createFlags() []cli.Flag {
 				return nil
 			},
 		},
+		&cli.StringFlag{
+			Name:     "network-subnet",
+			Usage:    "Subnet for the podman network in CIDR notation",
+			Value:    defaultRootConfig.NetworkSubnet,
+			Category: "Network:",
+		},
 		&cli.BoolFlag{
 			Name:     "no-expose-kubeapi",
 			Usage:    "Disable exposing the Kubernetes API server on the host",
@@ -69,22 +75,22 @@ func createFlags() []cli.Flag {
 		&cli.BoolFlag{
 			Name:     "no-share-host-containers",
 			Usage:    "Disable mounting host /var/lib/containers for image reuse",
-			Category: "Mounts:",
+			Category: "Mounts (immutable after creation):",
 		},
 		&cli.StringFlag{
 			Name:     "pull-secret",
 			Usage:    "Path to pull secret file",
-			Category: "Mounts:",
+			Category: "Mounts (immutable after creation):",
 		},
 		&cli.StringSliceFlag{
 			Name:     "idms",
 			Usage:    "Path(s) to ImageDigestMirrorSet yaml files for mirror registries, merged in order",
-			Category: "Mounts:",
+			Category: "Mounts (immutable after creation):",
 		},
 		&cli.StringSliceFlag{
 			Name:     "mount",
 			Usage:    "Extra volume mounts in podman format: /host/path:/container/path[:opts]",
-			Category: "Mounts:",
+			Category: "Mounts (immutable after creation):",
 		},
 	}
 }

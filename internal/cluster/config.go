@@ -34,6 +34,7 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	cfg.Image = cmd.String("image")
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
 	cfg.APIServerPort = cmd.Int("api-server-port")
+	cfg.NetworkSubnet = cmd.String("network-subnet")
 	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
 	cfg.PullSecret = cmd.String("pull-secret")
 	cfg.IDMSFiles = cmd.StringSlice("idms")
