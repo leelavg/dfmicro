@@ -1,4 +1,4 @@
-package perms
+package ops
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 )
 
 const sudoersTemplate = `# %[2]s - passwordless sudo for cluster management
-# Created by: %[2]s perms create
+# Created by: %[2]s ops sudoers create
 %[1]s ALL=(root) NOPASSWD: /usr/bin/podman
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/losetup
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/vgcreate
@@ -29,7 +29,7 @@ const sudoersTemplate = `# %[2]s - passwordless sudo for cluster management
 %[1]s ALL=(root) NOPASSWD: /usr/bin/install
 `
 
-func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
+func createSudoers(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
 	if runtime.GOOS == "darwin" {
 		logger.Info("macOS detected - sudoers not needed, podman machine runs rootful")
 		return nil
@@ -66,7 +66,7 @@ func createPerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 	return nil
 }
 
-func deletePerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
+func deleteSudoers(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
 	if runtime.GOOS == "darwin" {
 		logger.Info("macOS detected - no sudoers configuration to remove")
 		return nil
@@ -87,9 +87,9 @@ func deletePerms(ctx context.Context, logger *slog.Logger, runner execx.Runner) 
 	return nil
 }
 
-func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func sudoersCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
-		Name:   "perms",
+		Name:   "sudoers",
 		Usage:  "Manage sudo permissions for " + support.BinaryName + " (Linux only)",
 		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
@@ -97,14 +97,14 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				Name:  "create",
 				Usage: "Create sudoers configuration for passwordless sudo",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return createPerms(ctx, logger, runner)
+					return createSudoers(ctx, logger, runner)
 				},
 			},
 			{
 				Name:  "delete",
 				Usage: "Remove sudoers configuration",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					return deletePerms(ctx, logger, runner)
+					return deleteSudoers(ctx, logger, runner)
 				},
 			},
 		},
