@@ -114,7 +114,7 @@ func (m *Manager) Create(ctx context.Context) error {
 	if err := m.createTopoLVMBackend(ctx); err != nil {
 		return err
 	}
-	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network); err != nil {
+	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.NetworkSubnet); err != nil {
 		return err
 	}
 
@@ -367,7 +367,7 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 	return os.RemoveAll(filepath.Dir(m.cfg.LVMDisk))
 }
 
-func (m *Manager) ensurePodmanNetwork(ctx context.Context, name string) error {
+func (m *Manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
 	exists, err := m.podmanNetworkExists(ctx, name)
 	if err != nil {
 		return err
@@ -377,8 +377,13 @@ func (m *Manager) ensurePodmanNetwork(ctx context.Context, name string) error {
 		return nil
 	}
 
-	m.logger.Info("creating podman network", "network", name)
-	_, err = runPodmanCommand(ctx, m.runner, "network", "create", name)
+	m.logger.Info("creating podman network", "network", name, "subnet", subnet)
+	args := []string{"network", "create"}
+	if subnet != "" {
+		args = append(args, "--subnet", subnet)
+	}
+	args = append(args, name)
+	_, err = runPodmanCommand(ctx, m.runner, args...)
 	return err
 }
 
@@ -629,10 +634,13 @@ func (m *Manager) copyKubeconfig(ctx context.Context, containerName string) erro
 		return err
 	}
 
-	return writeKubeconfig(m.cfg.DefaultKubeconfigPath, result.Stdout)
+	return writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.DefaultKubeconfigPath)
 }
 
-func writeKubeconfig(path, content string) error {
+func writeKubeconfig(port int, content, path string) error {
+	if port != 6443 {
+		content = strings.ReplaceAll(content, ":6443", fmt.Sprintf(":%d", port))
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
