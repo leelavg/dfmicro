@@ -90,6 +90,11 @@ func createFlags() []cli.Flag {
 			Usage:    "Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)",
 			Category: "Mounts (immutable on creation):",
 		},
+		&cli.BoolFlag{
+			Name:     "no-power-tuning",
+			Usage:    "Do not apply MicroShift power tuning on create",
+			Category: "Mounts (immutable on creation):",
+		},
 		&cli.StringFlag{
 			Name:     "pull-secret",
 			Usage:    "Path to a pull secret JSON file for accessing private image registries",
@@ -184,13 +189,7 @@ Examples:
 				Name:      "config",
 				Usage:     "Print saved cluster config as JSON",
 				UsageText: "Config is recorded at creation time and reflects the flags used.",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "name",
-						Usage:    "Cluster name",
-						Required: true,
-					},
-				},
+				Flags:     []cli.Flag{nameFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return printClusterConfig(cmd.String("name"))
 				},

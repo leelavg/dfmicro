@@ -1,5 +1,17 @@
 package cluster
 
+const powerTuningConfig = `apiServer:
+  auditLog:
+    profile: None
+debugging:
+  logLevel: Warning
+etcd:
+  memoryLimitMB: 128
+ingress:
+  tuningOptions:
+    threadCount: 2
+`
+
 const lvmdConfigTmpl = `apiVersion: v1
 kind: ConfigMap
 metadata:

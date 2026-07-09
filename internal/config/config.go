@@ -20,6 +20,7 @@ type Config struct {
 	ExposeKubeAPI       bool    `json:"exposeKubeAPI"`
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
 	ShareHostContainers bool    `json:"shareHostContainers"`
+	PowerTuning         bool    `json:"powerTuning"`
 }
 
 var Load = sync.OnceValue(func() Config {

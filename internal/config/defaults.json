@@ -6,5 +6,6 @@
   "networkSubnet": "172.20.0.0/24",
   "exposeKubeAPI": true,
   "overprovisionRatio": 20.0,
-  "shareHostContainers": true
+  "shareHostContainers": true,
+  "powerTuning": true
 }

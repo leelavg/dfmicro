@@ -108,7 +108,7 @@ Print saved cluster config as JSON
 
 >Config is recorded at creation time and reflects the flags used.
 
-**--name**="": Cluster name
+**--name**="": Cluster name (default: "micro")
 
 ### create
 
@@ -137,6 +137,8 @@ Create a cluster, wait until ready, and print connection info
 **--network-subnet**="": IPv4 private CIDR for the Podman network (RFC 1918 only) (default: "172.20.0.0/24")
 
 **--no-expose-kubeapi**: Do not bind the API server port on the host (cluster-internal access only)
+
+**--no-power-tuning**: Do not apply MicroShift power tuning on create
 
 **--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)
 
