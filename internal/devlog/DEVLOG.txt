@@ -28,3 +28,4 @@
 - Kubeconfig port rewrite: server URL updated to match --api-server-port after copy from container
 - devlog command (hidden) for this log, config, docs commands
 - ops resources (experimental): CPU/mem requests limits and live usage per container, per-ns totals, node summary, filterable by ns and node
+- MicroShift power tuning on create, opt-out via --no-power-tuning

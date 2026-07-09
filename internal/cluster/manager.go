@@ -494,6 +494,16 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		)
 	}
 
+	if m.cfg.PowerTuning {
+		powerTuningPath := filepath.Join(m.cfg.StateDir, "power-tuning.yaml")
+		if err := os.WriteFile(powerTuningPath, []byte(powerTuningConfig), 0o644); err != nil {
+			return err
+		}
+		args = append(args,
+			"--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro",
+		)
+	}
+
 	if m.cfg.PullSecret != "" {
 		args = append(args, "--volume", m.cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")
 	}

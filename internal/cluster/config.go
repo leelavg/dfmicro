@@ -46,6 +46,9 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	if cmd.IsSet("no-share-host-containers") {
 		cfg.ShareHostContainers = !cmd.Bool("no-share-host-containers")
 	}
+	if cmd.IsSet("no-power-tuning") {
+		cfg.PowerTuning = !cmd.Bool("no-power-tuning")
+	}
 
 	return cfg, nil
 }
