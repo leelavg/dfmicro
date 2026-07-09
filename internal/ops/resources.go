@@ -50,7 +50,21 @@ const (
 func resourcesCommand(runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "resources",
-		Usage: "Show CPU and memory requests, limits, and usage per container (experimental)",
+		Usage: "Show CPU and memory requests, limits, and live usage per container (experimental)",
+		Description: `Fetches pod specs via kubectl and live container stats via crictl, then prints a
+hierarchical table: node header, per-namespace container rows with usage vs request percentages,
+a per-node total row, and a namespace summary at the end.
+
+Stats are fetched in parallel per namespace via crictl inside the cluster container,
+using a 30s gRPC timeout to handle large namespaces (e.g. openshift-storage with 40+ pods).
+
+Experimental: output format and flags may change. Performance improves significantly when
+scoped to a single namespace with --namespace.
+
+Examples:
+  dfmicro ops resources
+  dfmicro ops resources --namespace openshift-storage
+  dfmicro ops resources --name dev --node microshift-node-1`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "name",
@@ -59,11 +73,11 @@ func resourcesCommand(runner execx.Runner) *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "namespace",
-				Usage: "Namespace to inspect (omit for all namespaces)",
+				Usage: "Restrict output to a single namespace (omit for all namespaces)",
 			},
 			&cli.StringFlag{
 				Name:  "node",
-				Usage: "Node name to inspect (omit for all nodes)",
+				Usage: "Restrict output to a single node by name (omit for all nodes)",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
