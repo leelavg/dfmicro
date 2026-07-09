@@ -91,28 +91,24 @@ func sudoersCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "sudoers",
 		Usage: "Manage passwordless sudo configuration for dfmicro (Linux only)",
-		Description: `Writes /etc/sudoers.d/dfmicro granting your user passwordless sudo for the binaries
-dfmicro needs: podman, losetup, lvm tools (vgcreate, lvcreate, lvremove, vgremove, vgs, lvs),
-dmsetup, truncate, modprobe, and install.
+		UsageText: `Writes /etc/sudoers.d/dfmicro with the commands used by dfmicro requiring elevated access.
 
 No-op on macOS: rootful Podman machine runs as root so no sudoers entry is needed.
 
-Warning: these rules allow any process running as your user to invoke the listed binaries
-without a password. Intended for developer workstations, not shared hosts.`,
+Warning: these rules allow any process running as your user to invoke the listed binaries without a password prompt. Intended for developer workstations, not shared hosts.`,
 		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			{
-				Name:        "create",
-				Usage:       "Write /etc/sudoers.d/dfmicro for the current user",
-				Description: "Validates the file with visudo before installing. On macOS this is a no-op.",
+				Name:  "create",
+				Usage: "Write /etc/sudoers.d/dfmicro for the current user",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return createSudoers(ctx, logger, runner)
 				},
 			},
 			{
-				Name:        "delete",
-				Usage:       "Remove /etc/sudoers.d/dfmicro",
-				Description: "Removes the sudoers file created by 'sudoers create'. On macOS this is a no-op.",
+				Name:      "delete",
+				Usage:     "Remove /etc/sudoers.d/dfmicro",
+				UsageText: "Removes the sudoers file created by 'sudoers create'. On macOS this is a no-op.",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return deleteSudoers(ctx, logger, runner)
 				},

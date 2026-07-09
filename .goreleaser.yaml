@@ -35,4 +35,4 @@ signs:
 
 changelog:
   sort: asc
-  abbrev_length: 7
+  abbrev: 7

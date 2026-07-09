@@ -48,9 +48,9 @@ func docsCommand() *cli.Command {
 
 func configCommand() *cli.Command {
 	return &cli.Command{
-		Name:        "config",
-		Usage:       "Print the embedded default configuration as JSON",
-		Description: "Shows the compiled-in defaults for cluster name, image, network subnet, LVM size, and more.\nThese are the values used when flags are omitted on any command.",
+		Name:      "config",
+		Usage:     "Print the embedded default configuration as JSON",
+		UsageText: "Shows the compiled-in defaults for cluster name, image, network subnet, LVM size, and more.\nThese are the values used when flags are omitted on any command.",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			cfg := rootconfig.Load()
 
@@ -88,11 +88,11 @@ Verified on: Linux (Fedora / RHEL)
 Best-effort support: macOS (requires rootful Podman machine via 'podman machine init --rootful')
 
 Quick start:
-  dfmicro ops sudoers create                              # one-time: passwordless sudo for cluster tools
-  dfmicro cluster create                                  # create cluster named 'cluster'
-  dfmicro cluster kubeconfig > ~/.kube/config             # export kubeconfig
-  kubectl get nodes                                       # verify node is Ready
-  dfmicro cluster delete                                  # tear everything down`,
+  dfmicro ops sudoers create                   # one-time: passwordless sudo for cluster tools
+  dfmicro cluster create                       # create cluster with default name
+  dfmicro cluster kubeconfig > ~/.kube/config  # overwrites kubeconfig!
+  kubectl get nodes
+  dfmicro cluster delete                       # tear everything down`,
 		EnableShellCompletion: true,
 		Action:                support.UnknownSubcommand,
 		Commands: []*cli.Command{

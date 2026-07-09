@@ -9,7 +9,6 @@ import (
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
-	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -46,7 +45,7 @@ func createFlags() []cli.Flag {
 		},
 		&cli.Float32Flag{
 			Name:     "overprovision-ratio",
-			Usage:    "TopoLVM thin pool overprovision ratio; total allocatable storage = volsize * ratio",
+			Usage:    "TopoLVM thin pool overprovision ratio",
 			Value:    defaultRootConfig.OverprovisionRatio,
 			Category: "Storage:",
 		},
@@ -64,7 +63,7 @@ func createFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:     "network-subnet",
-			Usage:    "IPv4 private CIDR for the dedicated Podman network (RFC 1918 only, e.g. 10.88.0.0/24)",
+			Usage:    "IPv4 private CIDR for the Podman network (RFC 1918 only)",
 			Value:    defaultRootConfig.NetworkSubnet,
 			Category: "Network:",
 			Validator: func(s string) error {
@@ -88,22 +87,22 @@ func createFlags() []cli.Flag {
 		},
 		&cli.BoolFlag{
 			Name:     "no-share-host-containers",
-			Usage:    "Do not bind-mount /var/lib/containers from the host (disables image layer reuse, slower pulls)",
+			Usage:    "Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)",
 			Category: "Mounts (immutable on creation):",
 		},
 		&cli.StringFlag{
 			Name:     "pull-secret",
-			Usage:    "Path to a Red Hat pull secret JSON file (required for registries.redhat.io images)",
+			Usage:    "Path to a pull secret JSON file for accessing private image registries",
 			Category: "Mounts (immutable on creation):",
 		},
 		&cli.StringSliceFlag{
 			Name:     "idms",
-			Usage:    "Path(s) to ImageDigestMirrorSet YAML files for mirror registries; merged in order given",
+			Usage:    "Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)",
 			Category: "Mounts (immutable on creation):",
 		},
 		&cli.StringSliceFlag{
 			Name:     "mount",
-			Usage:    "Extra bind mounts in Podman format: /host/path:/container/path[:opts] (repeatable)",
+			Usage:    "Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)",
 			Category: "Mounts (immutable on creation):",
 		},
 	}
@@ -125,9 +124,9 @@ func commandAction(logger *slog.Logger, runner execx.Runner, fn func(context.Con
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
-		Name:        "cluster",
-		Usage:       "Manage cluster lifecycle",
-		Description: "Create, start, stop, and delete MicroShift clusters running in rootful Podman containers.\nEach cluster is identified by name and stores its config under ~/.config/dfmicro/<name>/.",
+		Name:      "cluster",
+		Usage:     "Manage cluster lifecycle",
+		UsageText: "Manage MicroShift cluster lifecycle in rootful Podman containers.",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowSubcommandHelp(cmd)
 		},
@@ -135,7 +134,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			{
 				Name:    "list",
 				Aliases: []string{"ls"},
-				Usage:   "List all " + support.BinaryName + " clusters",
+				Usage:   "List all clusters",
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					return listAll(ctx, logger, runner)
 				},
@@ -143,24 +142,13 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			{
 				Name:  "create",
 				Usage: "Create a cluster, wait until ready, and print connection info",
-				Description: `Pulls the MicroShift container image, creates a dedicated Podman network and LVM thin
-pool, starts the node, and waits for the API server and core components to be Ready.
-
-Flags marked "immutable on creation" cannot be changed after the cluster is created.
-To change them, delete and recreate the cluster.
-
-Notes:
-  - Verified on Linux (Fedora / RHEL). macOS requires a rootful Podman machine.
-  - On macOS, run 'podman machine init --rootful && podman machine start' before creating.
-  - --pull-secret is required for images from registries.redhat.io (Red Hat content).
-  - --idms accepts multiple files; they are merged in the order given.
-  - --network-subnet must be an RFC 1918 private range in CIDR notation, IPv4 only.
+				UsageText: `Mounts flags are immutable after creation. Delete and recreate to change them.
 
 Examples:
   dfmicro cluster create
   dfmicro cluster create --name dev --network-subnet 10.88.0.0/24
   dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
-  dfmicro cluster create --idms ~/idms-brew.yaml --idms ~/idms-quay.yaml`,
+  dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml`,
 				Flags: createFlags(),
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					if runtime.GOOS == "darwin" {
@@ -171,31 +159,31 @@ Examples:
 				Action: commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Create(ctx) }),
 			},
 			{
-				Name:        "delete",
-				Aliases:     []string{"rm"},
-				Usage:       "Delete cluster containers, network, and storage",
-				Description: "Stops and removes all containers for the cluster, deletes the Podman network, tears down the LVM thin pool, and removes the loop device. The cluster config directory is also removed.",
-				Flags:       clusterFlags(),
-				Action:      commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Delete(ctx) }),
+				Name:      "delete",
+				Aliases:   []string{"rm"},
+				Usage:     "Delete cluster containers, network, and storage",
+				UsageText: "Stops and removes all cluster containers, networking, and storage stack.",
+				Flags:     clusterFlags(),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Delete(ctx) }),
 			},
 			{
-				Name:        "start",
-				Usage:       "Start a stopped cluster",
-				Description: "Starts existing cluster containers. Use after 'cluster stop' or after a host reboot. Containers must already exist (created via 'cluster create').",
-				Flags:       clusterFlags(),
-				Action:      commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Start(ctx) }),
+				Name:      "start",
+				Usage:     "Start a stopped cluster",
+				UsageText: "Use after 'cluster stop' or after a host reboot.",
+				Flags:     clusterFlags(),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Start(ctx) }),
 			},
 			{
-				Name:        "stop",
-				Usage:       "Stop cluster containers without removing them",
-				Description: "Stops running cluster containers, preserving all state. Resume with 'cluster start'.",
-				Flags:       clusterFlags(),
-				Action:      commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Stop(ctx) }),
+				Name:      "stop",
+				Usage:     "Stop cluster containers without removing them",
+				UsageText: "Preserves all state. Resume with 'cluster start'.",
+				Flags:     clusterFlags(),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Stop(ctx) }),
 			},
 			{
-				Name:        "config",
-				Usage:       "Print saved cluster config as JSON",
-				Description: "Prints the config recorded at creation time (image, network, ports, mounts, etc.).",
+				Name:      "config",
+				Usage:     "Print saved cluster config as JSON",
+				UsageText: "Config is recorded at creation time and reflects the flags used.",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "name",
@@ -210,8 +198,7 @@ Examples:
 			{
 				Name:  "kubeconfig",
 				Usage: "Print kubeconfig for a cluster",
-				Description: `Prints the kubeconfig with the API server URL rewritten to match the host port.
-Pipe to a file or merge into an existing kubeconfig:
+				UsageText: `Pipe to a file or merge into an existing kubeconfig:
 
   dfmicro cluster kubeconfig > ~/.kube/config
   dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml`,
@@ -221,15 +208,9 @@ Pipe to a file or merge into an existing kubeconfig:
 				}),
 			},
 			{
-				Name:  "exec",
-				Usage: "Open an interactive shell inside the cluster container",
-				Description: `Runs an interactive shell inside the running Podman container for the cluster.
-Useful for running crictl, oc, or kubectl directly against the node.
-
-Examples:
-  dfmicro cluster exec
-  dfmicro cluster exec --name dev
-  dfmicro cluster exec --container my-container`,
+				Name:      "exec",
+				Usage:     "Open an interactive shell inside the cluster container",
+				UsageText: `Useful for running crictl, oc, or kubectl directly against the node.`,
 				Flags: []cli.Flag{
 					nameFlag(),
 					&cli.StringFlag{

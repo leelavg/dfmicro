@@ -15,11 +15,11 @@ Verified on: Linux (Fedora / RHEL)
 Best-effort support: macOS (requires rootful Podman machine via 'podman machine init --rootful')
 
 Quick start:
-  dfmicro ops sudoers create                              # one-time: passwordless sudo for cluster tools
-  dfmicro cluster create                                  # create cluster named 'cluster'
-  dfmicro cluster kubeconfig > ~/.kube/config             # export kubeconfig
-  kubectl get nodes                                       # verify node is Ready
-  dfmicro cluster delete                                  # tear everything down
+  dfmicro ops sudoers create                   # one-time: passwordless sudo for cluster tools
+  dfmicro cluster create                       # create cluster with default name
+  dfmicro cluster kubeconfig > ~/.kube/config  # overwrites kubeconfig!
+  kubectl get nodes
+  dfmicro cluster delete                       # tear everything down
 
 **Usage**:
 
@@ -33,33 +33,44 @@ dfmicro [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 
 Manage cluster addons
 
+**--list**: List available addons
+
 ### odf
 
 Manage OpenShift Data Foundation on a MicroShift cluster
 
->dfmicro addon odf [--name NAME | --kubeconfig PATH] [--kubectl] <command>
+    Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
+    
+    Note: --name and --kubeconfig apply to all subcommands and must come before the subcommand name.
 
 **--kubeconfig**="": Path to an existing kubeconfig file
 
 **--kubectl**: Use kubectl instead of oc for cluster operations
 
-**--name**="": Cluster name to resolve kubeconfig from (default: "cluster")
+**--name**="": Cluster name to resolve kubeconfig from (default: "micro")
 
 #### configure
 
-Apply SINGLE_NODE StorageCluster CR and label the storage node
+Configure ODF to run on MicroShift in an opinionated single-node setup
+
+>Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.
 
 #### install
 
-Install ODF operator, shim CRDs, RBAC, and catalog source
+Install ODF and required shim resources
 
-**--catalog-image**="": Catalog source image containing the ODF operator bundle
+    Requires rbd, ceph, nbd kernel modules loaded on the host. Run 'dfmicro addon odf modules load' first.
+    
+    Example:
+      dfmicro addon odf install --catalog-image quay.io/example/catalog:v4.16 --channel stable-4.16 --version 4.16.0
 
-**--channel**="": OLM subscription channel (e.g. stable-4.16)
+**--catalog-image**="": Catalog source image
 
-**--sub-name**="": OLM subscription name(s) to create (repeatable) (default: "odf-operator")
+**--channel**="": Subscription channel (e.g. stable-4.16)
 
-**--version**="": OCP version string in X.Y.Z format (e.g. 4.16.0) used to select the correct shim resources
+**--sub-name**="": Subscription name (repeatable) (default: "odf-operator")
+
+**--version**="": OCP version in X.Y.Z format (e.g. 4.16.0)
 
 #### modules
 
@@ -67,15 +78,21 @@ Manage ODF kernel module auto-load configuration
 
 ##### load
 
-Write modules-load.d config and load rbd, ceph, nbd for the current session
+Load rbd, ceph, nbd kernel modules and configure auto-load at boot
 
 ##### unload
 
-Remove modules-load.d config and unload rbd, ceph, nbd from the current session
+Unload rbd, ceph, nbd kernel modules and remove auto-load config
 
 #### uninstall
 
-Uninstall ODF operator and all associated resources
+Uninstall ODF and all associated resources
+
+    Prints the cleanup commands by default. Pass --attempt to execute them (best-effort).
+    
+    Examples:
+      dfmicro addon odf uninstall            # dry-run: print commands
+      dfmicro addon odf uninstall --attempt  # execute cleanup
 
 **--attempt**: Execute the delete commands instead of printing them (best-effort)
 
@@ -83,9 +100,13 @@ Uninstall ODF operator and all associated resources
 
 Manage cluster lifecycle
 
+>Manage MicroShift cluster lifecycle in rootful Podman containers.
+
 ### config
 
 Print saved cluster config as JSON
+
+>Config is recorded at creation time and reflects the flags used.
 
 **--name**="": Cluster name
 
@@ -93,67 +114,91 @@ Print saved cluster config as JSON
 
 Create a cluster, wait until ready, and print connection info
 
+    Mounts flags are immutable after creation. Delete and recreate to change them.
+    
+    Examples:
+      dfmicro cluster create
+      dfmicro cluster create --name dev --network-subnet 10.88.0.0/24
+      dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
+      dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml
+
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
 
-**--idms**="": Path(s) to ImageDigestMirrorSet YAML files for mirror registries; merged in order given
+**--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
 **--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202607050937_g45630c7b1_5.0.0_okd_scos.ec.4")
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 
-**--mount**="": Extra bind mounts in Podman format: /host/path:/container/path[:opts] (repeatable)
+**--mount**="": Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)
 
-**--name**="": Cluster name, used to identify containers and stored config (default: "cluster")
+**--name**="": Cluster name, used to identify containers and stored config (default: "micro")
 
-**--network-subnet**="": IPv4 private CIDR for the dedicated Podman network (RFC 1918 only, e.g. 10.88.0.0/24) (default: "172.20.0.0/24")
+**--network-subnet**="": IPv4 private CIDR for the Podman network (RFC 1918 only) (default: "172.20.0.0/24")
 
 **--no-expose-kubeapi**: Do not bind the API server port on the host (cluster-internal access only)
 
-**--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (disables image layer reuse, slower pulls)
+**--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)
 
-**--overprovision-ratio**="": TopoLVM thin pool overprovision ratio; total allocatable storage = volsize * ratio (default: 20)
+**--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
-**--pull-secret**="": Path to a Red Hat pull secret JSON file (required for registries.redhat.io images)
+**--pull-secret**="": Path to a pull secret JSON file for accessing private image registries
 
 ### delete, rm
 
 Delete cluster containers, network, and storage
 
-**--name**="": Cluster name (default: "cluster")
+>Stops and removes all cluster containers, networking, and storage stack.
+
+**--name**="": Cluster name (default: "micro")
 
 ### exec
 
 Open an interactive shell inside the cluster container
 
+>Useful for running crictl, oc, or kubectl directly against the node.
+
 **--container**="": Container name (defaults to first running container for the cluster)
 
-**--name**="": Cluster name (default: "cluster")
+**--name**="": Cluster name (default: "micro")
 
 ### kubeconfig
 
 Print kubeconfig for a cluster
 
-**--name**="": Cluster name (default: "cluster")
+    Pipe to a file or merge into an existing kubeconfig:
+    
+      dfmicro cluster kubeconfig > ~/.kube/config
+      dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml
+
+**--name**="": Cluster name (default: "micro")
 
 ### list, ls
 
-List all dfmicro clusters
+List all clusters
 
 ### start
 
 Start a stopped cluster
 
-**--name**="": Cluster name (default: "cluster")
+>Use after 'cluster stop' or after a host reboot.
+
+**--name**="": Cluster name (default: "micro")
 
 ### stop
 
 Stop cluster containers without removing them
 
-**--name**="": Cluster name (default: "cluster")
+>Preserves all state. Resume with 'cluster start'.
+
+**--name**="": Cluster name (default: "micro")
 
 ## config
 
 Print the embedded default configuration as JSON
+
+    Shows the compiled-in defaults for cluster name, image, network subnet, LVM size, and more.
+    These are the values used when flags are omitted on any command.
 
 ## docs
 
@@ -169,7 +214,14 @@ Operational utilities for running clusters
 
 Show CPU and memory requests, limits, and live usage per container (experimental)
 
-**--name**="": Cluster name (default: "cluster")
+    Experimental: output format and flags may change. Use --namespace to scope and improve performance.
+    
+    Examples:
+      dfmicro ops resources
+      dfmicro ops resources --namespace openshift-operator-lifecycle-manager
+      dfmicro ops resources --name dev --node microshift-node-1
+
+**--name**="": Cluster name (default: "micro")
 
 **--namespace**="": Restrict output to a single namespace (omit for all namespaces)
 
@@ -179,6 +231,12 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 
 Manage passwordless sudo configuration for dfmicro (Linux only)
 
+    Writes /etc/sudoers.d/dfmicro with the commands used by dfmicro requiring elevated access.
+    
+    No-op on macOS: rootful Podman machine runs as root so no sudoers entry is needed.
+    
+    Warning: these rules allow any process running as your user to invoke the listed binaries without a password prompt. Intended for developer workstations, not shared hosts.
+
 #### create
 
 Write /etc/sudoers.d/dfmicro for the current user
@@ -186,3 +244,5 @@ Write /etc/sudoers.d/dfmicro for the current user
 #### delete
 
 Remove /etc/sudoers.d/dfmicro
+
+>Removes the sudoers file created by 'sudoers create'. On macOS this is a no-op.
