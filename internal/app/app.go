@@ -36,8 +36,9 @@ func devlogCommand() *cli.Command {
 
 func docsCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "docs",
-		Usage: "Print full command reference as markdown",
+		Name:      "docs",
+		Usage:     "Print full command reference as markdown",
+		UsageText: "dfmicro docs > cli.md",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			_, err := os.Stdout.WriteString(docs.CLI)
 			return err
@@ -47,8 +48,9 @@ func docsCommand() *cli.Command {
 
 func configCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "config",
-		Usage: "Print top-level embedded config",
+		Name:        "config",
+		Usage:       "Print the embedded default configuration as JSON",
+		Description: "Shows the compiled-in defaults for cluster name, image, network subnet, LVM size, and more.\nThese are the values used when flags are omitted on any command.",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			cfg := rootconfig.Load()
 
@@ -76,9 +78,21 @@ func sortAll(cmd *cli.Command) {
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	cmd := &cli.Command{
-		Name:                  support.BinaryName,
-		Usage:                 "Manage " + support.BinaryName + " clusters",
-		Version:               buildinfo.String(),
+		Name:    support.BinaryName,
+		Usage:   "Run MicroShift clusters in rootful Podman containers",
+		Version: buildinfo.String(),
+		Description: `dfmicro creates and manages single-node MicroShift clusters inside rootful Podman containers.
+Each cluster gets its own Podman network and a loop-device backed LVM thin pool for TopoLVM storage.
+
+Verified on: Linux (Fedora / RHEL)
+Best-effort support: macOS (requires rootful Podman machine via 'podman machine init --rootful')
+
+Quick start:
+  dfmicro ops sudoers create                              # one-time: passwordless sudo for cluster tools
+  dfmicro cluster create                                  # create cluster named 'cluster'
+  dfmicro cluster kubeconfig > ~/.kube/config             # export kubeconfig
+  kubectl get nodes                                       # verify node is Ready
+  dfmicro cluster delete                                  # tear everything down`,
 		EnableShellCompletion: true,
 		Action:                support.UnknownSubcommand,
 		Commands: []*cli.Command{

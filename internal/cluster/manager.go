@@ -489,8 +489,8 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		}
 
 		args = append(args,
-			"-p", fmt.Sprintf("%d:%d", m.cfg.APIServerPort, m.cfg.APIServerPort),
-			"--volume", m.cfg.ExtraConfig+":/etc/microshift/config.d/api_server.yaml:ro",
+			"-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort),
+			"--volume", m.cfg.ExtraConfig+":/etc/microshift/config.d/99-api-server.yaml:ro",
 		)
 	}
 

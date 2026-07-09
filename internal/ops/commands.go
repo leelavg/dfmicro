@@ -11,8 +11,9 @@ import (
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
-		Name:  "ops",
-		Usage: "Operational utilities for running clusters",
+		Name:        "ops",
+		Usage:       "Operational utilities for running clusters",
+		Description: "Host-side helpers that complement cluster management: inspect live resource usage, manage sudo permissions.",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return cli.ShowSubcommandHelp(cmd)
 		},
