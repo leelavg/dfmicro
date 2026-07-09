@@ -1,5 +1,6 @@
 ## Do
 
+- cluster: test running multiple named clusters simultaneously to verify config dirs, networks, and loop devices don't collide
 - ops resources: flag to choose bulk vs per-ns stats strategy, pluggable transport beyond podman exec
 - replace kubectl/crictl exec chains with podman API and client-go for cluster operations
 - VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
