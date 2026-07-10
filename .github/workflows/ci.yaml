@@ -18,6 +18,25 @@ jobs:
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version-file: go.mod
-          cache: false
-      - run: make build
+      - run: make fmt vet generate
       - run: git diff --exit-code
+
+  cross-compile:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux,  goarch: amd64  }
+          - { goos: linux,  goarch: arm64  }
+          - { goos: darwin, goarch: amd64  }
+          - { goos: darwin, goarch: arm64  }
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      ACTIONS_CACHE_RETURN_ON_POST_FAILURE: "true"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: go.mod
+      - run: make build-cross
