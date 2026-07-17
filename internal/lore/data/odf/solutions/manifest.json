@@ -1,0 +1,19 @@
+{
+  "download_date": "2026-07-18T14:14:13Z",
+  "files": [
+    {
+      "name": "7143190.json",
+      "url": "https://access.redhat.com/solutions/7143190"
+    },
+    {
+      "name": "7145344.json",
+      "url": "https://access.redhat.com/solutions/7145344"
+    }
+  ],
+  "stats": {
+    "total": 1057,
+    "successful": 2,
+    "failed": 0,
+    "skipped": 0
+  }
+}

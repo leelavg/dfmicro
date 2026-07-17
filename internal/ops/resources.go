@@ -325,9 +325,6 @@ func (r *resources) build(ctx context.Context, targetCtr string) ([]nodeReport, 
 		nr.namespaces[idx].rows = append(nr.namespaces[idx].rows, rows...)
 	}
 
-	// - if we sort the namespace when we got the kubectl output for pods do we still need a sort here?
-	// - the reasoning is, I'm thinking to stream the result per namespace rather than holding a lot of
-	// - buffer string
 	for i := range reports {
 		sort.Slice(reports[i].namespaces, func(a, b int) bool {
 			return reports[i].namespaces[a].name < reports[i].namespaces[b].name

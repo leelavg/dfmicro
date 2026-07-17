@@ -3,6 +3,8 @@ package support
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -22,4 +24,14 @@ func UnknownSubcommand(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("unknown command %q", name)
 	}
 	return cli.ShowSubcommandHelp(cmd)
+}
+
+func SortCommand(cmd *cli.Command) {
+	sort.Sort(cli.FlagsByName(cmd.Flags))
+	slices.SortFunc(cmd.Commands, func(a, b *cli.Command) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+	for _, subCmd := range cmd.Commands {
+		SortCommand(subCmd)
+	}
 }

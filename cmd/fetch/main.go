@@ -6,8 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"dfmicro/internal/app"
-	"dfmicro/internal/execx"
+	"dfmicro/internal/lore"
 	"dfmicro/internal/support"
 )
 
@@ -17,8 +16,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cmd := app.Command(logger, execx.OSRunner{})
-	if err := cmd.Run(ctx, os.Args); err != nil {
+	if err := lore.Command(logger).Run(ctx, os.Args); err != nil {
 		logger.Error("command failed", "error", err)
 		os.Exit(1)
 	}

@@ -8,7 +8,7 @@ MAKEFLAGS += --no-builtin-rules
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
 
-.PHONY: vet fmt generate build build-cross build-release build-analyze
+.PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch
 
 vet:
 	go vet ./...
@@ -18,6 +18,10 @@ fmt:
 
 generate:
 	go generate ./internal/docs
+
+build-fetch:
+	mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 go build -o $(BIN_DIR)/fetch ./cmd/fetch
 
 build: fmt vet generate
 	$(MAKE) -s build-cross

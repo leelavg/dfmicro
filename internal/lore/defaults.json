@@ -1,0 +1,8 @@
+{
+  "docsBaseURL": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation",
+  "solrBaseURL": "https://access.redhat.com/hydra/rest/search/kcs",
+  "maxRetries": 3,
+  "retryDelaySeconds": 2,
+  "httpTimeoutSeconds": 60,
+  "defaultProduct": "odf"
+}

@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
-	"slices"
-	"sort"
-	"strings"
 
 	"dfmicro/internal/addon"
 	"dfmicro/internal/buildinfo"
@@ -66,16 +63,6 @@ func configCommand() *cli.Command {
 	}
 }
 
-func sortAll(cmd *cli.Command) {
-	sort.Sort(cli.FlagsByName(cmd.Flags))
-	slices.SortFunc(cmd.Commands, func(a, b *cli.Command) int {
-		return strings.Compare(a.Name, b.Name)
-	})
-	for _, subCmd := range cmd.Commands {
-		sortAll(subCmd)
-	}
-}
-
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	cmd := &cli.Command{
 		Name:    support.BinaryName,
@@ -105,6 +92,6 @@ Quick start:
 		},
 	}
 
-	sortAll(cmd)
+	support.SortCommand(cmd)
 	return cmd
 }
