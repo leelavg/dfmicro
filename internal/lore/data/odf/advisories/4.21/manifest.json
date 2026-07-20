@@ -47,8 +47,8 @@
     }
   ],
   "stats": {
-    "total": 11,
-    "successful": 11,
+    "total": 0,
+    "successful": 0,
     "failed": 0,
     "skipped": 0,
     "base_url": "https://access.redhat.com/errata"
