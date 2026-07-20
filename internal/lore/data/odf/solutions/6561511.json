@@ -1,0 +1,1 @@
+{"id":"6561511","lastModifiedDate":"2024-06-13T22:08:39Z","publishedAbstract":"- There is a new `PVC` created in the `openshift-storage` project in OCP 4.- No manual changes were made recently to the OpenShift Container Storage platform.","publishedTitle":"Extra pvc for rook-ceph-mon pod in OpenShift 4","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6561511"}

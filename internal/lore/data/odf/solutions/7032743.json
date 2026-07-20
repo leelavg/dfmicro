@@ -1,0 +1,1 @@
+{"id":"7032743","lastModifiedDate":"2024-06-03T19:01:51Z","publishedAbstract":"- s3 buckets are accessible only via path-style internally.- Creating s3 buckets does not create a virtual-host-style URL.","publishedTitle":"NooBaa: Create internal virtual-host-style URLs for s3 MCG buckets","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7032743"}

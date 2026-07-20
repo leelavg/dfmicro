@@ -1,0 +1,1 @@
+{"id":"5636081","lastModifiedDate":"2024-08-29T15:33:23Z","publishedAbstract":"* It is required to access a Ceph-RBD Persistent Volume in another container after it\u0026#039;s unmounted * Details of the PVC and PV are known ","publishedTitle":"Mounting a ceph-rbd PV in another a container","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/5636081"}

@@ -1,0 +1,1 @@
+{"id":"6970988","lastModifiedDate":"2024-08-01T20:34:19Z","publishedAbstract":"Whether deploying OpenShift or Openshift on Openstack the control plane must meet known resource requirements to run the etcd key-value store. ","publishedTitle":"Should I use Ceph or ODF to back etcd for my Openshift Cluster?","setLanguage":"en","view_uri":"https://access.redhat.com/articles/6970988"}

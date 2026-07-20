@@ -1,0 +1,1 @@
+{"id":"5576871","lastModifiedDate":"2024-08-13T06:57:17Z","publishedAbstract":"- How to configure device tiering in heketi.- Allocate bricks on specific devices. Eg. If you want to allocate a set of bricks on HDD and another set on SDD. ","publishedTitle":"Configure device tiering in Heketi","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/5576871"}

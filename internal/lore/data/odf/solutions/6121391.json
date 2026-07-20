@@ -1,0 +1,1 @@
+{"id":"6121391","lastModifiedDate":"2023-03-29T03:35:25Z","publishedAbstract":"- Customers may have multiple Ceph clusters and want to consume their storage from a single OpenShift cluster.","publishedTitle":"Is it supported to create storage classes with ODF backed by multiple external Ceph clusters?","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6121391"}

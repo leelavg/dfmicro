@@ -1,0 +1,1 @@
+{"id":"6300121","lastModifiedDate":"2024-06-13T22:37:16Z","publishedAbstract":"* Pod creation fail due to digest mismatch on images modified after the upgrade to OCP 4.7.24 ","publishedTitle":"Image can't be pulled due to digest mismatch, expected sha256 not found ","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6300121"}

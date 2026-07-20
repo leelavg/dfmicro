@@ -28,7 +28,7 @@ The CI workflow checks that committed docs match the source.
 
 **Command structure**
 
-Commands are grouped into three top-level domains: `cluster` (lifecycle), `addon` (optional workloads), and `ops` (host utilities). Each domain lives in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup so the help output is stable without manual ordering.
+Commands are grouped into three top-level domains: `cluster` (lifecycle), `addon` (optional workloads), and `ops` (host utilities). Each domain lives in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup via `support.SortCommand()` so the help output is stable without manual ordering.
 
 **Addon mechanism**
 
@@ -46,3 +46,17 @@ Releases are cut by pushing a version tag. GoReleaser builds cross-platform bina
 git tag v0.x.0
 git push origin v0.x.0
 ```
+
+## Code Standards
+
+**Comments only when required.** Only add `// comment` when the WHY is non-obvious: a hidden constraint, subtle invariant, workaround for a specific bug, or behavior that would surprise a reader. No sprinkled inline documentation, no refactoring comments, no references to issues/PRs.
+
+**Structs and methods, not standalone functions.** Prefer types with methods hanging off them over free functions. Cleaner state management, less parameter threading. Export only what external packages need.
+
+**Minimal exports.** Lowercase for internals. Private to the package unless another package must use it.
+
+**Defaults from build-time config.** Read defaults from embedded JSON (via `sync.OnceValue`), not hardcoded. Single source of truth. Example: `internal/config/defaults.json` loaded once in `config.Load()`.
+
+**Validation at CLI layer.** Use urfave Validator on flags, not error returns in business logic. Let the framework reject invalid input before calling handler code.
+
+**Review comments during development.** Use `// -` inline comments to mark areas for refactoring or decisions pending feedback. Example: `// - move to support/log.go and reuse`. These are addressed before merge, not shipped.

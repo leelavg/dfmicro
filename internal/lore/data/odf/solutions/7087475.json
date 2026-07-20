@@ -1,0 +1,1 @@
+{"id":"7087475","lastModifiedDate":"2024-09-17T06:43:17Z","publishedAbstract":"* If an object in a versioned RGW bucket is deleted, it is required to restore the object.","publishedTitle":"Restoring a deleted RGW object in a versioned bucket","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7087475"}

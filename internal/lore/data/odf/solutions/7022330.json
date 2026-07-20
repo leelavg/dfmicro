@@ -1,0 +1,1 @@
+{"id":"7022330","lastModifiedDate":"2024-12-04T15:25:26Z","publishedAbstract":"- ceph status and ceph osd df tree are reporting osd down, often times `oc alert rules` command can be used to easily identify the reason for osd down.","publishedTitle":"How to find a reason for osd down by oc alert CLI.","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7022330"}

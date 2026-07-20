@@ -1,0 +1,1 @@
+{"id":"7003312","lastModifiedDate":"2024-06-13T19:22:06Z","publishedAbstract":"- We see this error in MGR log frequently ``` mgr[rbd_support] execute_task: [errno 39] error deleting image from trash ```","publishedTitle":"ODF: rook-ceph-mgr reports \"error deleting image from trash\"","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7003312"}

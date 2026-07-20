@@ -1,0 +1,1 @@
+{"id":"6965427","lastModifiedDate":"2024-06-13T21:02:16Z","publishedAbstract":"- When attempting to delete the odf-service cluster the deletion fails without error when issuing the following: ~~~ # rosa delete cluster--cluster= ~~~","publishedTitle":"Unable to delete the odf-service cluster","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6965427"}

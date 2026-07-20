@@ -1,0 +1,1 @@
+{"id":"4859571","lastModifiedDate":"2024-06-14T02:05:45Z","publishedAbstract":"- Is it recommended to use rbd device for etcd mount path? ","publishedTitle":"Why etcd pod using rbd device as a backend reporting sync times larger than a second ? ","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/4859571"}

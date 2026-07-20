@@ -1,0 +1,1 @@
+{"id":"7132037","lastModifiedDate":"2026-01-30T19:25:39Z","publishedAbstract":"+ The newly added Luns are visible in the cli not in openshift-console (GUI). + Raw block volumes visible on nodes but not in GUI.","publishedTitle":"Newly added LUNs not visible in OpenShift console","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7132037"}

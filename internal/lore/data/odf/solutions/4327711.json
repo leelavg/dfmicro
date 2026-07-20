@@ -1,0 +1,1 @@
+{"id":"4327711","lastModifiedDate":"2024-06-14T13:01:07Z","publishedAbstract":"- A restart a Gluster Node in OCS takes at least 20 minutes.- There is a high number of volumes, almost 400, but the OCS limit is for now 1000 volumes ","publishedTitle":"Nodes takes a lot of time to startup","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/4327711"}
