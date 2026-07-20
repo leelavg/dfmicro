@@ -20,8 +20,8 @@ type solrClient struct {
 
 type solrResponse struct {
 	Response struct {
-		NumFound int64           `json:"numFound"`
-		Start    int64           `json:"start"`
+		NumFound int64                    `json:"numFound"`
+		Start    int64                    `json:"start"`
 		Docs     []map[string]interface{} `json:"docs"`
 	} `json:"response"`
 	Highlighting map[string]interface{} `json:"highlighting,omitempty"`
@@ -29,30 +29,30 @@ type solrResponse struct {
 }
 
 type solrDocAdvisory struct {
-	ID                  string `json:"id"`
-	Language            string `json:"language"`
-	LastModifiedDate    string `json:"lastModifiedDate"`
-	PortalDescription   string `json:"portal_description"`
-	PortalSolution      string `json:"portal_solution"`
-	ViewURI             string `json:"view_uri"`
+	ID                string `json:"id"`
+	Language          string `json:"language"`
+	LastModifiedDate  string `json:"lastModifiedDate"`
+	PortalDescription string `json:"portal_description"`
+	PortalSolution    string `json:"portal_solution"`
+	ViewURI           string `json:"view_uri"`
 }
 
 type solrDocArticle struct {
-	ID                  string `json:"id"`
-	LastModifiedDate    string `json:"lastModifiedDate"`
-	PublishedAbstract   string `json:"publishedAbstract"`
-	PublishedTitle      string `json:"publishedTitle"`
-	SetLanguage         string `json:"setLanguage"`
-	ViewURI             string `json:"view_uri"`
+	ID                string `json:"id"`
+	LastModifiedDate  string `json:"lastModifiedDate"`
+	PublishedAbstract string `json:"publishedAbstract"`
+	PublishedTitle    string `json:"publishedTitle"`
+	SetLanguage       string `json:"setLanguage"`
+	ViewURI           string `json:"view_uri"`
 }
 
 type solrDocSolution struct {
-	ID                  string `json:"id"`
-	LastModifiedDate    string `json:"lastModifiedDate"`
-	PublishedAbstract   string `json:"publishedAbstract"`
-	PublishedTitle      string `json:"publishedTitle"`
-	SetLanguage         string `json:"setLanguage"`
-	ViewURI             string `json:"view_uri"`
+	ID                string `json:"id"`
+	LastModifiedDate  string `json:"lastModifiedDate"`
+	PublishedAbstract string `json:"publishedAbstract"`
+	PublishedTitle    string `json:"publishedTitle"`
+	SetLanguage       string `json:"setLanguage"`
+	ViewURI           string `json:"view_uri"`
 }
 
 func newSolrClient(cfg config) *solrClient {

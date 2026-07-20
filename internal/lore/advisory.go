@@ -29,7 +29,7 @@ func (f *fetcher) downloadAdvisories(ctx context.Context) error {
 		existingManifest, _ := loadManifest(manifestPath)
 
 		params := map[string]any{
-			"q":    "*:*",
+			"q": "*:*",
 			"fq": []string{
 				`documentKind:("Errata")`,
 				fmt.Sprintf(`portal_product_filter:Red\ Hat\ OpenShift\ Data\ Foundation|*|%s|*`, ver),
