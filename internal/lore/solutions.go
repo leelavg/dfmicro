@@ -118,6 +118,7 @@ func (f *fetcher) downloadSolutions(ctx context.Context) error {
 
 			solutionFile := filepath.Join(solutionsDir, docID+".json")
 
+			cached := false
 			if existingManifest != nil {
 				for _, fileRec := range existingManifest.Files {
 					if fileRec.Name == docID+".json" {
@@ -127,9 +128,13 @@ func (f *fetcher) downloadSolutions(ctx context.Context) error {
 							Name: fileRec.Name,
 							URL:  doc["view_uri"].(string),
 						})
-						continue
+						cached = true
+						break
 					}
 				}
+			}
+			if cached {
+				continue
 			}
 
 			if err := os.MkdirAll(filepath.Dir(solutionFile), 0755); err != nil {

@@ -50,3 +50,7 @@ func (f *fetcher) articles(ctx context.Context) error {
 func (f *fetcher) solutions(ctx context.Context) error {
 	return f.downloadSolutions(ctx)
 }
+
+func (f *fetcher) runbooks(ctx context.Context) error {
+	return f.downloadRunbooks(ctx)
+}

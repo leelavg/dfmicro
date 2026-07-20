@@ -1,9 +1,17 @@
 {
-  "download_date": "2026-07-18T14:14:06Z",
+  "download_date": "2026-07-20T10:12:07Z",
   "files": [
     {
       "name": "6932811.json",
       "url": "https://access.redhat.com/articles/6932811"
+    },
+    {
+      "name": "6932811.json",
+      "url": "https://access.redhat.com/articles/6932811"
+    },
+    {
+      "name": "7078648.json",
+      "url": "https://access.redhat.com/articles/7078648"
     },
     {
       "name": "7078648.json",
@@ -14,6 +22,6 @@
     "total": 108,
     "successful": 2,
     "failed": 0,
-    "skipped": 0
+    "skipped": 2
   }
 }

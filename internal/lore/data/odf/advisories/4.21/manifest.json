@@ -1,9 +1,17 @@
 {
-  "download_date": "2026-07-18T14:17:28Z",
+  "download_date": "2026-07-20T10:12:29Z",
   "files": [
     {
       "name": "RHBA-2026:41000.json",
       "url": "https://access.redhat.com/errata/RHBA-2026:41000"
+    },
+    {
+      "name": "RHBA-2026:41000.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:41000"
+    },
+    {
+      "name": "RHBA-2026:26421.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:26421"
     },
     {
       "name": "RHBA-2026:26421.json",
@@ -14,7 +22,7 @@
     "total": 11,
     "successful": 2,
     "failed": 0,
-    "skipped": 0,
+    "skipped": 2,
     "base_url": "https://access.redhat.com/errata"
   }
 }

@@ -25,9 +25,10 @@ func Command(logger *slog.Logger) *cli.Command {
 		},
 		Commands: []*cli.Command{
 			docsCmd(logger),
-			advisoryCmd(logger),
+			advisoriesCmd(logger),
 			articlesCmd(logger),
 			solutionsCmd(logger),
+			runbooksCmd(logger),
 		},
 	}
 
@@ -53,11 +54,11 @@ func docsCmd(logger *slog.Logger) *cli.Command {
 	}
 }
 
-func advisoryCmd(logger *slog.Logger) *cli.Command {
+func advisoriesCmd(logger *slog.Logger) *cli.Command {
 	return &cli.Command{
-		Name:      "advisory",
+		Name:      "advisories",
 		Usage:     "Download Red Hat errata/advisories",
-		UsageText: "fetch advisory --product odf --version 4.21 --version 4.22",
+		UsageText: "fetch advisories --product odf --version 4.21 --version 4.22",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "product",
@@ -111,6 +112,24 @@ func solutionsCmd(logger *slog.Logger) *cli.Command {
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return newFetcher(loadConfig(), logger).withProduct(cmd.String("product")).solutions(ctx)
+		},
+	}
+}
+
+func runbooksCmd(logger *slog.Logger) *cli.Command {
+	return &cli.Command{
+		Name:      "runbooks",
+		Usage:     "Download OpenShift runbooks",
+		UsageText: "fetch runbooks --product odf",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "product",
+				Usage: "Product name",
+				Value: loadConfig().DefaultProduct,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return newFetcher(loadConfig(), logger).withProduct(cmd.String("product")).runbooks(ctx)
 		},
 	}
 }

@@ -102,6 +102,7 @@ func (f *fetcher) downloadAdvisories(ctx context.Context) error {
 			}
 			advisoryFile := filepath.Join(advisoryDir, docID+".json")
 
+			cached := false
 			if existingManifest != nil {
 				for _, fileRec := range existingManifest.Files {
 					if fileRec.Name == docID+".json" {
@@ -111,9 +112,13 @@ func (f *fetcher) downloadAdvisories(ctx context.Context) error {
 							Name: fileRec.Name,
 							URL:  fmt.Sprintf("https://access.redhat.com/errata/%s", docID),
 						})
-						continue
+						cached = true
+						break
 					}
 				}
+			}
+			if cached {
+				continue
 			}
 
 			if err := os.MkdirAll(filepath.Dir(advisoryFile), 0755); err != nil {
