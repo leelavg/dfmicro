@@ -1,0 +1,1 @@
+{"id":"7008762","lastModifiedDate":"2024-06-13T19:06:42Z","publishedAbstract":"- After upgrading the RHOCP cluster from 4.9.58 to 4.10.55, the node tolerations are getting wiped out. ","publishedTitle":"rook-ceph-operator overwrites CSI driver DaemonSet and clears tolerations when it's restarted","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7008762"}

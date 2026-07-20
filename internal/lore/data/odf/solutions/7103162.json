@@ -1,0 +1,1 @@
+{"id":"7103162","lastModifiedDate":"2025-06-26T19:21:00Z","publishedAbstract":"- OSD pods are `0/1` with error `ceph_assert(delta.offset == fnode.allocated)`","publishedTitle":"OSDs crashing with ceph_assert(delta.offset == fnode.allocated)","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7103162"}

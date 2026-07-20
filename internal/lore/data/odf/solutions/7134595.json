@@ -1,0 +1,1 @@
+{"id":"7134595","lastModifiedDate":"2025-12-04T00:15:38Z","publishedAbstract":"* It is required to determine if a PostgreSQL `vacuum` is in progress and to estimate how much time is left.","publishedTitle":"How to determine the progress of a PostgreSQL Vacuum and estimate how much time is left","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7134595"}

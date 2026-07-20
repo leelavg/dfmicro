@@ -1,0 +1,1 @@
+{"id":"7105706","lastModifiedDate":"2025-08-15T06:46:51Z","publishedAbstract":"\u0026quot;Access denied\u0026quot; errors occur when provisioning PVCs using an EFS file system from a different AWS account.","publishedTitle":"Mounting AWS EFS Cross-Account in ROSA (STS)","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7105706"}

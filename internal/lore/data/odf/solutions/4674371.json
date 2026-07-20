@@ -1,0 +1,1 @@
+{"id":"4674371","lastModifiedDate":"2024-06-14T02:26:52Z","publishedAbstract":"- After deleting a `PersistentVolumeClaim` (PVC), it gets stuck in the `Terminating` state. The corresponding `PersistentVolume` still exists.","publishedTitle":"PersistentVolumeClaim stuck in Terminating state","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/4674371"}

@@ -1,0 +1,1 @@
+{"id":"6994654","lastModifiedDate":"2024-08-09T03:45:04Z","publishedAbstract":"- Object buckets are not accessible via s3 endpoint which is backed by RGW route. ","publishedTitle":"ODF : Why object buckets are not accessible via RGW route backed s3 endpoint?","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6994654"}

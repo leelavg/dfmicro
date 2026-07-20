@@ -1,0 +1,1 @@
+{"id":"7132339","lastModifiedDate":"2025-10-07T10:10:23Z","publishedAbstract":"Ceph Manager asserts: RefCountedObj.cc: 14: FAILED ceph_assert(nref == 0) ","publishedTitle":"[Ceph][MGR] RefCountedObj.cc: 14: FAILED ceph_assert(nref == 0)","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7132339"}

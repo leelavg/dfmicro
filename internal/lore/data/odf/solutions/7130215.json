@@ -1,0 +1,1 @@
+{"id":"7130215","lastModifiedDate":"2025-11-19T03:48:49Z","publishedAbstract":"When creating volume snapshots an error can be seen in the logs stating: `failed to get credentials: provided secret is empty`","publishedTitle":"VolumeSnapshots fail with: failed to get credentials: provided secret is empty","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7130215"}

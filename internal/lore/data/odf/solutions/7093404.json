@@ -1,0 +1,1 @@
+{"id":"7093404","lastModifiedDate":"2025-01-14T08:35:59Z","publishedAbstract":"- During upgrade from OpenShift 4.12 to OpenShift 4.14.37 on AWS cloud provider rollout go in stuck during Ceph OSD pod scheduling on new nodes.","publishedTitle":"RHOCP 4.14 upgrade is stuck during ODF pod scheduling stage ","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7093404"}

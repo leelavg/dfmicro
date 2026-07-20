@@ -1,0 +1,1 @@
+{"id":"7028899","lastModifiedDate":"2024-06-03T20:26:19Z","publishedAbstract":"When upgrading from ODF 4.11 to 4.12, the `hostPID: true` section of the ODF pod deployments is preventing ODF pods from creating.","publishedTitle":"\"hostPID: true\" on ODF 4.12 deployments preventing ODF  pods from Running","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7028899"}

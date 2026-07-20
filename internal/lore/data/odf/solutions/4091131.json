@@ -1,0 +1,1 @@
+{"id":"4091131","lastModifiedDate":"2024-06-14T13:39:21Z","publishedAbstract":"In an OCS environment, I have a Gluster volume. I want to know what pod uses that volume as its persistent storage.","publishedTitle":"How to determine what pod uses a particular storage volume?","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/4091131"}

@@ -58,63 +58,78 @@ func (f *fetcher) downloadArticles(ctx context.Context) error {
 		manifest.Files = existingManifest.Files
 	}
 
-	params := map[string]any{
-		"q":    "*:*",
-		"fq":   fqFilters,
-		"sort": "lastModifiedDate desc",
-		"rows": "2",
-		"fl":   "id,lastModifiedDate,publishedAbstract,publishedTitle,setLanguage,view_uri",
-	}
+	const pageSize = 30
+	pageNum := 0
 
-	resp, err := solrClient.Query(ctx, params)
-	if err != nil {
-		return fmt.Errorf("failed to query articles: %w", err)
-	}
+	for {
+		params := map[string]any{
+			"q":     "*:*",
+			"fq":    fqFilters,
+			"sort":  "lastModifiedDate desc",
+			"start": fmt.Sprintf("%d", pageNum*pageSize),
+			"rows":  fmt.Sprintf("%d", pageSize),
+			"fl":    "id,lastModifiedDate,publishedAbstract,publishedTitle,setLanguage,view_uri",
+		}
 
-	foundCount := int(resp.Response.NumFound)
-	manifest.Stats.Total = foundCount
-	f.logger.Info("found articles", "count", foundCount, "product", f.product)
-
-	for _, doc := range resp.Response.Docs {
-		var article solrDocArticle
-		docBytes, err := json.Marshal(doc)
+		resp, err := solrClient.Query(ctx, params)
 		if err != nil {
-			f.logger.Error("failed to marshal article raw", "id", doc["id"], "error", err)
-			manifest.Stats.Failed++
-			continue
-		}
-		if err := json.Unmarshal(docBytes, &article); err != nil {
-			f.logger.Error("failed to unmarshal article", "id", doc["id"], "error", err)
-			manifest.Stats.Failed++
-			continue
+			return fmt.Errorf("failed to query articles: %w", err)
 		}
 
-		articleFile := filepath.Join(articlesDir, article.ID+".json")
-
-		if err := os.MkdirAll(filepath.Dir(articleFile), 0755); err != nil {
-			f.logger.Error("failed to create directory", "error", err)
-			manifest.Stats.Failed++
-			continue
+		if pageNum == 0 {
+			foundCount := int(resp.Response.NumFound)
+			manifest.Stats.Total = foundCount
+			f.logger.Info("found articles", "count", foundCount, "product", f.product)
 		}
 
-		data, err := json.Marshal(article)
-		if err != nil {
-			f.logger.Error("failed to marshal article", "id", article.ID, "error", err)
-			manifest.Stats.Failed++
-			continue
+		if len(resp.Response.Docs) == 0 {
+			break
 		}
 
-		if err := os.WriteFile(articleFile, data, 0644); err != nil {
-			f.logger.Error("failed to save article", "id", article.ID, "error", err)
-			manifest.Stats.Failed++
-			continue
+		for _, doc := range resp.Response.Docs {
+			var article solrDocArticle
+			docBytes, err := json.Marshal(doc)
+			if err != nil {
+				f.logger.Error("failed to marshal article raw", "id", doc["id"], "error", err)
+				manifest.Stats.Failed++
+				continue
+			}
+			if err := json.Unmarshal(docBytes, &article); err != nil {
+				f.logger.Error("failed to unmarshal article", "id", doc["id"], "error", err)
+				manifest.Stats.Failed++
+				continue
+			}
+
+			articleFile := filepath.Join(articlesDir, article.ID+".json")
+
+			if err := os.MkdirAll(filepath.Dir(articleFile), 0755); err != nil {
+				f.logger.Error("failed to create directory", "error", err)
+				manifest.Stats.Failed++
+				continue
+			}
+
+			data, err := json.Marshal(article)
+			if err != nil {
+				f.logger.Error("failed to marshal article", "id", article.ID, "error", err)
+				manifest.Stats.Failed++
+				continue
+			}
+
+			if err := os.WriteFile(articleFile, data, 0644); err != nil {
+				f.logger.Error("failed to save article", "id", article.ID, "error", err)
+				manifest.Stats.Failed++
+				continue
+			}
+
+			manifest.Stats.Successful++
+			manifest.Files = append(manifest.Files, file{
+				Name: article.ID + ".json",
+				URL:  article.ViewURI,
+			})
 		}
 
-		manifest.Stats.Successful++
-		manifest.Files = append(manifest.Files, file{
-			Name: article.ID + ".json",
-			URL:  article.ViewURI,
-		})
+		pageNum++
+		time.Sleep(time.Second)
 	}
 
 	if err := saveManifest(manifestPath, manifest); err != nil {

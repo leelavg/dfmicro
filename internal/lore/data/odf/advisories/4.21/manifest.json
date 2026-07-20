@@ -1,28 +1,56 @@
 {
-  "download_date": "2026-07-20T10:12:29Z",
+  "download_date": "2026-07-20T11:18:18Z",
   "files": [
     {
       "name": "RHBA-2026:41000.json",
       "url": "https://access.redhat.com/errata/RHBA-2026:41000"
     },
     {
-      "name": "RHBA-2026:41000.json",
-      "url": "https://access.redhat.com/errata/RHBA-2026:41000"
-    },
-    {
       "name": "RHBA-2026:26421.json",
       "url": "https://access.redhat.com/errata/RHBA-2026:26421"
     },
     {
-      "name": "RHBA-2026:26421.json",
-      "url": "https://access.redhat.com/errata/RHBA-2026:26421"
+      "name": "RHBA-2026:25074.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:25074"
+    },
+    {
+      "name": "RHSA-2026:22382.json",
+      "url": "https://access.redhat.com/errata/RHSA-2026:22382"
+    },
+    {
+      "name": "RHBA-2026:22382.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:22382"
+    },
+    {
+      "name": "RHBA-2026:20906.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:20906"
+    },
+    {
+      "name": "RHBA-2026:19228.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:19228"
+    },
+    {
+      "name": "RHBA-2026:16353.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:16353"
+    },
+    {
+      "name": "RHBA-2026:8127.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:8127"
+    },
+    {
+      "name": "RHBA-2026:6345.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:6345"
+    },
+    {
+      "name": "RHBA-2026:4073.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:4073"
     }
   ],
   "stats": {
     "total": 11,
-    "successful": 2,
+    "successful": 11,
     "failed": 0,
-    "skipped": 2,
+    "skipped": 0,
     "base_url": "https://access.redhat.com/errata"
   }
 }

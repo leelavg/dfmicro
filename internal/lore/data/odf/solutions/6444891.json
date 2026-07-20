@@ -1,0 +1,1 @@
+{"id":"6444891","lastModifiedDate":"2024-06-13T22:21:28Z","publishedAbstract":"After a vMotion virtual machine migration, a node/pods fails to mount any previously mounted OCS/ODF persistent volume.","publishedTitle":"Use of VMware VMotion with OpenShift Container Storage / OpenShift Data Foundation","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/6444891"}

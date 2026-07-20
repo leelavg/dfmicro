@@ -1,0 +1,1 @@
+{"id":"7127897","lastModifiedDate":"2025-07-10T14:06:29Z","publishedAbstract":"* Creating a NooBaaAccount will lead to the `noobaa-operator-*` pod in the `openshift-storage` namespace to go into `CrashLoopBackOff` state","publishedTitle":"On NooBaa account creation the NooBaa Operator is crashing","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7127897"}

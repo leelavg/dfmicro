@@ -1,0 +1,20 @@
+{
+  "download_date": "2026-07-20T11:18:20Z",
+  "files": [
+    {
+      "name": "RHBA-2026:40921.json",
+      "url": "https://access.redhat.com/errata/RHBA-2026:40921"
+    },
+    {
+      "name": "RHSA-2026:37387.json",
+      "url": "https://access.redhat.com/errata/RHSA-2026:37387"
+    }
+  ],
+  "stats": {
+    "total": 2,
+    "successful": 2,
+    "failed": 0,
+    "skipped": 0,
+    "base_url": "https://access.redhat.com/errata"
+  }
+}

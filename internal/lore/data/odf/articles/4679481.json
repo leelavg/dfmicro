@@ -1,0 +1,1 @@
+{"id":"4679481","lastModifiedDate":"2020-08-28T06:47:21Z","publishedAbstract":"-While doing static provisioning, PVC is going into a pending state resulting error **Failed to provision volume with StorageClass: invalid AccessModes** ","publishedTitle":"How to change default storage class in OCS","setLanguage":"en","view_uri":"https://access.redhat.com/articles/4679481"}

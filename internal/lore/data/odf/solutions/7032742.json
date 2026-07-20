@@ -1,0 +1,1 @@
+{"id":"7032742","lastModifiedDate":"2024-06-03T19:03:16Z","publishedAbstract":"* I have an object in a Ceph RGW or Noobaa bucket that has the wrong owner * How do I change the current owner of a Ceph RGW or Noobaa object to the bucket owner","publishedTitle":"Ceph or Noobaa object has the wrong owner","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/7032742"}

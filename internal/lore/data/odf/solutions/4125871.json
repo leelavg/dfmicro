@@ -1,0 +1,1 @@
+{"id":"4125871","lastModifiedDate":"2024-06-14T13:34:43Z","publishedAbstract":"Attempting to edit the storage class results in the following error: ~~~ Forbidden: updates to parameters are forbidden ~~~","publishedTitle":"How do I change a Glusterfs storage class to provision arbiter volumes?","setLanguage":"en","view_uri":"https://access.redhat.com/solutions/4125871"}
