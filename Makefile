@@ -19,7 +19,7 @@ fmt:
 generate:
 	go generate ./internal/docs
 
-build-fetch:
+build-fetch: fmt vet
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -o $(BIN_DIR)/fetch ./cmd/fetch
 
