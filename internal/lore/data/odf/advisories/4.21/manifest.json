@@ -1,5 +1,5 @@
 {
-  "download_date": "2026-07-20T11:18:18Z",
+  "download_date": "2026-07-20T11:24:33Z",
   "files": [
     {
       "name": "RHBA-2026:41000.json",
@@ -47,8 +47,8 @@
     }
   ],
   "stats": {
-    "total": 11,
-    "successful": 11,
+    "total": 0,
+    "successful": 0,
     "failed": 0,
     "skipped": 0,
     "base_url": "https://access.redhat.com/errata"

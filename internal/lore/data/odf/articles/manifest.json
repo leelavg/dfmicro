@@ -1,5 +1,5 @@
 {
-  "download_date": "2026-07-20T11:17:31Z",
+  "download_date": "2026-07-20T11:24:31Z",
   "files": [
     {
       "name": "6932811.json",
@@ -435,8 +435,8 @@
     }
   ],
   "stats": {
-    "total": 108,
-    "successful": 108,
+    "total": 0,
+    "successful": 0,
     "failed": 0,
     "skipped": 0
   }

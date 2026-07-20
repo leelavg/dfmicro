@@ -39,9 +39,14 @@ func Command(logger *slog.Logger) *cli.Command {
 func docsCmd(logger *slog.Logger) *cli.Command {
 	return &cli.Command{
 		Name:      "docs",
-		Usage:     "Download ODF documentation PDFs",
-		UsageText: "fetch docs --version 4.21 --version 4.22",
+		Usage:     "Download documentation PDFs",
+		UsageText: "fetch docs --product odf --version 4.21 --version 4.22",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "product",
+				Usage: "Product name",
+				Value: loadConfig().DefaultProduct,
+			},
 			&cli.StringSliceFlag{
 				Name:     "version",
 				Usage:    "Version to download (repeatable: --version 4.21 --version 4.22)",
@@ -49,7 +54,10 @@ func docsCmd(logger *slog.Logger) *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			return newFetcher(loadConfig(), logger).withVersions(cmd.StringSlice("version")).docs(ctx)
+			return newFetcher(loadConfig(), logger).
+				withProduct(cmd.String("product")).
+				withVersions(cmd.StringSlice("version")).
+				docs(ctx)
 		},
 	}
 }

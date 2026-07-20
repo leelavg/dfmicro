@@ -44,24 +44,27 @@ func (f *fetcher) downloadDocs(ctx context.Context, version string) error {
 		Stats:        stats{Total: len(sections)},
 	}
 
+	if existingManifest != nil {
+		manifest.Files = existingManifest.Files
+	}
+
 	for i, section := range sections {
 		pdfURL := fmt.Sprintf("%s/%s/pdf/%s/%s.pdf", f.cfg.DocsBaseURL, version, section, section)
 		outputFile := filepath.Join(docsDir, section+".pdf")
 
-		if _, err := os.Stat(outputFile); err == nil {
-			if existingManifest != nil {
-				for _, fileRec := range existingManifest.Files {
-					if fileRec.Name == section+".pdf" {
-						f.logger.Info("already exists, skipping", "section", section)
-						manifest.Stats.Skipped++
-						manifest.Files = append(manifest.Files, file{
-							Name: fileRec.Name,
-							URL:  pdfURL,
-						})
-						continue
-					}
+		cached := false
+		if existingManifest != nil {
+			for _, fileRec := range existingManifest.Files {
+				if fileRec.Name == section+".pdf" {
+					f.logger.Debug("doc already cached", "section", section)
+					manifest.Stats.Skipped++
+					cached = true
+					break
 				}
 			}
+		}
+		if cached {
+			continue
 		}
 
 		f.logger.Info("downloading PDF", "section", section, "progress", fmt.Sprintf("%d/%d", i+1, len(sections)))

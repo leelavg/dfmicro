@@ -1,37 +1,111 @@
 {
-  "download_date": "2026-07-17T16:11:39+05:30",
+  "download_date": "2026-07-20T11:47:24Z",
   "files": [
-    {"name": "4.21_release_notes.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/4.21_release_notes/4.21_release_notes.pdf"},
-    {"name": "configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads/configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads.pdf"},
-    {"name": "deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform/deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform.pdf"},
-    {"name": "deploying_multiple_openshift_data_foundation_storage_clusters.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_multiple_openshift_data_foundation_storage_clusters/deploying_multiple_openshift_data_foundation_storage_clusters.pdf"},
-    {"name": "deploying_openshift_data_foundation_in_external_mode.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_in_external_mode/deploying_openshift_data_foundation_in_external_mode.pdf"},
-    {"name": "deploying_openshift_data_foundation_on_any_platform.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_on_any_platform/deploying_openshift_data_foundation_on_any_platform.pdf"},
-    {"name": "deploying_openshift_data_foundation_on_two-node_clusters.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_on_two-node_clusters/deploying_openshift_data_foundation_on_two-node_clusters.pdf"},
-    {"name": "deploying_openshift_data_foundation_on_vmware_vsphere.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_on_vmware_vsphere/deploying_openshift_data_foundation_on_vmware_vsphere.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_amazon_web_services.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_amazon_web_services/deploying_openshift_data_foundation_using_amazon_web_services.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_bare_metal_infrastructure.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_bare_metal_infrastructure/deploying_openshift_data_foundation_using_bare_metal_infrastructure.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_google_cloud.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_google_cloud/deploying_openshift_data_foundation_using_google_cloud.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_ibm_cloud.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_cloud/deploying_openshift_data_foundation_using_ibm_cloud.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_ibm_power.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_power/deploying_openshift_data_foundation_using_ibm_power.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_ibm_z.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_z/deploying_openshift_data_foundation_using_ibm_z.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_microsoft_azure.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_microsoft_azure/deploying_openshift_data_foundation_using_microsoft_azure.pdf"},
-    {"name": "deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes/deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes.pdf"},
-    {"name": "managing_and_allocating_storage_resources.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/managing_and_allocating_storage_resources/managing_and_allocating_storage_resources.pdf"},
-    {"name": "managing_hybrid_and_multicloud_resources.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/managing_hybrid_and_multicloud_resources/managing_hybrid_and_multicloud_resources.pdf"},
-    {"name": "monitoring_openshift_data_foundation.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/monitoring_openshift_data_foundation/monitoring_openshift_data_foundation.pdf"},
-    {"name": "planning_your_deployment.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/planning_your_deployment/planning_your_deployment.pdf"},
-    {"name": "red_hat_openshift_data_foundation_architecture.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/red_hat_openshift_data_foundation_architecture/red_hat_openshift_data_foundation_architecture.pdf"},
-    {"name": "replacing_devices.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/replacing_devices/replacing_devices.pdf"},
-    {"name": "replacing_nodes.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/replacing_nodes/replacing_nodes.pdf"},
-    {"name": "scaling_storage.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/scaling_storage/scaling_storage.pdf"},
-    {"name": "troubleshooting_openshift_data_foundation.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/troubleshooting_openshift_data_foundation/troubleshooting_openshift_data_foundation.pdf"},
-    {"name": "updating_openshift_data_foundation.pdf", "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/updating_openshift_data_foundation/updating_openshift_data_foundation.pdf"}
+    {
+      "name": "4.21_release_notes.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/4.21_release_notes/4.21_release_notes.pdf"
+    },
+    {
+      "name": "planning_your_deployment.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/planning_your_deployment/planning_your_deployment.pdf"
+    },
+    {
+      "name": "red_hat_openshift_data_foundation_architecture.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/red_hat_openshift_data_foundation_architecture/red_hat_openshift_data_foundation_architecture.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_on_vmware_vsphere.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_on_vmware_vsphere/deploying_openshift_data_foundation_on_vmware_vsphere.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_bare_metal_infrastructure.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_bare_metal_infrastructure/deploying_openshift_data_foundation_using_bare_metal_infrastructure.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_amazon_web_services.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_amazon_web_services/deploying_openshift_data_foundation_using_amazon_web_services.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_in_external_mode.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_in_external_mode/deploying_openshift_data_foundation_in_external_mode.pdf"
+    },
+    {
+      "name": "deploying_multiple_openshift_data_foundation_storage_clusters.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_multiple_openshift_data_foundation_storage_clusters/deploying_multiple_openshift_data_foundation_storage_clusters.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_microsoft_azure.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_microsoft_azure/deploying_openshift_data_foundation_using_microsoft_azure.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_ibm_power.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_power/deploying_openshift_data_foundation_using_ibm_power.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_ibm_z.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_z/deploying_openshift_data_foundation_using_ibm_z.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_on_any_platform.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_on_any_platform/deploying_openshift_data_foundation_on_any_platform.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_ibm_cloud.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_ibm_cloud/deploying_openshift_data_foundation_using_ibm_cloud.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_google_cloud.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_google_cloud/deploying_openshift_data_foundation_using_google_cloud.pdf"
+    },
+    {
+      "name": "deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes/deploying_openshift_data_foundation_using_red_hat_openshift_service_on_aws_with_hosted_control_planes.pdf"
+    },
+    {
+      "name": "deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform/deploying_and_managing_openshift_data_foundation_using_red_hat_openstack_platform.pdf"
+    },
+    {
+      "name": "managing_hybrid_and_multicloud_resources.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/managing_hybrid_and_multicloud_resources/managing_hybrid_and_multicloud_resources.pdf"
+    },
+    {
+      "name": "managing_and_allocating_storage_resources.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/managing_and_allocating_storage_resources/managing_and_allocating_storage_resources.pdf"
+    },
+    {
+      "name": "replacing_devices.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/replacing_devices/replacing_devices.pdf"
+    },
+    {
+      "name": "replacing_nodes.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/replacing_nodes/replacing_nodes.pdf"
+    },
+    {
+      "name": "scaling_storage.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/scaling_storage/scaling_storage.pdf"
+    },
+    {
+      "name": "updating_openshift_data_foundation.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/updating_openshift_data_foundation/updating_openshift_data_foundation.pdf"
+    },
+    {
+      "name": "monitoring_openshift_data_foundation.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/monitoring_openshift_data_foundation/monitoring_openshift_data_foundation.pdf"
+    },
+    {
+      "name": "troubleshooting_openshift_data_foundation.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/troubleshooting_openshift_data_foundation/troubleshooting_openshift_data_foundation.pdf"
+    },
+    {
+      "name": "configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads.pdf",
+      "url": "https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.21/pdf/configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads/configuring_openshift_data_foundation_disaster_recovery_for_openshift_workloads.pdf"
+    }
   ],
   "stats": {
     "total": 25,
-    "successful": 25,
+    "successful": 0,
     "failed": 0,
-    "skipped": 0
+    "skipped": 25
   }
 }

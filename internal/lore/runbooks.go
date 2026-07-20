@@ -42,6 +42,10 @@ func (f *fetcher) downloadRunbooks(ctx context.Context) error {
 	}
 
 	if existingManifest != nil && existingManifest.DownloadDate.After(latestCommitTime) {
+		existingManifest.DownloadDate = time.Now().UTC()
+		if err := saveManifest(filepath.Join(runbookDir, "manifest.json"), existingManifest); err != nil {
+			f.logger.Error("failed to update manifest", "error", err)
+		}
 		f.logger.Info("runbooks already up to date", "product", f.product)
 		return nil
 	}
