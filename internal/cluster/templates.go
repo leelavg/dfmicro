@@ -6,7 +6,7 @@ const powerTuningConfig = `apiServer:
 debugging:
   logLevel: Warning
 etcd:
-  memoryLimitMB: 128
+  memoryLimitMB: 512
 ingress:
   tuningOptions:
     threadCount: 2
