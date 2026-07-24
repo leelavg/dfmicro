@@ -1,3 +1,5 @@
+//go:build fetch
+
 package support
 
 import (
