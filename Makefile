@@ -11,7 +11,7 @@ BINARY := $(BIN_DIR)/dfmicro
 .PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch
 
 vet:
-	go vet ./...
+	go vet -tags fetch ./...
 
 fmt:
 	go fmt ./...
@@ -21,19 +21,19 @@ generate:
 
 build-fetch: fmt vet
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -o $(BIN_DIR)/fetch ./cmd/fetch
+	CGO_ENABLED=0 go build -tags fetch -o $(BIN_DIR)/fetch ./cmd/fetch
 
 build: fmt vet generate
 	$(MAKE) -s build-cross
 
 build-release: fmt vet generate
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w" -o $(BINARY) ./cmd/dfmicro
 
 build-analyze: fmt vet generate
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -o $(BINARY) ./cmd/dfmicro
 
 build-cross:
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -tags '!fetch' -o $(BINARY) ./cmd/dfmicro
