@@ -142,6 +142,8 @@ Create a cluster, wait until ready, and print connection info
 
 **--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)
 
+**--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage
+
 **--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
 **--pull-secret**="": Path to a pull secret JSON file for accessing private image registries

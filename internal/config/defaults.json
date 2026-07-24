@@ -7,5 +7,6 @@
   "exposeKubeAPI": true,
   "overprovisionRatio": 20.0,
   "shareHostContainers": true,
-  "powerTuning": true
+  "powerTuning": true,
+  "enableThinpool": true
 }
