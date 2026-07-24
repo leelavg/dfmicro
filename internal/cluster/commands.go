@@ -43,12 +43,6 @@ func createFlags() []cli.Flag {
 			Value:    defaultRootConfig.LVMVolSize,
 			Category: "Storage:",
 		},
-		&cli.Float32Flag{
-			Name:     "overprovision-ratio",
-			Usage:    "TopoLVM thin pool overprovision ratio",
-			Value:    defaultRootConfig.OverprovisionRatio,
-			Category: "Storage:",
-		},
 		&cli.IntFlag{
 			Name:     "api-server-port",
 			Usage:    "Host port to expose the Kubernetes API server on (1024-65535)",
@@ -155,6 +149,26 @@ Examples:
   dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
   dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml`,
 				Flags: createFlags(),
+				MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+					{
+						Category: "Storage:",
+						Flags: [][]cli.Flag{
+							{
+								&cli.BoolFlag{
+									Name:  "no-thinpool",
+									Usage: "Skip thin pool creation and configuration for TopoLVM storage",
+								},
+							},
+							{
+								&cli.Float32Flag{
+									Name:  "overprovision-ratio",
+									Usage: "TopoLVM thin pool overprovision ratio",
+									Value: defaultRootConfig.OverprovisionRatio,
+								},
+							},
+						},
+					},
+				},
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					if runtime.GOOS == "darwin" {
 						return ctx, checkMacOSRootful()

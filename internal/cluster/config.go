@@ -49,6 +49,9 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	if cmd.IsSet("no-power-tuning") {
 		cfg.PowerTuning = !cmd.Bool("no-power-tuning")
 	}
+	if cmd.IsSet("no-thinpool") {
+		cfg.EnableThinpool = !cmd.Bool("no-thinpool")
+	}
 
 	return cfg, nil
 }

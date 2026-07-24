@@ -465,17 +465,19 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 
 	args = append(args, "--network", networkName, "--ip", ipAddress, "--dns-search=.")
 
-	lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
-	var lvmdBuf bytes.Buffer
-	if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
-		return err
+	if m.cfg.EnableThinpool {
+		lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
+		var lvmdBuf bytes.Buffer
+		if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
+			return err
+		}
+		if err := os.WriteFile(lvmdConfigPath, lvmdBuf.Bytes(), 0o644); err != nil {
+			return err
+		}
+		args = append(args,
+			"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
+		)
 	}
-	if err := os.WriteFile(lvmdConfigPath, lvmdBuf.Bytes(), 0o644); err != nil {
-		return err
-	}
-	args = append(args,
-		"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
-	)
 
 	if m.cfg.ExposeKubeAPI {
 		hostname, err := getHostname()

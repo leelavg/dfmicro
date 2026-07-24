@@ -21,6 +21,7 @@ type Config struct {
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
 	ShareHostContainers bool    `json:"shareHostContainers"`
 	PowerTuning         bool    `json:"powerTuning"`
+	EnableThinpool      bool    `json:"enableThinpool"`
 }
 
 var Load = sync.OnceValue(func() Config {
