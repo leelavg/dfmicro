@@ -329,14 +329,14 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 	// cross-check against lvs output to avoid accidentally touching unrelated dm devices
 	if lvResult, err := runLVMCommand(ctx, m.runner, "lvs", "--noheadings", "-o", "lv_name", m.cfg.VGName); err == nil {
 		knownLVs := map[string]bool{}
-		for _, lv := range strings.Split(strings.TrimSpace(lvResult.Stdout), "\n") {
+		for lv := range strings.SplitSeq(strings.TrimSpace(lvResult.Stdout), "\n") {
 			lv = strings.TrimSpace(lv)
 			if lv != "" {
 				knownLVs[m.cfg.VGName+"-"+lv] = true
 			}
 		}
 		if dmResult, err := runLVMCommand(ctx, m.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name"); err == nil {
-			for _, name := range strings.Split(strings.TrimSpace(dmResult.Stdout), "\n") {
+			for name := range strings.SplitSeq(strings.TrimSpace(dmResult.Stdout), "\n") {
 				name = strings.TrimSpace(name)
 				if knownLVs[name] {
 					if _, err := runLVMCommand(ctx, m.runner, "dmsetup", "remove", "--force", name); err != nil {
@@ -599,8 +599,10 @@ func (m *Manager) waitReady(ctx context.Context) error {
 			}
 		}
 		if ready {
-			m.logger.Info("all nodes ready")
-			return nil
+			if err := m.checkNodesReady(ctx, containers[0]); err == nil {
+				m.logger.Info("all nodes ready")
+				return nil
+			}
 		}
 
 		select {
@@ -611,6 +613,19 @@ func (m *Manager) waitReady(ctx context.Context) error {
 	}
 
 	return errors.New("cluster did not become ready within 10 minutes")
+}
+
+func (m *Manager) checkNodesReady(ctx context.Context, containerName string) error {
+	result, err := runPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "oc", "get", "nodes", "--no-headers")
+	if err != nil {
+		return err
+	}
+	for line := range strings.SplitSeq(result.Stdout, "\n") {
+		if strings.TrimSpace(line) != "" && strings.Contains(line, "Ready") {
+			return nil
+		}
+	}
+	return errors.New("nodes not ready yet")
 }
 
 func (m *Manager) PrintKubeconfig(ctx context.Context) error {
@@ -632,6 +647,11 @@ func (m *Manager) PrintKubeconfig(ctx context.Context) error {
 }
 
 func (m *Manager) copyKubeconfig(ctx context.Context, containerName string) error {
+	// TODO: overlayfs deadlock occasionally happens on kubeconfig access.
+	// waitReady checks node Ready state, but overlayfs may still be settling.
+	// Add extra delay to ensure filesystem is stable before file I/O.
+	time.Sleep(5 * time.Second)
+
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 	if m.cfg.ExposeKubeAPI {
 		host, err := getHostname()

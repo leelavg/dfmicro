@@ -20,12 +20,12 @@ type solrClient struct {
 
 type solrResponse struct {
 	Response struct {
-		NumFound int64                    `json:"numFound"`
-		Start    int64                    `json:"start"`
-		Docs     []map[string]interface{} `json:"docs"`
+		NumFound int64            `json:"numFound"`
+		Start    int64            `json:"start"`
+		Docs     []map[string]any `json:"docs"`
 	} `json:"response"`
-	Highlighting map[string]interface{} `json:"highlighting,omitempty"`
-	Facets       map[string]interface{} `json:"facets,omitempty"`
+	Highlighting map[string]any `json:"highlighting,omitempty"`
+	Facets       map[string]any `json:"facets,omitempty"`
 }
 
 type solrDocAdvisory struct {

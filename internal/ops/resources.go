@@ -542,8 +542,8 @@ func (formatter) parseCPUMillis(s string) (int64, bool) {
 	if s == "" {
 		return 0, false
 	}
-	if strings.HasSuffix(s, "m") {
-		v, err := strconv.ParseInt(strings.TrimSuffix(s, "m"), 10, 64)
+	if before, ok := strings.CutSuffix(s, "m"); ok {
+		v, err := strconv.ParseInt(before, 10, 64)
 		return v, err == nil
 	}
 	v, err := strconv.ParseFloat(s, 64)
@@ -555,8 +555,8 @@ func (formatter) parseMemBytes(s string) (int64, bool) {
 		return 0, false
 	}
 	for _, e := range memSuffixes {
-		if strings.HasSuffix(s, e.s) {
-			v, err := strconv.ParseInt(strings.TrimSuffix(s, e.s), 10, 64)
+		if before, ok := strings.CutSuffix(s, e.s); ok {
+			v, err := strconv.ParseInt(before, 10, 64)
 			return v * e.mult, err == nil
 		}
 	}

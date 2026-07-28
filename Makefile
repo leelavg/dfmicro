@@ -19,6 +19,9 @@ fmt:
 generate:
 	go generate ./internal/docs
 
+fix:
+	go fix -tags fetch ./...
+
 build-fetch: fmt vet
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -tags fetch -o $(BIN_DIR)/fetch ./cmd/fetch
