@@ -28,3 +28,8 @@ data:
               name: thin
               overprovision-ratio: {{printf "%.1f" .OverprovisionRatio}}
 `
+
+const apiServerConfigTmpl = `apiServer:
+  subjectAltNames:
+{{range .}}    - {{.}}
+{{end}}`

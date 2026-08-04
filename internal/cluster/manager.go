@@ -480,13 +480,18 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 	}
 
 	if m.cfg.ExposeKubeAPI {
-		hostname, err := getHostname()
+		clients, err := getClients()
 		if err != nil {
 			return err
 		}
 
-		content := fmt.Sprintf("apiServer:\n  subjectAltNames:\n    - %s\n", hostname)
-		if err := os.WriteFile(m.cfg.ExtraConfig, []byte(content), 0o644); err != nil {
+		var sanBuf bytes.Buffer
+		tmpl := template.Must(template.New("").Parse(apiServerConfigTmpl))
+		if err := tmpl.Execute(&sanBuf, clients); err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(m.cfg.ExtraConfig, sanBuf.Bytes(), 0o644); err != nil {
 			return err
 		}
 
@@ -549,16 +554,49 @@ func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 	return m.waitForDBus(ctx, name)
 }
 
-func getHostname() (string, error) {
+func getClients() ([]string, error) {
+	var clients []string
+
 	hostname, err := os.Hostname()
+	if err == nil {
+		hostname = strings.TrimSpace(hostname)
+		if hostname != "" {
+			clients = append(clients, hostname)
+		}
+	}
+
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", err
+		return clients, nil
 	}
-	hostname = strings.TrimSpace(hostname)
-	if hostname == "" {
-		return "", errors.New("could not determine local hostname")
+
+	seen := make(map[string]struct{})
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && ip.To4() != nil {
+				ipStr := ip.String()
+				if _, exists := seen[ipStr]; !exists {
+					seen[ipStr] = struct{}{}
+					clients = append(clients, ipStr)
+				}
+			}
+		}
 	}
-	return hostname, nil
+	return clients, nil
 }
 
 func (m *Manager) waitForDBus(ctx context.Context, name string) error {
@@ -653,20 +691,33 @@ func (m *Manager) copyKubeconfig(ctx context.Context, containerName string) erro
 	time.Sleep(5 * time.Second)
 
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
-	if m.cfg.ExposeKubeAPI {
-		host, err := getHostname()
-		if err != nil {
-			return err
-		}
-		sourcePath = fmt.Sprintf("/var/lib/microshift/resources/kubeadmin/%s/kubeconfig", host)
-	}
-
 	result, err := runPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
-	if err != nil {
-		return err
+	if err == nil {
+		writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.DefaultKubeconfigPath)
 	}
 
-	return writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.DefaultKubeconfigPath)
+	if m.cfg.ExposeKubeAPI {
+		clients, err := getClients()
+		if err == nil && len(clients) > 0 {
+			var kubeconfigs []string
+			for _, client := range clients {
+				time.Sleep(1 * time.Second)
+				sourcePath = fmt.Sprintf("/var/lib/microshift/resources/kubeadmin/%s/kubeconfig", client)
+				result, err := runPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
+				if err == nil {
+					kubeconfigs = append(kubeconfigs, result.Stdout)
+					m.logger.Info("kubeconfig found for client", "client", client)
+				}
+			}
+			if len(kubeconfigs) > 0 {
+				support.MergeKubeconfigs(m.cfg.Name, m.cfg.APIServerPort, kubeconfigs, clients, m.cfg.DefaultKubeconfigPath)
+			}
+		}
+	} else {
+		m.logger.Warn("kubeconfig copied with internal addresses; kubectl from host will not work")
+	}
+
+	return nil
 }
 
 func writeKubeconfig(port int, content, path string) error {

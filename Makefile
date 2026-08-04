@@ -26,7 +26,7 @@ build-fetch: fmt vet
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -tags fetch -o $(BIN_DIR)/fetch ./cmd/fetch
 
-build: fmt vet generate
+build: fmt vet generate fix
 	$(MAKE) -s build-cross
 
 build-release: fmt vet generate
