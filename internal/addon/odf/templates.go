@@ -77,3 +77,106 @@ spec:
   source: odf-catsrc
   sourceNamespace: openshift-marketplace
 `
+
+const storageclusterTmpl = `apiVersion: ocs.openshift.io/v1
+kind: StorageCluster
+metadata:
+  name: ocs-storagecluster
+  namespace: openshift-storage
+spec:
+  enableCephTools: true
+  monitoring:
+    reconcileStrategy: ignore
+  managedResources:
+    cephObjectStores:
+      reconcileStrategy: ignore
+    cephObjectStoreUsers:
+      reconcileStrategy: ignore
+{{- if not .IncludeCephFS}}
+    cephFilesystems:
+      reconcileStrategy: ignore
+{{- end}}
+  multiCloudGateway:
+    reconcileStrategy: ignore
+  monPVCTemplate:
+    spec:
+      storageClassName: topolvm-provisioner-immediate
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Gi
+  placement:
+    mon: {}
+    mds: {}
+    mgr: {}
+    rbd-mirror: {}
+    rgw: {}
+    nfs: {}
+    noobaa-core: {}
+    noobaa-standalone: {}
+    osd-prepare: {}
+  resources:
+    mon:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    mds:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    mgr:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    mgr-sidecar:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    nfs:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    noobaa-core:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    noobaa-db:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    noobaa-db-vol:
+      requests:
+        storage: 5Gi
+    noobaa-endpoint:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    rbd-mirror:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+    rgw:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+  storageDeviceSets:
+    - count: 1
+      name: ocs-deviceset
+      dataPVCTemplate:
+        spec:
+          storageClassName: topolvm-provisioner-immediate
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+          volumeMode: Block
+      placement: {}
+      portable: false
+      replica: 3
+      resources:
+        requests:
+          cpu: 100m
+          memory: 100Mi
+`

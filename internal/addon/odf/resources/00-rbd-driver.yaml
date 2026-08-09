@@ -9,87 +9,87 @@ spec:
     resources:
       addons:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       attacher:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       logRotator:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       omapGenerator:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       plugin:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       provisioner:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       resizer:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       snapshotter:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
   nodePlugin:
     resources:
       addons:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       logRotator:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       plugin:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
       registrar:
         limits:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi
         requests:
-          cpu: 50m
-          memory: 100Mi
+          cpu: 10m
+          memory: 50Mi

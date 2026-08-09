@@ -106,8 +106,21 @@ Example:
 				Name:      "configure",
 				Usage:     "Configure ODF to run on MicroShift in an opinionated single-node setup",
 				UsageText: `Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.`,
-				Action: odfAction(logger, runner, func(ctx context.Context, _ *cli.Command, o *odf) error {
-					return o.Configure(ctx)
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "client",
+						Usage: "Client-only mode",
+					},
+					&cli.BoolFlag{
+						Name:  "include-cephfs",
+						Usage: "Run CephFS and CSI Driver",
+					},
+				},
+				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
+					return o.Configure(ctx, configureConfig{
+						ClientOnly:    cmd.Bool("client"),
+						IncludeCephFS: cmd.Bool("include-cephfs"),
+					})
 				}),
 			},
 			{
