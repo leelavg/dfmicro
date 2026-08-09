@@ -28,7 +28,7 @@ The CI workflow checks that committed docs match the source.
 
 **Command structure**
 
-Commands are grouped into three top-level domains: `cluster` (lifecycle), `addon` (optional workloads), and `ops` (host utilities). Each domain lives in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup via `support.SortCommand()` so the help output is stable without manual ordering.
+Commands are grouped into various top-level domains cand lives in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup via `support.SortCommand()` so the help output is stable without manual ordering.
 
 **Addon mechanism**
 
@@ -58,5 +58,3 @@ git push origin v0.x.0
 **Defaults from build-time config.** Read defaults from embedded JSON (via `sync.OnceValue`), not hardcoded. Single source of truth. Example: `internal/config/defaults.json` loaded once in `config.Load()`.
 
 **Validation at CLI layer.** Use urfave Validator on flags, not error returns in business logic. Let the framework reject invalid input before calling handler code.
-
-**Review comments during development.** Use `// -` inline comments to mark areas for refactoring or decisions pending feedback. Example: `// - move to support/log.go and reuse`. These are addressed before merge, not shipped.

@@ -102,9 +102,58 @@ sudo nmcli general reload dns-full || sudo systemctl reload dnsmasq
 Podman's aardvark-dns only resolves container names, not in-cluster routes. It has no upstream config to forward to CoreDNS. The router on node IP `172.20.0.11` handles SNI dispatch, so dnsmasq just needs to answer `*.apps.example.com` with that IP.
 </details>
 
+<details>
+<summary>System reboots with "watchdog did not stop!" in journal</summary>
+<br>
+
+**Symptom:** Machine reboots hard during cluster creation, especially with multiple clusters. Journal shows:
+```
+kernel: watchdog: watchdog0: watchdog did not stop!
+kernel: watchdog0: pretimeout event
+```
+
+**Cause:** Cluster startup causes heavy disk I/O. Real-time antivirus/EDR scanning processes (e.g., `wdavdaemon` from Microsoft Defender) scan this I/O, causing kernel stalls. On encrypted drives, the encryption/decryption overhead compounds the scanning load. Hardware watchdog (`iTCO_wdt`, 30-second heartbeat) assumes OS is frozen and forces hard reboot.
+
+**Fix:** Exclude container storage and microshift processes from real-time scanning:
+
+```bash
+# Exclude container storage (all clusters)
+sudo mdatp exclusion folder add --path "/var/lib/containers"
+
+# Exclude cluster LVM backing files (optional, for extra safety)
+dfmicro cluster config --name cluster-name | grep lvm-disk
+# Example: lvm-disk: /home/user/.config/dfmicro/cluster-name/cluster-name.img
+sudo mdatp exclusion folder add --path "/home/user/.config/dfmicro"
+
+# Exclude microshift processes
+sudo mdatp exclusion process add --name microshift
+sudo mdatp exclusion process add --name microshift-etcd
+
+# Restart mdatp
+sudo systemctl restart mdatp
+```
+
+If using different scanning software (ClamAV, Sophos, etc.), add equivalent exclusions for `/var/lib/containers` and the cluster config directory.
+
+dfmicro also mounts etcd to tmpfs to minimize disk I/O during startup.
+
+**Last resort:** If exclusions don't work and reboots persist, blacklist the hardware watchdog entirely:
+
+```bash
+echo "blacklist iTCO_wdt" | sudo tee /etc/modprobe.d/disable-watchdog.conf
+echo "blacklist intel_oc_wdt" | sudo tee -a /etc/modprobe.d/disable-watchdog.conf
+sudo modprobe -r iTCO_wdt
+sudo modprobe -r intel_oc_wdt
+```
+
+Disables hardware watchdog completely. wdavdaemon falls back to software watchdog. Safe for development.
+
+**Why not fixed in dfmicro:** Real-time scanning is a host-level security feature. The exclusion must be configured on the host.
+</details>
+
 ## Contributing
 
-Bug reports and suggestions are welcome via [issues](https://github.com/leelavg/dfmicro/issues). This is a personal project with a focused scope for now, so pull requests are not being accepted at this time.
+Bug reports and suggestions are welcome via [issues](https://github.com/leelavg/dfmicro/issues). This is a personal project with a focused scope and occasional history rewrites for now, so pull requests are not being accepted at this time.
 
 ## Acknowledgements
 

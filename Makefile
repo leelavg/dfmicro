@@ -29,6 +29,9 @@ build-fetch: fmt vet
 build: fmt vet generate fix
 	$(MAKE) -s build-cross
 
+install: build
+	install $(BINARY) ~/.local/bin
+
 build-release: fmt vet generate
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w" -o $(BINARY) ./cmd/dfmicro
