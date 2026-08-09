@@ -5,8 +5,6 @@ const powerTuningConfig = `apiServer:
     profile: None
 debugging:
   logLevel: Warning
-etcd:
-  memoryLimitMB: 512
 ingress:
   tuningOptions:
     threadCount: 2
@@ -33,3 +31,12 @@ const apiServerConfigTmpl = `apiServer:
   subjectAltNames:
 {{range .}}    - {{.}}
 {{end}}`
+
+const multusDropinConfig = `[crio.network]
+# Enable Multus as default CNI and add plugin directories
+cni_default_network = "multus-cni-network"
+plugin_dirs = [
+	"/run/cni/bin",
+	"/usr/libexec/cni",
+]
+`

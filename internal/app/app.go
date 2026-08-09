@@ -13,6 +13,7 @@ import (
 	"dfmicro/internal/devlog"
 	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/network"
 	"dfmicro/internal/ops"
 	"dfmicro/internal/support"
 
@@ -84,10 +85,11 @@ Quick start:
 		Action:                support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			addon.Command(logger, runner),
+			cluster.Command(logger, runner),
 			configCommand(),
 			docsCommand(),
 			devlogCommand(),
-			cluster.Command(logger, runner),
+			network.Command(logger, runner),
 			ops.Command(logger, runner),
 		},
 	}

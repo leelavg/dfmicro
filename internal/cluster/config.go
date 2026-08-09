@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	rootconfig "dfmicro/internal/config"
-	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -57,7 +56,7 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 }
 
 func deriveConfig(defaults rootconfig.Config, name string) Config {
-	stateDir := filepath.Join(configDir(), name)
+	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
 
 	return Config{
 		Config:                defaults,
@@ -72,26 +71,18 @@ func deriveConfig(defaults rootconfig.Config, name string) Config {
 }
 
 func clusterConfigPath(name string) (string, error) {
-	return filepath.Join(configDir(), name, configFileName), nil
-}
-
-func configDir() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		dir = support.Must(os.UserHomeDir())
-	}
-	return filepath.Join(dir, "dfmicro")
+	return filepath.Join(rootconfig.ConfigDir(), name, configFileName), nil
 }
 
 func Kubeconfig(name string) (string, error) {
-	cfg, err := readClusterConfig(name)
+	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return "", err
 	}
 	return cfg.DefaultKubeconfigPath, nil
 }
 
-func readClusterConfig(name string) (Config, error) {
+func ReadClusterConfig(name string) (Config, error) {
 	path, err := clusterConfigPath(name)
 	if err != nil {
 		return Config{}, err
@@ -129,7 +120,7 @@ func writeClusterConfig(cfg Config) error {
 }
 
 func printClusterConfig(name string) error {
-	cfg, err := readClusterConfig(name)
+	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return err
 	}

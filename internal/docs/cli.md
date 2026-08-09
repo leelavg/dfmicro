@@ -55,6 +55,10 @@ Configure ODF to run on MicroShift in an opinionated single-node setup
 
 >Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.
 
+**--client**: Client-only mode
+
+**--include-cephfs**: Run CephFS and CSI Driver
+
 #### install
 
 Install ODF and required shim resources
@@ -126,7 +130,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
-**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202607050937_g45630c7b1_5.0.0_okd_scos.ec.4")
+**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202608090303_gd026782c2_5.0.0_okd_scos.ec.6")
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 
@@ -210,6 +214,66 @@ Print full command reference as markdown
 
 >dfmicro docs > cli.md
 
+## network
+
+Manage multi-cluster networks
+
+### attach
+
+Attach clusters to a network
+
+    Attach one or more clusters to a bridge network.
+    
+    Example:
+      dfmicro network attach --cluster first --cluster second --to backbone
+
+**--cluster**="": Cluster name (repeatable)
+
+**--namespace**="": Namespace for NAD creation (default: "default")
+
+**--to**="": Network name to attach to
+
+### create
+
+Create a bridge network for multi-cluster interconnect
+
+    Create a bridge network that clusters can attach to.
+    
+    Example:
+      dfmicro network create --name backbone --segment-count 5
+
+**--name**="": Network name
+
+**--segment-count**="": Number of IPAM segments for clusters (default: 5)
+
+**--subnet**="": Network subnet in CIDR notation (default: "172.30.0.0/24")
+
+### delete
+
+Delete a bridge network
+
+    Delete a bridge network.
+    
+    Example:
+      dfmicro network delete --name backbone
+
+**--name**="": Network name
+
+### detach
+
+Detach clusters from a network
+
+    Detach one or more clusters from a bridge network.
+    
+    Example:
+      dfmicro network detach --cluster first --cluster second --from backbone
+
+**--cluster**="": Cluster name (repeatable)
+
+**--from**="": Network name to detach from
+
+**--namespace**="": Namespace of the NAD to delete (default: "default")
+
 ## ops
 
 Operational utilities for running clusters
@@ -230,6 +294,10 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 **--namespace**="": Restrict output to a single namespace (omit for all namespaces)
 
 **--node**="": Restrict output to a single node by name (omit for all nodes)
+
+### storage
+
+Show storage paths for all dfmicro clusters
 
 ### sudoers
 

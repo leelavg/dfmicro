@@ -19,6 +19,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Commands: []*cli.Command{
 			resourcesCommand(runner),
 			sudoersCommand(logger, runner),
+			storageCommand(runner),
 		},
 	}
 }

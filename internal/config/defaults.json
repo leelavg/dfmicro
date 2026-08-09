@@ -1,12 +1,15 @@
 {
   "name": "micro",
-  "image": "ghcr.io/leelavg/microshift:5.0.0_202607050937_g45630c7b1_5.0.0_okd_scos.ec.4",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202608090303_gd026782c2_5.0.0_okd_scos.ec.6",
   "lvmVolSize": "10G",
   "apiServerPort": 6443,
   "networkSubnet": "172.20.0.0/24",
+  "bridgeSubnet": "172.30.0.0/24",
   "exposeKubeAPI": true,
   "overprovisionRatio": 20.0,
   "shareHostContainers": true,
   "powerTuning": true,
-  "enableThinpool": true
+  "enableThinpool": true,
+  "nadNamespace": "default",
+  "bridgeSegmentCount": 5
 }

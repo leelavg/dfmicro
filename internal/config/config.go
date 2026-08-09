@@ -3,6 +3,8 @@ package config
 import (
 	_ "embed"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"dfmicro/internal/support"
@@ -17,11 +19,14 @@ type Config struct {
 	LVMVolSize          string  `json:"lvmVolSize"`
 	APIServerPort       int     `json:"apiServerPort"`
 	NetworkSubnet       string  `json:"networkSubnet"`
+	BridgeSubnet        string  `json:"bridgeSubnet"`
 	ExposeKubeAPI       bool    `json:"exposeKubeAPI"`
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
 	ShareHostContainers bool    `json:"shareHostContainers"`
 	PowerTuning         bool    `json:"powerTuning"`
 	EnableThinpool      bool    `json:"enableThinpool"`
+	NADNamespace        string  `json:"nadNamespace"`
+	BridgeSegmentCount  int     `json:"bridgeSegmentCount"`
 }
 
 var Load = sync.OnceValue(func() Config {
@@ -29,3 +34,11 @@ var Load = sync.OnceValue(func() Config {
 	support.MustOK(json.Unmarshal(embeddedConfig, &cfg))
 	return cfg
 })
+
+func ConfigDir() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		configDir = support.Must(os.UserHomeDir())
+	}
+	return filepath.Join(configDir, "dfmicro")
+}

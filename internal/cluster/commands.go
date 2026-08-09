@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"runtime"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -20,6 +20,12 @@ func nameFlag() cli.Flag {
 		Name:  "name",
 		Usage: "Cluster name",
 		Value: defaultRootConfig.Name,
+		Validator: func(s string) error {
+			if len(s) > 0 && s[0] == ',' {
+				return fmt.Errorf("cluster name cannot start with ','")
+			}
+			return nil
+		},
 	}
 }
 
@@ -30,6 +36,12 @@ func createFlags() []cli.Flag {
 			Usage:    "Cluster name, used to identify containers and stored config",
 			Value:    defaultRootConfig.Name,
 			Category: "Cluster:",
+			Validator: func(s string) error {
+				if len(s) > 0 && s[0] == '-' {
+					return fmt.Errorf("cluster name cannot start with ','")
+				}
+				return nil
+			},
 		},
 		&cli.StringFlag{
 			Name:     "image",
@@ -170,7 +182,7 @@ Examples:
 					},
 				},
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
-					if runtime.GOOS == "darwin" {
+					if support.IsMacOS {
 						return ctx, checkMacOSRootful()
 					}
 					return ctx, nil
@@ -232,7 +244,7 @@ Examples:
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
