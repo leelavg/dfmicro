@@ -9,7 +9,7 @@ import (
 )
 
 func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
-	if cfg.ClientOnly {
+	if cfg.clientOnly {
 		o.logger.Info("checking Driver CRD")
 		if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {
 			return fmt.Errorf("Driver CRD not found: %w", err)
@@ -25,7 +25,7 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 			return err
 		}
 
-		if cfg.IncludeCephFS {
+		if cfg.includeCephFS {
 			o.logger.Info("applying cephfs driver")
 			cephfs, err := odfFS.ReadFile("resources/00-cephfs-driver.yaml")
 			if err != nil {
@@ -75,7 +75,7 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		return err
 	}
 
-	if cfg.IncludeCephFS {
+	if cfg.includeCephFS {
 		o.logger.Info("applying cephfs driver")
 		cephfs, err := odfFS.ReadFile("resources/00-cephfs-driver.yaml")
 		if err != nil {
@@ -105,7 +105,7 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 
 	o.logger.Info("applying StorageCluster")
 	scVars := map[string]string{"IncludeCephFS": ""}
-	if cfg.IncludeCephFS {
+	if cfg.includeCephFS {
 		scVars["IncludeCephFS"] = "true"
 	}
 	sc, err := support.Render(storageclusterTmpl, scVars)

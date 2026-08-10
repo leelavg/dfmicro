@@ -9,12 +9,12 @@ import (
 )
 
 type nadConfig struct {
-	Name       string
-	Namespace  string
-	Bridge     string
-	Subnet     string
-	RangeStart string
-	RangeEnd   string
+	name       string
+	namespace  string
+	bridge     string
+	subnet     string
+	rangeStart string
+	rangeEnd   string
 }
 
 type nadManager struct {
@@ -34,7 +34,7 @@ func newNADManager(logger *slog.Logger, runner execx.Runner, kubectl, kubeconfig
 }
 
 func (m *nadManager) create(ctx context.Context, cfg nadConfig) error {
-	m.logger.Info("creating NetworkAttachmentDefinition", "name", cfg.Name, "namespace", cfg.Namespace)
+	m.logger.Info("creating NetworkAttachmentDefinition", "name", cfg.name, "namespace", cfg.namespace)
 
 	nadYAML, err := m.render(cfg)
 	if err != nil {
@@ -55,12 +55,12 @@ func (m *nadManager) delete(ctx context.Context, name, namespace string) error {
 
 func (m *nadManager) render(cfg nadConfig) (string, error) {
 	nadCfg := map[string]string{
-		"Name":       cfg.Name,
-		"Namespace":  cfg.Namespace,
-		"Bridge":     cfg.Bridge,
-		"Subnet":     cfg.Subnet,
-		"RangeStart": cfg.RangeStart,
-		"RangeEnd":   cfg.RangeEnd,
+		"Name":       cfg.name,
+		"Namespace":  cfg.namespace,
+		"Bridge":     cfg.bridge,
+		"Subnet":     cfg.subnet,
+		"RangeStart": cfg.rangeStart,
+		"RangeEnd":   cfg.rangeEnd,
 	}
 	return support.Render(nadTemplate, nadCfg)
 }

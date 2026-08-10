@@ -76,9 +76,9 @@ Example:
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			mgr := newBridgeManager(logger, runner)
 			return mgr.create(ctx, bridgeConfig{
-				Name:         cmd.String("name"),
-				Subnet:       cmd.String("subnet"),
-				SegmentCount: cmd.Int("segment-count"),
+				name:         cmd.String("name"),
+				subnet:       cmd.String("subnet"),
+				segmentCount: cmd.Int("segment-count"),
 			})
 		},
 	}
@@ -164,12 +164,12 @@ Example:
 
 				nadMgr := newNADManager(logger, runner, "oc", kcPath)
 				err = nadMgr.create(ctx, nadConfig{
-					Name:       networkName,
-					Namespace:  namespace,
-					Bridge:     networkName,
-					Subnet:     subnet,
-					RangeStart: rangeStart,
-					RangeEnd:   rangeEnd,
+					name:       networkName,
+					namespace:  namespace,
+					bridge:     networkName,
+					subnet:     subnet,
+					rangeStart: rangeStart,
+					rangeEnd:   rangeEnd,
 				})
 				if err != nil {
 					return fmt.Errorf("failed to create NAD for cluster %s: %w", clusterName, err)

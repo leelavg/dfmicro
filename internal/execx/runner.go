@@ -19,34 +19,34 @@ type Runner interface {
 }
 
 type CommandError struct {
-	Name   string
-	Args   []string
-	Stdout string
-	Stderr string
-	Err    error
+	name   string
+	args   []string
+	stdout string
+	stderr string
+	err    error
 }
 
 func (e *CommandError) Error() string {
 	var b strings.Builder
 	b.WriteString("command failed: ")
-	b.WriteString(e.Name)
-	if len(e.Args) > 0 {
+	b.WriteString(e.name)
+	if len(e.args) > 0 {
 		b.WriteString(" ")
-		b.WriteString(strings.Join(e.Args, " "))
+		b.WriteString(strings.Join(e.args, " "))
 	}
-	if e.Err != nil {
+	if e.err != nil {
 		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		b.WriteString(e.err.Error())
 	}
-	if e.Stderr != "" {
+	if e.stderr != "" {
 		b.WriteString(": ")
-		b.WriteString(strings.TrimSpace(e.Stderr))
+		b.WriteString(strings.TrimSpace(e.stderr))
 	}
 	return b.String()
 }
 
 func (e *CommandError) Unwrap() error {
-	return e.Err
+	return e.err
 }
 
 type PanicRunner struct{}
@@ -76,11 +76,11 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, e
 	}
 	if err != nil {
 		return result, &CommandError{
-			Name:   name,
-			Args:   append([]string(nil), args...),
-			Stdout: result.Stdout,
-			Stderr: result.Stderr,
-			Err:    err,
+			name:   name,
+			args:   append([]string(nil), args...),
+			stdout: result.Stdout,
+			stderr: result.Stderr,
+			err:    err,
 		}
 	}
 

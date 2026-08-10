@@ -11,9 +11,9 @@ import (
 )
 
 type bridgeConfig struct {
-	Name         string
-	Subnet       string
-	SegmentCount int
+	name         string
+	subnet       string
+	segmentCount int
 }
 
 type bridgeManager struct {
@@ -29,38 +29,38 @@ func newBridgeManager(logger *slog.Logger, runner execx.Runner) *bridgeManager {
 }
 
 func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
-	exists, err := m.exists(ctx, cfg.Name)
+	exists, err := m.exists(ctx, cfg.name)
 	if err != nil {
 		return err
 	}
 	if exists {
-		m.logger.Info("bridge already exists", "name", cfg.Name)
+		m.logger.Info("bridge already exists", "name", cfg.name)
 		return nil
 	}
 
-	reservedEnd, err := computeReservedIPRange(cfg.Subnet, cfg.SegmentCount)
+	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.segmentCount)
 	if err != nil {
 		return fmt.Errorf("failed to compute reserved IP range: %w", err)
 	}
 
-	m.logger.Info("creating bridge", "name", cfg.Name, "subnet", cfg.Subnet)
+	m.logger.Info("creating bridge", "name", cfg.name, "subnet", cfg.subnet)
 	args := []string{"network", "create", "--opt", "no_default_route=true"}
-	if cfg.Subnet != "" {
-		args = append(args, "--subnet", cfg.Subnet)
+	if cfg.subnet != "" {
+		args = append(args, "--subnet", cfg.subnet)
 	}
 	if reservedEnd != "" {
 		args = append(args, "--ip-range", reservedEnd)
 	}
-	args = append(args, cfg.Name)
+	args = append(args, cfg.name)
 	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
 	if err != nil {
 		return fmt.Errorf("failed to create bridge: %w", err)
 	}
 
 	state := &bridgeState{
-		Name:         cfg.Name,
-		Subnet:       cfg.Subnet,
-		SegmentCount: cfg.SegmentCount,
+		Name:         cfg.name,
+		Subnet:       cfg.subnet,
+		SegmentCount: cfg.segmentCount,
 	}
 	if err := state.save(bridgeStateDir()); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)

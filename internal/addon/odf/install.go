@@ -11,15 +11,15 @@ import (
 var odfFS embed.FS
 
 type installConfig struct {
-	CatalogImage string
-	Channel      string
-	SubNames     []string
-	Version      string
+	catalogImage string
+	channel      string
+	subNames     []string
+	version      string
 }
 
 type configureConfig struct {
-	ClientOnly    bool
-	IncludeCephFS bool
+	clientOnly    bool
+	includeCephFS bool
 }
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
@@ -29,7 +29,7 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying ClusterVersion")
-	cv, err := support.Render(clusterVersionTmpl, map[string]string{"Channel": cfg.Channel, "Version": cfg.Version})
+	cv, err := support.Render(clusterVersionTmpl, map[string]string{"Channel": cfg.channel, "Version": cfg.version})
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying catalog source")
-	catsrc, err := support.Render(catalogTmpl, map[string]string{"CatalogImage": cfg.CatalogImage})
+	catsrc, err := support.Render(catalogTmpl, map[string]string{"CatalogImage": cfg.catalogImage})
 	if err != nil {
 		return err
 	}
@@ -71,9 +71,9 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 		return err
 	}
 
-	for _, sub := range cfg.SubNames {
+	for _, sub := range cfg.subNames {
 		o.logger.Info("applying subscription", "name", sub)
-		s, err := support.Render(subscriptionTmpl, map[string]string{"SubName": sub, "Channel": cfg.Channel})
+		s, err := support.Render(subscriptionTmpl, map[string]string{"SubName": sub, "Channel": cfg.channel})
 		if err != nil {
 			return err
 		}
