@@ -8,7 +8,7 @@ import (
 	"dfmicro/internal/support"
 )
 
-type NADConfig struct {
+type nadConfig struct {
 	Name       string
 	Namespace  string
 	Bridge     string
@@ -17,15 +17,15 @@ type NADConfig struct {
 	RangeEnd   string
 }
 
-type NADManager struct {
+type nadManager struct {
 	logger     *slog.Logger
 	runner     execx.Runner
 	kubectl    string
 	kubeconfig string
 }
 
-func NewNADManager(logger *slog.Logger, runner execx.Runner, kubectl, kubeconfig string) *NADManager {
-	return &NADManager{
+func newNADManager(logger *slog.Logger, runner execx.Runner, kubectl, kubeconfig string) *nadManager {
+	return &nadManager{
 		logger:     logger,
 		runner:     runner,
 		kubectl:    kubectl,
@@ -33,17 +33,17 @@ func NewNADManager(logger *slog.Logger, runner execx.Runner, kubectl, kubeconfig
 	}
 }
 
-func (m *NADManager) CreateNAD(ctx context.Context, cfg NADConfig) error {
+func (m *nadManager) create(ctx context.Context, cfg nadConfig) error {
 	m.logger.Info("creating NetworkAttachmentDefinition", "name", cfg.Name, "namespace", cfg.Namespace)
 
-	nadYAML, err := m.renderNAD(cfg)
+	nadYAML, err := m.render(cfg)
 	if err != nil {
 		return err
 	}
 	return support.ApplyYAML(ctx, m.runner, m.kubectl, m.kubeconfig, nadYAML)
 }
 
-func (m *NADManager) DeleteNAD(ctx context.Context, name, namespace string) error {
+func (m *nadManager) delete(ctx context.Context, name, namespace string) error {
 	m.logger.Info("deleting NetworkAttachmentDefinition", "name", name, "namespace", namespace)
 	args := []string{"delete", "net-attach-def", name, "-n", namespace}
 	if m.kubeconfig != "" {
@@ -53,7 +53,7 @@ func (m *NADManager) DeleteNAD(ctx context.Context, name, namespace string) erro
 	return err
 }
 
-func (m *NADManager) renderNAD(cfg NADConfig) (string, error) {
+func (m *nadManager) render(cfg nadConfig) (string, error) {
 	nadCfg := map[string]string{
 		"Name":       cfg.Name,
 		"Namespace":  cfg.Namespace,

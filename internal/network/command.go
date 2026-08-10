@@ -75,7 +75,7 @@ Example:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			mgr := newBridgeManager(logger, runner)
-			return mgr.create(ctx, BridgeConfig{
+			return mgr.create(ctx, bridgeConfig{
 				Name:         cmd.String("name"),
 				Subnet:       cmd.String("subnet"),
 				SegmentCount: cmd.Int("segment-count"),
@@ -120,7 +120,7 @@ Example:
 				return err
 			}
 
-			bridgeState, err := LoadBridgeState(bridgeStateDir(), networkName)
+			bridgeState, err := loadBridgeState(bridgeStateDir(), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load bridge state for network %s: %w", networkName, err)
 			}
@@ -162,8 +162,8 @@ Example:
 					return fmt.Errorf("failed to save IPAM state for cluster %s: %w", clusterName, err)
 				}
 
-				nadMgr := NewNADManager(logger, runner, "oc", kcPath)
-				err = nadMgr.CreateNAD(ctx, NADConfig{
+				nadMgr := newNADManager(logger, runner, "oc", kcPath)
+				err = nadMgr.create(ctx, nadConfig{
 					Name:       networkName,
 					Namespace:  namespace,
 					Bridge:     networkName,
@@ -230,8 +230,8 @@ Example:
 					}
 				}
 
-				nadMgr := NewNADManager(logger, runner, "oc", kcPath)
-				if err := nadMgr.DeleteNAD(ctx, networkName, namespace); err != nil {
+				nadMgr := newNADManager(logger, runner, "oc", kcPath)
+				if err := nadMgr.delete(ctx, networkName, namespace); err != nil {
 					return fmt.Errorf("failed to delete NAD for cluster %s: %w", clusterName, err)
 				}
 

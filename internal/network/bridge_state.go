@@ -9,13 +9,13 @@ import (
 	rootconfig "dfmicro/internal/config"
 )
 
-type BridgeState struct {
+type bridgeState struct {
 	Name         string `json:"name"`
 	Subnet       string `json:"subnet"`
 	SegmentCount int    `json:"segmentCount"`
 }
 
-func LoadBridgeState(stateDir, bridgeName string) (*BridgeState, error) {
+func loadBridgeState(stateDir, bridgeName string) (*bridgeState, error) {
 	path := filepath.Join(stateDir, fmt.Sprintf("bridge-%s.json", bridgeName))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("bridge state not found for %s", bridgeName)
@@ -24,14 +24,14 @@ func LoadBridgeState(stateDir, bridgeName string) (*BridgeState, error) {
 	if err != nil {
 		return nil, err
 	}
-	var state BridgeState
+	var state bridgeState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, err
 	}
 	return &state, nil
 }
 
-func (b *BridgeState) Save(stateDir string) error {
+func (b *bridgeState) save(stateDir string) error {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return err
 	}

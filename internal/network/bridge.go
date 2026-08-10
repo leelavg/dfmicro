@@ -10,25 +10,25 @@ import (
 	"dfmicro/internal/execx"
 )
 
-type BridgeConfig struct {
+type bridgeConfig struct {
 	Name         string
 	Subnet       string
 	SegmentCount int
 }
 
-type BridgeManager struct {
+type bridgeManager struct {
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func newBridgeManager(logger *slog.Logger, runner execx.Runner) *BridgeManager {
-	return &BridgeManager{
+func newBridgeManager(logger *slog.Logger, runner execx.Runner) *bridgeManager {
+	return &bridgeManager{
 		logger: logger,
 		runner: runner,
 	}
 }
 
-func (m *BridgeManager) create(ctx context.Context, cfg BridgeConfig) error {
+func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	exists, err := m.exists(ctx, cfg.Name)
 	if err != nil {
 		return err
@@ -57,12 +57,12 @@ func (m *BridgeManager) create(ctx context.Context, cfg BridgeConfig) error {
 		return fmt.Errorf("failed to create bridge: %w", err)
 	}
 
-	state := &BridgeState{
+	state := &bridgeState{
 		Name:         cfg.Name,
 		Subnet:       cfg.Subnet,
 		SegmentCount: cfg.SegmentCount,
 	}
-	if err := state.Save(bridgeStateDir()); err != nil {
+	if err := state.save(bridgeStateDir()); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)
 	}
 
@@ -70,7 +70,7 @@ func (m *BridgeManager) create(ctx context.Context, cfg BridgeConfig) error {
 	return nil
 }
 
-func (m *BridgeManager) exists(ctx context.Context, name string) (bool, error) {
+func (m *bridgeManager) exists(ctx context.Context, name string) (bool, error) {
 	_, err := execx.RunPodmanCommand(ctx, m.runner, "network", "exists", name)
 	if err == nil {
 		return true, nil
@@ -78,7 +78,7 @@ func (m *BridgeManager) exists(ctx context.Context, name string) (bool, error) {
 	return false, nil
 }
 
-func (m *BridgeManager) getSubnet(ctx context.Context, name string) (string, error) {
+func (m *bridgeManager) getSubnet(ctx context.Context, name string) (string, error) {
 	result, err := execx.RunPodmanCommand(ctx, m.runner, "network", "inspect", name, "--format", "{{json .Subnets}}")
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect bridge: %w", err)
@@ -103,7 +103,7 @@ func (m *BridgeManager) getSubnet(ctx context.Context, name string) (string, err
 	return subnet, nil
 }
 
-func (m *BridgeManager) delete(ctx context.Context, name string) error {
+func (m *bridgeManager) delete(ctx context.Context, name string) error {
 	exists, err := m.exists(ctx, name)
 	if err != nil {
 		return err

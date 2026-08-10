@@ -58,12 +58,12 @@ type solrDocSolution struct {
 func newSolrClient(cfg config) *solrClient {
 	return &solrClient{
 		baseURL: cfg.SolrBaseURL,
-		client:  support.NewHTTPClient(cfg.HTTPTimeout()),
+		client:  support.NewHTTPClient(cfg.httpTimeout()),
 		cfg:     cfg,
 	}
 }
 
-func (c *solrClient) Query(ctx context.Context, params map[string]any) (*solrResponse, error) {
+func (c *solrClient) query(ctx context.Context, params map[string]any) (*solrResponse, error) {
 	q := url.Values{}
 	for k, v := range params {
 		switch val := v.(type) {
@@ -91,7 +91,7 @@ func (c *solrClient) Query(ctx context.Context, params map[string]any) (*solrRes
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d/%d: %w", attempt, c.cfg.MaxRetries, err)
 			if attempt < c.cfg.MaxRetries {
-				selectTimeout(ctx, c.cfg.RetryDelay())
+				selectTimeout(ctx, c.cfg.retryDelay())
 			}
 			continue
 		}
@@ -101,7 +101,7 @@ func (c *solrClient) Query(ctx context.Context, params map[string]any) (*solrRes
 			body, _ := io.ReadAll(resp.Body)
 			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
 			if attempt < c.cfg.MaxRetries {
-				selectTimeout(ctx, c.cfg.RetryDelay())
+				selectTimeout(ctx, c.cfg.retryDelay())
 			}
 			continue
 		}

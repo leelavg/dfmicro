@@ -94,7 +94,7 @@ func (f *fetcher) downloadDocs(ctx context.Context, version string) error {
 }
 
 func (f *fetcher) fetchTOC(ctx context.Context, version string) (string, error) {
-	client := support.NewHTTPClient(f.cfg.HTTPTimeout())
+	client := support.NewHTTPClient(f.cfg.httpTimeout())
 	tocURL := fmt.Sprintf("%s/%s", f.cfg.DocsBaseURL, version)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", tocURL, nil)
@@ -115,7 +115,7 @@ func (f *fetcher) fetchTOC(ctx context.Context, version string) (string, error) 
 }
 
 func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, section string) error {
-	client := support.NewHTTPClient(f.cfg.HTTPTimeout())
+	client := support.NewHTTPClient(f.cfg.httpTimeout())
 	var lastErr error
 	for attempt := 1; attempt <= f.cfg.MaxRetries; attempt++ {
 
@@ -131,7 +131,7 @@ func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, sect
 			lastErr = fmt.Errorf("request failed: %w", err)
 			if attempt < f.cfg.MaxRetries {
 				f.logger.Warn("download failed, retrying", "section", section, "attempt", attempt, "error", err)
-				time.Sleep(f.cfg.RetryDelay())
+				time.Sleep(f.cfg.retryDelay())
 			}
 			continue
 		}
@@ -141,7 +141,7 @@ func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, sect
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 			if attempt < f.cfg.MaxRetries {
 				f.logger.Warn("HTTP error, retrying", "section", section, "attempt", attempt, "status", resp.StatusCode)
-				time.Sleep(f.cfg.RetryDelay())
+				time.Sleep(f.cfg.retryDelay())
 			}
 			continue
 		}
@@ -159,7 +159,7 @@ func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, sect
 			lastErr = fmt.Errorf("write failed: %w", err)
 			if attempt < f.cfg.MaxRetries {
 				f.logger.Warn("write failed, retrying", "section", section, "attempt", attempt, "error", err)
-				time.Sleep(f.cfg.RetryDelay())
+				time.Sleep(f.cfg.retryDelay())
 			}
 			continue
 		}
@@ -169,7 +169,7 @@ func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, sect
 			lastErr = fmt.Errorf("empty file received")
 			if attempt < f.cfg.MaxRetries {
 				f.logger.Warn("empty file, retrying", "section", section, "attempt", attempt)
-				time.Sleep(f.cfg.RetryDelay())
+				time.Sleep(f.cfg.retryDelay())
 			}
 			continue
 		}

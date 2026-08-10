@@ -2,10 +2,8 @@ package buildinfo
 
 import "fmt"
 
-var (
-	Version = "dev"
-	Commit  = "none"
-)
+var Version = "dev"
+var Commit = "none"
 
 func String() string {
 	return fmt.Sprintf("%s (%s)", Version, Commit)

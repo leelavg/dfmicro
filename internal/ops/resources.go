@@ -20,10 +20,8 @@ import (
 
 var defaultName = rootconfig.Load().Name
 
-const (
-	internalKubeconfig = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
-
-	podTemplate = `
+const internalKubeconfig = "/var/lib/microshift/resources/kubeadmin/kubeconfig"
+const podTemplate = `
 		{{- range .items -}}
 		    {{- $ns := .metadata.namespace -}}
 		    {{- $pod := .metadata.name -}}
@@ -40,12 +38,10 @@ const (
 		    {{- end -}}
 		{{- end -}}
 	`
-
-	nsTruncAt   = 16
-	podTruncAt  = 42
-	truncSuffix = 3
-	dotLen      = 3
-)
+const nsTruncAt = 16
+const podTruncAt = 42
+const truncSuffix = 3
+const dotLen = 3
 
 func resourcesCommand(runner execx.Runner) *cli.Command {
 	return &cli.Command{

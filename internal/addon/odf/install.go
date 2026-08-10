@@ -22,7 +22,7 @@ type configureConfig struct {
 	IncludeCephFS bool
 }
 
-func (o *odf) Install(ctx context.Context, cfg installConfig) error {
+func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	o.logger.Info("applying shim CRDs")
 	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/crd"); err != nil {
 		return err

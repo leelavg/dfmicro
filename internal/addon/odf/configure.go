@@ -8,7 +8,7 @@ import (
 	"dfmicro/internal/support"
 )
 
-func (o *odf) Configure(ctx context.Context, cfg configureConfig) error {
+func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 	if cfg.ClientOnly {
 		o.logger.Info("checking Driver CRD")
 		if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {

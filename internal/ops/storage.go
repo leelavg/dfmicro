@@ -21,10 +21,10 @@ func storageCommand(runner execx.Runner) *cli.Command {
 				return err
 			}
 
-			type Container struct {
+			type container struct {
 				Names []string `json:"Names"`
 			}
-			var containers []Container
+			var containers []container
 			if err := json.Unmarshal([]byte(result.Stdout), &containers); err != nil {
 				return err
 			}

@@ -12,7 +12,7 @@ import (
 
 const configFileName = "config.json"
 
-type Config struct {
+type config struct {
 	rootconfig.Config
 	Name                  string   `json:"name,omitempty"`
 	Network               string   `json:"network,omitempty"`
@@ -26,7 +26,7 @@ type Config struct {
 	ExtraMounts           []string `json:"extraMounts,omitempty"`
 }
 
-func newConfigFromCommand(cmd *cli.Command) (Config, error) {
+func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	name := cmd.String("name")
 	cfg := deriveConfig(defaultRootConfig, name)
 
@@ -55,10 +55,10 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	return cfg, nil
 }
 
-func deriveConfig(defaults rootconfig.Config, name string) Config {
+func deriveConfig(defaults rootconfig.Config, name string) config {
 	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
 
-	return Config{
+	return config{
 		Config:                defaults,
 		Name:                  name,
 		Network:               name,
@@ -75,32 +75,32 @@ func clusterConfigPath(name string) (string, error) {
 }
 
 func Kubeconfig(name string) (string, error) {
-	cfg, err := ReadClusterConfig(name)
+	cfg, err := readClusterConfig(name)
 	if err != nil {
 		return "", err
 	}
 	return cfg.DefaultKubeconfigPath, nil
 }
 
-func ReadClusterConfig(name string) (Config, error) {
+func readClusterConfig(name string) (config, error) {
 	path, err := clusterConfigPath(name)
 	if err != nil {
-		return Config{}, err
+		return config{}, err
 	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Config{}, err
+		return config{}, err
 	}
 
-	var cfg Config
+	var cfg config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, err
+		return config{}, err
 	}
 	return cfg, nil
 }
 
-func writeClusterConfig(cfg Config) error {
+func writeClusterConfig(cfg config) error {
 	path, err := clusterConfigPath(cfg.Name)
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func writeClusterConfig(cfg Config) error {
 }
 
 func printClusterConfig(name string) error {
-	cfg, err := ReadClusterConfig(name)
+	cfg, err := readClusterConfig(name)
 	if err != nil {
 		return err
 	}

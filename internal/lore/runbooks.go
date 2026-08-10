@@ -130,7 +130,7 @@ func (f *fetcher) downloadRunbooks(ctx context.Context) error {
 }
 
 func (f *fetcher) getLatestCommitTime(ctx context.Context) (time.Time, error) {
-	client := support.NewHTTPClient(f.cfg.HTTPTimeout())
+	client := support.NewHTTPClient(f.cfg.httpTimeout())
 	url := "https://api.github.com/repos/openshift/runbooks/commits?path=alerts/openshift-container-storage-operator&per_page=1"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -174,7 +174,7 @@ func (f *fetcher) getLatestCommitTime(ctx context.Context) (time.Time, error) {
 }
 
 func (f *fetcher) listAllRunbookFiles(ctx context.Context) ([]githubFile, error) {
-	client := support.NewHTTPClient(f.cfg.HTTPTimeout())
+	client := support.NewHTTPClient(f.cfg.httpTimeout())
 	url := "https://api.github.com/repos/openshift/runbooks/contents/alerts/openshift-container-storage-operator"
 
 	var allFiles []githubFile
@@ -222,7 +222,7 @@ func (f *fetcher) walkGitHubDir(ctx context.Context, client *http.Client, url st
 }
 
 func (f *fetcher) downloadRunbookFile(ctx context.Context, url string) ([]byte, error) {
-	client := support.NewHTTPClient(f.cfg.HTTPTimeout())
+	client := support.NewHTTPClient(f.cfg.httpTimeout())
 	var lastErr error
 
 	for attempt := 1; attempt <= f.cfg.MaxRetries; attempt++ {
@@ -236,7 +236,7 @@ func (f *fetcher) downloadRunbookFile(ctx context.Context, url string) ([]byte, 
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d/%d: %w", attempt, f.cfg.MaxRetries, err)
 			if attempt < f.cfg.MaxRetries {
-				selectTimeout(ctx, f.cfg.RetryDelay())
+				selectTimeout(ctx, f.cfg.retryDelay())
 			}
 			continue
 		}
@@ -245,7 +245,7 @@ func (f *fetcher) downloadRunbookFile(ctx context.Context, url string) ([]byte, 
 		if resp.StatusCode != http.StatusOK {
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
 			if attempt < f.cfg.MaxRetries {
-				selectTimeout(ctx, f.cfg.RetryDelay())
+				selectTimeout(ctx, f.cfg.retryDelay())
 			}
 			continue
 		}

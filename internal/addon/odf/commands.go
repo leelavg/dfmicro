@@ -94,7 +94,7 @@ Example:
 					},
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
-					return o.Install(ctx, installConfig{
+					return o.install(ctx, installConfig{
 						CatalogImage: cmd.String("catalog-image"),
 						Channel:      cmd.String("channel"),
 						SubNames:     cmd.StringSlice("sub-name"),
@@ -117,7 +117,7 @@ Example:
 					},
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
-					return o.Configure(ctx, configureConfig{
+					return o.configure(ctx, configureConfig{
 						ClientOnly:    cmd.Bool("client"),
 						IncludeCephFS: cmd.Bool("include-cephfs"),
 					})
@@ -159,7 +159,7 @@ Examples:
 					},
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
-					return o.Uninstall(ctx, cmd.Bool("attempt"))
+					return o.uninstall(ctx, cmd.Bool("attempt"))
 				}),
 			},
 		},

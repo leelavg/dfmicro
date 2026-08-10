@@ -27,10 +27,10 @@ var loadConfig = sync.OnceValue(func() config {
 	return cfg
 })
 
-func (c config) RetryDelay() time.Duration {
+func (c config) retryDelay() time.Duration {
 	return time.Duration(c.RetryDelaySeconds) * time.Second
 }
 
-func (c config) HTTPTimeout() time.Duration {
+func (c config) httpTimeout() time.Duration {
 	return time.Duration(c.HTTPTimeoutSeconds) * time.Second
 }

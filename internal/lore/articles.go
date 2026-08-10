@@ -71,7 +71,7 @@ func (f *fetcher) downloadArticles(ctx context.Context) error {
 			"fl":    "id,lastModifiedDate,publishedAbstract,publishedTitle,setLanguage,view_uri",
 		}
 
-		resp, err := solrClient.Query(ctx, params)
+		resp, err := solrClient.query(ctx, params)
 		if err != nil {
 			return fmt.Errorf("failed to query articles: %w", err)
 		}

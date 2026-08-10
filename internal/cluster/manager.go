@@ -74,21 +74,21 @@ type podmanContainer struct {
 	Labels map[string]string `json:"Labels"`
 }
 
-type Manager struct {
-	cfg    Config
+type manager struct {
+	cfg    config
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func NewManager(cfg Config, logger *slog.Logger, runner execx.Runner) *Manager {
-	return &Manager{
+func newManager(cfg config, logger *slog.Logger, runner execx.Runner) *manager {
+	return &manager{
 		cfg:    cfg,
 		logger: logger,
 		runner: runner,
 	}
 }
 
-func (m *Manager) Create(ctx context.Context) error {
+func (m *manager) create(ctx context.Context) error {
 	containerName := m.cfg.Name + "-1"
 
 	exists, err := m.containerExists(ctx, containerName)
@@ -137,7 +137,7 @@ func (m *Manager) Create(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) Start(ctx context.Context) error {
+func (m *manager) start(ctx context.Context) error {
 	containers, err := m.getClusterContainers(ctx)
 	if err != nil {
 		return err
@@ -165,7 +165,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) Stop(ctx context.Context) error {
+func (m *manager) stop(ctx context.Context) error {
 	containers, err := m.getRunningContainers(ctx)
 	if err != nil {
 		return err
@@ -185,7 +185,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) Delete(ctx context.Context) error {
+func (m *manager) delete(ctx context.Context) error {
 	containers, err := m.getClusterContainers(ctx)
 	if err != nil {
 		return err
@@ -227,7 +227,7 @@ func (m *Manager) Delete(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) Status(ctx context.Context) error {
+func (m *manager) status(ctx context.Context) error {
 	createdContainers, err := m.getClusterContainers(ctx)
 	if err != nil {
 		return err
@@ -266,7 +266,7 @@ func (m *Manager) Status(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) createTopoLVMBackend(ctx context.Context) error {
+func (m *manager) createTopoLVMBackend(ctx context.Context) error {
 	imageExists := false
 	if _, err := os.Stat(m.cfg.LVMDisk); err == nil {
 		imageExists = true
@@ -309,7 +309,7 @@ func (m *Manager) createTopoLVMBackend(ctx context.Context) error {
 	return nil
 }
 
-func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
+func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 	if _, err := os.Stat(m.cfg.LVMDisk); errors.Is(err, os.ErrNotExist) {
 		return nil
 	} else if err != nil {
@@ -360,7 +360,7 @@ func (m *Manager) deleteTopoLVMBackend(ctx context.Context) error {
 	return os.RemoveAll(filepath.Dir(m.cfg.LVMDisk))
 }
 
-func (m *Manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
+func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
 	exists, err := m.podmanNetworkExists(ctx, name)
 	if err != nil {
 		return err
@@ -380,7 +380,7 @@ func (m *Manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) 
 	return err
 }
 
-func (m *Manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
+func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
 	_, err := execx.RunPodmanCommand(ctx, m.runner, "network", "exists", name)
 	if err == nil {
 		return true, nil
@@ -392,7 +392,7 @@ func (m *Manager) podmanNetworkExists(ctx context.Context, name string) (bool, e
 	return false, err
 }
 
-func (m *Manager) containerExists(ctx context.Context, name string) (bool, error) {
+func (m *manager) containerExists(ctx context.Context, name string) (bool, error) {
 	_, err := execx.RunPodmanCommand(ctx, m.runner, "container", "exists", name)
 	if err == nil {
 		return true, nil
@@ -404,7 +404,7 @@ func (m *Manager) containerExists(ctx context.Context, name string) (bool, error
 	return false, err
 }
 
-func (m *Manager) getSubnet(ctx context.Context, networkName string) (string, error) {
+func (m *manager) getSubnet(ctx context.Context, networkName string) (string, error) {
 	result, err := execx.RunPodmanCommand(ctx, m.runner, "network", "inspect", networkName, "--format", "{{range .}}{{range .Subnets}}{{.Subnet}}{{end}}{{end}}")
 	if err != nil {
 		return "", err
@@ -438,7 +438,7 @@ func getIPAddress(subnet string, nodeID int) (string, error) {
 	return ip.String(), nil
 }
 
-func (m *Manager) addNode(ctx context.Context, name, networkName, ipAddress string) error {
+func (m *manager) addNode(ctx context.Context, name, networkName, ipAddress string) error {
 	args := []string{
 		"podman", "run", "--privileged", "-d",
 		"--ulimit", "nofile=524288:524288",
@@ -602,7 +602,7 @@ func getClients() ([]string, error) {
 	return clients, nil
 }
 
-func (m *Manager) waitForDBus(ctx context.Context, name string) error {
+func (m *manager) waitForDBus(ctx context.Context, name string) error {
 	for range 60 {
 		if _, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
 			return nil
@@ -616,7 +616,7 @@ func (m *Manager) waitForDBus(ctx context.Context, name string) error {
 	return errors.New("the container did not activate the dbus service within 60 seconds")
 }
 
-func (m *Manager) waitReady(ctx context.Context) error {
+func (m *manager) waitReady(ctx context.Context) error {
 	containers, err := m.getRunningContainers(ctx)
 	if err != nil {
 		return err
@@ -656,7 +656,7 @@ func (m *Manager) waitReady(ctx context.Context) error {
 	return errors.New("cluster did not become ready within 10 minutes")
 }
 
-func (m *Manager) checkNodesReady(ctx context.Context, containerName string) error {
+func (m *manager) checkNodesReady(ctx context.Context, containerName string) error {
 	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "oc", "get", "nodes", "--no-headers")
 	if err != nil {
 		return err
@@ -669,7 +669,7 @@ func (m *Manager) checkNodesReady(ctx context.Context, containerName string) err
 	return errors.New("nodes not ready yet")
 }
 
-func (m *Manager) PrintKubeconfig(ctx context.Context) error {
+func (m *manager) PrintKubeconfig(ctx context.Context) error {
 	data, err := os.ReadFile(m.cfg.DefaultKubeconfigPath)
 	if err == nil {
 		_, err = os.Stdout.Write(data)
@@ -687,7 +687,7 @@ func (m *Manager) PrintKubeconfig(ctx context.Context) error {
 	return m.copyKubeconfig(ctx, containers[0])
 }
 
-func (m *Manager) copyKubeconfig(ctx context.Context, containerName string) error {
+func (m *manager) copyKubeconfig(ctx context.Context, containerName string) error {
 	m.logger.Info("delaying kubeconfig reads to prevent watchdog starvation on systems with hardware watchdog (see FAQ)")
 	time.Sleep(5 * time.Second)
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
@@ -756,15 +756,15 @@ func chownFromSudo(path string) error {
 	return os.Chown(path, uid, gid)
 }
 
-func (m *Manager) getClusterContainers(ctx context.Context) ([]string, error) {
+func (m *manager) getClusterContainers(ctx context.Context) ([]string, error) {
 	return m.listContainers(ctx, true)
 }
 
-func (m *Manager) getRunningContainers(ctx context.Context) ([]string, error) {
+func (m *manager) getRunningContainers(ctx context.Context) ([]string, error) {
 	return m.listContainers(ctx, false)
 }
 
-func (m *Manager) listContainers(ctx context.Context, all bool) ([]string, error) {
+func (m *manager) listContainers(ctx context.Context, all bool) ([]string, error) {
 	args := []string{"podman", "ps", "--filter", "label=part-of=" + m.cfg.Name, "--format=json"}
 	if all {
 		args = []string{"podman", "ps", "-a", "--filter", "label=part-of=" + m.cfg.Name, "--format=json"}
@@ -788,7 +788,7 @@ func (m *Manager) listContainers(ctx context.Context, all bool) ([]string, error
 	return names, nil
 }
 
-func (m *Manager) systemdSubState(ctx context.Context, containerName, unit string) (string, error) {
+func (m *manager) systemdSubState(ctx context.Context, containerName, unit string) (string, error) {
 	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "systemctl", "show", "--property=SubState", "--value", unit)
 	if err != nil {
 		return "unknown", nil
@@ -840,7 +840,7 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 	return nil
 }
 
-func (m *Manager) Exec(ctx context.Context, containerName string) error {
+func (m *manager) exec(ctx context.Context, containerName string) error {
 	result, err := execx.RunPodmanCommand(ctx, m.runner, "ps", "-a", "--filter", "label=part-of="+m.cfg.Name, "--format=json")
 	if err != nil {
 		return err

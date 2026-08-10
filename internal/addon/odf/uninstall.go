@@ -22,7 +22,7 @@ var uninstallFinalCmds = []string{
 	"delete namespace openshift-storage --ignore-not-found",
 }
 
-func (o *odf) Uninstall(ctx context.Context, attempt bool) error {
+func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 	if !attempt {
 		fmt.Println("# Run the following to uninstall:")
 		for _, c := range uninstallCmds {

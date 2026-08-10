@@ -64,7 +64,7 @@ func (f *fetcher) downloadAdvisories(ctx context.Context) error {
 				"fl":    "id,language,lastModifiedDate,portal_description,portal_solution,view_uri",
 			}
 
-			resp, err := solrClient.Query(ctx, params)
+			resp, err := solrClient.query(ctx, params)
 			if err != nil {
 				return fmt.Errorf("failed to query Solr: %w", err)
 			}

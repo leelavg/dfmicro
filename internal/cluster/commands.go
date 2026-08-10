@@ -123,13 +123,13 @@ func clusterFlags() []cli.Flag {
 	return []cli.Flag{nameFlag()}
 }
 
-func commandAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *Manager) error) cli.ActionFunc {
+func commandAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *manager) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
 		cfg, err := newConfigFromCommand(cmd)
 		if err != nil {
 			return err
 		}
-		return fn(ctx, NewManager(cfg, logger, runner))
+		return fn(ctx, newManager(cfg, logger, runner))
 	}
 }
 
@@ -187,7 +187,7 @@ Examples:
 					}
 					return ctx, nil
 				},
-				Action: commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Create(ctx) }),
+				Action: commandAction(logger, runner, func(ctx context.Context, manager *manager) error { return manager.create(ctx) }),
 			},
 			{
 				Name:      "delete",
@@ -195,21 +195,21 @@ Examples:
 				Usage:     "Delete cluster containers, network, and storage",
 				UsageText: "Stops and removes all cluster containers, networking, and storage stack.",
 				Flags:     clusterFlags(),
-				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Delete(ctx) }),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *manager) error { return manager.delete(ctx) }),
 			},
 			{
 				Name:      "start",
 				Usage:     "Start a stopped cluster",
 				UsageText: "Use after 'cluster stop' or after a host reboot.",
 				Flags:     clusterFlags(),
-				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Start(ctx) }),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *manager) error { return manager.start(ctx) }),
 			},
 			{
 				Name:      "stop",
 				Usage:     "Stop cluster containers without removing them",
 				UsageText: "Preserves all state. Resume with 'cluster start'.",
 				Flags:     clusterFlags(),
-				Action:    commandAction(logger, runner, func(ctx context.Context, manager *Manager) error { return manager.Stop(ctx) }),
+				Action:    commandAction(logger, runner, func(ctx context.Context, manager *manager) error { return manager.stop(ctx) }),
 			},
 			{
 				Name:      "config",
@@ -228,7 +228,7 @@ Examples:
   dfmicro cluster kubeconfig > ~/.kube/config
   dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml`,
 				Flags: []cli.Flag{nameFlag()},
-				Action: commandAction(logger, runner, func(ctx context.Context, manager *Manager) error {
+				Action: commandAction(logger, runner, func(ctx context.Context, manager *manager) error {
 					return manager.PrintKubeconfig(ctx)
 				}),
 			},
@@ -244,12 +244,12 @@ Examples:
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := ReadClusterConfig(cmd.String("name"))
+					cfg, err := readClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
-					manager := NewManager(cfg, logger, runner)
-					return manager.Exec(ctx, cmd.String("container"))
+					manager := newManager(cfg, logger, runner)
+					return manager.exec(ctx, cmd.String("container"))
 				},
 			},
 		},
