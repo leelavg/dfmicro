@@ -1,0 +1,192 @@
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// Helper to format basic type layouts or fallback definitions
+func baseExprToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.SelectorExpr:
+		return baseExprToString(t.X) + "." + t.Sel.Name
+	case *ast.StarExpr:
+		return "*" + baseExprToString(t.X)
+	case *ast.ArrayType:
+		return "[]" + baseExprToString(t.Elt)
+	case *ast.MapType:
+		return fmt.Sprintf("map[%s]%s", baseExprToString(t.Key), baseExprToString(t.Value))
+	case *ast.FuncType:
+		return "func(...)"
+	case *ast.ChanType:
+		dir := ""
+		if t.Dir == ast.RECV {
+			dir = "<-chan "
+		} else if t.Dir == ast.SEND {
+			dir = "chan<- "
+		} else {
+			dir = "chan "
+		}
+		return dir + baseExprToString(t.Value)
+	default:
+		return ""
+	}
+}
+
+// Recursively print fields of a type declaration on separate lines with progressive indentation
+func printTypeWithDepth(fset *token.FileSet, path string, expr ast.Expr, depth int) {
+	indent := strings.Repeat("  ", depth)
+
+	// If it's a pointer or a slice, unwrap it but preserve the structural prefix visual
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		fmt.Printf("%s*\n", indent)
+		printTypeWithDepth(fset, path, t.X, depth+1)
+		return
+	case *ast.ArrayType:
+		fmt.Printf("%s[]\n", indent)
+		printTypeWithDepth(fset, path, t.Elt, depth+1)
+		return
+	}
+
+	// Try extracting as a simple textual type signature first
+	if baseStr := baseExprToString(expr); baseStr != "" {
+		fmt.Printf("%s%s\n", indent, baseStr)
+		return
+	}
+
+	// Evaluate complex structural nodes line-by-line
+	switch t := expr.(type) {
+	case *ast.StructType:
+		fmt.Printf("%sstruct\n", indent)
+		if t.Fields != nil {
+			for _, field := range t.Fields.List {
+				fPos := fset.Position(field.Pos())
+				tagStr := ""
+				if field.Tag != nil {
+					tagStr = " " + field.Tag.Value
+				}
+
+				if len(field.Names) == 0 {
+					fmt.Printf("%s  -> %s:%d: (embedded)%s\n", indent, path, fPos.Line, tagStr)
+					printTypeWithDepth(fset, path, field.Type, depth+2)
+				} else {
+					for _, name := range field.Names {
+						fmt.Printf("%s  -> %s:%d: field %s%s\n", indent, path, fPos.Line, name.Name, tagStr)
+						printTypeWithDepth(fset, path, field.Type, depth+2)
+					}
+				}
+			}
+		}
+
+	case *ast.InterfaceType:
+		fmt.Printf("%sinterface\n", indent)
+		if t.Methods != nil {
+			for _, method := range t.Methods.List {
+				mPos := fset.Position(method.Pos())
+				if len(method.Names) == 0 {
+					fmt.Printf("%s  -> %s:%d: (embedded interface)\n", indent, path, mPos.Line)
+					printTypeWithDepth(fset, path, method.Type, depth+2)
+				} else {
+					for _, name := range method.Names {
+						fmt.Printf("%s  -> %s:%d: method %s()\n", indent, path, mPos.Line, name.Name)
+					}
+				}
+			}
+		}
+
+	default:
+		fmt.Printf("%s%T\n", indent, expr)
+	}
+}
+
+// Helper to extract build tags from file comments before the package clause
+func extractBuildTags(file *ast.File) []string {
+	var tags []string
+	for _, cg := range file.Comments {
+		if cg.Pos() > file.Package {
+			break
+		}
+		for _, comm := range cg.List {
+			text := strings.TrimSpace(comm.Text)
+			if strings.HasPrefix(text, "//go:build ") {
+				tags = append(tags, strings.TrimPrefix(text, "//go:build "))
+			} else if strings.HasPrefix(text, "// +build ") {
+				tags = append(tags, strings.TrimPrefix(text, "// +build "))
+			}
+		}
+	}
+	return tags
+}
+
+func main() {
+	fset := token.NewFileSet()
+
+	err := filepath.Walk(".", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && info.Name() == "bin" {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() && !strings.HasSuffix(info.Name(), ".go") {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+		if err != nil {
+			return nil
+		}
+
+		buildTags := extractBuildTags(f)
+		tagsStr := ""
+		if len(buildTags) > 0 {
+			tagsStr = fmt.Sprintf(" [tags: %s]", strings.Join(buildTags, " | "))
+		}
+		fmt.Printf("%s:%d: package %s%s\n", path, fset.Position(f.Package).Line, f.Name.Name, tagsStr)
+
+		for _, decl := range f.Decls {
+			switch d := decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					pos := fset.Position(spec.Pos())
+					switch s := spec.(type) {
+					case *ast.TypeSpec:
+						fmt.Printf("%s:%d: type %s ", path, pos.Line, s.Name.Name)
+						printTypeWithDepth(fset, path, s.Type, 0)
+
+					case *ast.ValueSpec:
+						tokType := "var"
+						if d.Tok == token.CONST {
+							tokType = "const"
+						}
+						for _, name := range s.Names {
+							fmt.Printf("%s:%d: %s %s\n", path, pos.Line, tokType, name.Name)
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				pos := fset.Position(d.Pos())
+				recv := ""
+				if d.Recv != nil && len(d.Recv.List) > 0 {
+					recv = "method "
+				}
+				fmt.Printf("%s:%d: %sfunc %s\n", path, pos.Line, recv, d.Name.Name)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
+}
