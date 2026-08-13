@@ -2,37 +2,16 @@ package network
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
+	"net"
 
-	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
-
-func clusterContainers(ctx context.Context, runner execx.Runner, clusterName string) ([]string, error) {
-	result, err := execx.RunPodmanCommand(ctx, runner, "ps", "-a", "--filter", "label=part-of="+clusterName, "--format=json")
-	if err != nil {
-		return nil, err
-	}
-	var containers []struct {
-		Names []string `json:"Names"`
-	}
-	if err := json.Unmarshal([]byte(result.Stdout), &containers); err != nil {
-		return nil, err
-	}
-	var names []string
-	for _, c := range containers {
-		names = append(names, c.Names...)
-	}
-	return names, nil
-}
 
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
@@ -66,6 +45,12 @@ Example:
 				Name:  "subnet",
 				Usage: "Network subnet in CIDR notation",
 				Value: rootconfig.Load().BridgeSubnet,
+				Validator: func(s string) error {
+					if _, _, err := net.ParseCIDR(s); err != nil {
+						return fmt.Errorf("invalid CIDR %s: %w", s, err)
+					}
+					return nil
+				},
 			},
 			&cli.IntFlag{
 				Name:  "segment-count",
@@ -79,6 +64,7 @@ Example:
 				name:         cmd.String("name"),
 				subnet:       cmd.String("subnet"),
 				segmentCount: cmd.Int("segment-count"),
+				stateDir:     bridgeStateDir(),
 			})
 		},
 	}
@@ -110,74 +96,33 @@ Example:
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			mgr := newBridgeManager(logger, runner)
 			clusterNames := cmd.StringSlice("cluster")
 			networkName := cmd.String("to")
 			namespace := cmd.String("namespace")
-
-			subnet, err := mgr.getSubnet(ctx, networkName)
-			if err != nil {
-				return err
-			}
 
 			bridgeState, err := loadBridgeState(bridgeStateDir(), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load bridge state for network %s: %w", networkName, err)
 			}
-
-			for _, clusterName := range clusterNames {
-				kcPath, err := cluster.Kubeconfig(clusterName)
-				if err != nil {
-					return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
-				}
-
-				containers, err := clusterContainers(ctx, runner, clusterName)
-				if err != nil {
-					return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
-				}
-				for _, c := range containers {
-					logger.Info("connecting container to network", "container", c, "network", networkName)
-					if _, err := execx.RunPodmanCommand(ctx, runner, "network", "connect", networkName, c); err != nil {
-						return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
-					}
-				}
-
-				ipamAlloc, err := loadIPAMAllocation(networkName)
-				if err != nil {
-					return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
-				}
-
-				segmentIndex, err := ipamAlloc.allocateForCluster(clusterName, bridgeState.SegmentCount)
-				if err != nil {
-					return fmt.Errorf("failed to allocate IPAM segment for cluster %s: %w", clusterName, err)
-				}
-
-				segmentSize := 256 / bridgeState.SegmentCount
-				rangeStart, rangeEnd, err := computeIPAMRange(subnet, segmentIndex, segmentSize, bridgeState.SegmentCount)
-				if err != nil {
-					return fmt.Errorf("failed to compute IPAM range for cluster %s: %w", clusterName, err)
-				}
-
-				if err := ipamAlloc.save(); err != nil {
-					return fmt.Errorf("failed to save IPAM state for cluster %s: %w", clusterName, err)
-				}
-
-				nadMgr := newNADManager(logger, runner, "oc", kcPath)
-				err = nadMgr.create(ctx, nadConfig{
-					name:       networkName,
-					namespace:  namespace,
-					bridge:     networkName,
-					subnet:     subnet,
-					rangeStart: rangeStart,
-					rangeEnd:   rangeEnd,
-				})
-				if err != nil {
-					return fmt.Errorf("failed to create NAD for cluster %s: %w", clusterName, err)
-				}
-
-				logger.Info("attached cluster to network", "cluster", clusterName, "network", networkName, "segment", segmentIndex)
+			ipam, err := newIPAMManager(bridgeStateDir(), networkName)
+			if err != nil {
+				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
+			}
+			ops := &netOps{
+				logger: logger,
+				runner: runner,
+				nad:    newNADManager(logger, runner, "oc"),
+				ipam:   ipam,
 			}
 
+			for _, clusterName := range clusterNames {
+				if err := ops.attach(ctx, bridgeState, clusterName, networkName, namespace); err != nil {
+					return err
+				}
+				if err := ipam.save(bridgeStateDir()); err != nil {
+					return fmt.Errorf("failed to save IPAM state for cluster %s: %w", clusterName, err)
+				}
+			}
 			return nil
 		},
 	}
@@ -213,43 +158,22 @@ Example:
 			networkName := cmd.String("from")
 			namespace := cmd.String("namespace")
 
-			for _, clusterName := range clusterNames {
-				kcPath, err := cluster.Kubeconfig(clusterName)
-				if err != nil {
-					return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
-				}
-
-				containers, err := clusterContainers(ctx, runner, clusterName)
-				if err != nil {
-					return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
-				}
-				for _, c := range containers {
-					logger.Info("disconnecting container from network", "container", c, "network", networkName)
-					if _, err := execx.RunPodmanCommand(ctx, runner, "network", "disconnect", networkName, c); err != nil {
-						logger.Warn("failed to disconnect container from network", "container", c, "network", networkName, "error", err)
-					}
-				}
-
-				nadMgr := newNADManager(logger, runner, "oc", kcPath)
-				if err := nadMgr.delete(ctx, networkName, namespace); err != nil {
-					return fmt.Errorf("failed to delete NAD for cluster %s: %w", clusterName, err)
-				}
-
-				ipamAlloc, err := loadIPAMAllocation(networkName)
-				if err != nil {
-					logger.Warn("failed to load IPAM state for cleanup", "network", networkName, "error", err)
-				} else {
-					ipamAlloc.deallocateCluster(clusterName)
-					ipamAlloc.NextIndex = len(ipamAlloc.Segments)
-					if err := ipamAlloc.save(); err != nil {
-						logger.Warn("failed to save IPAM state after deallocation", "cluster", clusterName, "error", err)
-					}
-				}
-
-				logger.Info("detached cluster from network", "cluster", clusterName, "network", networkName)
+			ipam, err := newIPAMManager(bridgeStateDir(), networkName)
+			if err != nil {
+				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-
-			return nil
+			ops := &netOps{
+				logger: logger,
+				runner: runner,
+				nad:    newNADManager(logger, runner, "oc"),
+				ipam:   ipam,
+			}
+			for _, clusterName := range clusterNames {
+				if err := ops.detach(ctx, clusterName, networkName, namespace); err != nil {
+					return err
+				}
+			}
+			return ipam.save(bridgeStateDir())
 		},
 	}
 }
@@ -272,21 +196,7 @@ Example:
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			networkName := cmd.String("name")
 			mgr := newBridgeManager(logger, runner)
-			if err := mgr.delete(ctx, networkName); err != nil {
-				return err
-			}
-
-			ipamPath := filepath.Join(bridgeStateDir(), fmt.Sprintf("ipam-%s.json", networkName))
-			if err := os.Remove(ipamPath); err != nil && !os.IsNotExist(err) {
-				logger.Warn("failed to delete IPAM state file", "path", ipamPath, "error", err)
-			}
-
-			bridgeStatePath := filepath.Join(bridgeStateDir(), fmt.Sprintf("bridge-%s.json", networkName))
-			if err := os.Remove(bridgeStatePath); err != nil && !os.IsNotExist(err) {
-				logger.Warn("failed to delete bridge state file", "path", bridgeStatePath, "error", err)
-			}
-
-			return nil
+			return mgr.delete(ctx, networkName, bridgeStateDir())
 		},
 	}
 }

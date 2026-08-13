@@ -17,10 +17,7 @@ spec:
         "type": "host-local",
         "subnet": "{{.Subnet}}",
         "rangeStart": "{{.RangeStart}}",
-        "rangeEnd": "{{.RangeEnd}}",
-        "routes": [
-          { "dst": "{{.Subnet}}" }
-        ]
+        "rangeEnd": "{{.RangeEnd}}"
       }
     }
 `

@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -35,8 +36,20 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	cfg.APIServerPort = cmd.Int("api-server-port")
 	cfg.NetworkSubnet = cmd.String("network-subnet")
 	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
-	cfg.PullSecret = cmd.String("pull-secret")
-	cfg.IDMSFiles = cmd.StringSlice("idms")
+	if s := cmd.String("pull-secret"); s != "" {
+		abs, err := filepath.Abs(s)
+		if err != nil {
+			return config{}, fmt.Errorf("pull-secret: %w", err)
+		}
+		cfg.PullSecret = abs
+	}
+	for _, f := range cmd.StringSlice("idms") {
+		abs, err := filepath.Abs(f)
+		if err != nil {
+			return config{}, fmt.Errorf("idms %s: %w", f, err)
+		}
+		cfg.IDMSFiles = append(cfg.IDMSFiles, abs)
+	}
 	cfg.ExtraMounts = cmd.StringSlice("mount")
 
 	if cmd.IsSet("no-expose-kubeapi") {

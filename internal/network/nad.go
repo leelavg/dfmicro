@@ -11,6 +11,7 @@ import (
 type nadConfig struct {
 	name       string
 	namespace  string
+	kubeconfig string
 	bridge     string
 	subnet     string
 	rangeStart string
@@ -18,18 +19,16 @@ type nadConfig struct {
 }
 
 type nadManager struct {
-	logger     *slog.Logger
-	runner     execx.Runner
-	kubectl    string
-	kubeconfig string
+	logger  *slog.Logger
+	runner  execx.Runner
+	kubectl string
 }
 
-func newNADManager(logger *slog.Logger, runner execx.Runner, kubectl, kubeconfig string) *nadManager {
+func newNADManager(logger *slog.Logger, runner execx.Runner, kubectl string) *nadManager {
 	return &nadManager{
-		logger:     logger,
-		runner:     runner,
-		kubectl:    kubectl,
-		kubeconfig: kubeconfig,
+		logger:  logger,
+		runner:  runner,
+		kubectl: kubectl,
 	}
 }
 
@@ -40,14 +39,14 @@ func (m *nadManager) create(ctx context.Context, cfg nadConfig) error {
 	if err != nil {
 		return err
 	}
-	return support.ApplyYAML(ctx, m.runner, m.kubectl, m.kubeconfig, nadYAML)
+	return support.ApplyYAML(ctx, m.runner, m.kubectl, cfg.kubeconfig, nadYAML)
 }
 
-func (m *nadManager) delete(ctx context.Context, name, namespace string) error {
+func (m *nadManager) delete(ctx context.Context, name, namespace, kubeconfig string) error {
 	m.logger.Info("deleting NetworkAttachmentDefinition", "name", name, "namespace", namespace)
 	args := []string{"delete", "net-attach-def", name, "-n", namespace}
-	if m.kubeconfig != "" {
-		args = append(args, "--kubeconfig", m.kubeconfig)
+	if kubeconfig != "" {
+		args = append(args, "--kubeconfig", kubeconfig)
 	}
 	_, err := m.runner.Run(ctx, m.kubectl, args...)
 	return err

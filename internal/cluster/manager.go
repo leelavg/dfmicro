@@ -138,7 +138,7 @@ func (m *manager) create(ctx context.Context) error {
 }
 
 func (m *manager) start(ctx context.Context) error {
-	containers, err := m.getClusterContainers(ctx)
+	containers, err := support.AllClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (m *manager) start(ctx context.Context) error {
 }
 
 func (m *manager) stop(ctx context.Context) error {
-	containers, err := m.getRunningContainers(ctx)
+	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (m *manager) stop(ctx context.Context) error {
 }
 
 func (m *manager) delete(ctx context.Context) error {
-	containers, err := m.getClusterContainers(ctx)
+	containers, err := support.AllClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -228,7 +228,7 @@ func (m *manager) delete(ctx context.Context) error {
 }
 
 func (m *manager) status(ctx context.Context) error {
-	createdContainers, err := m.getClusterContainers(ctx)
+	createdContainers, err := support.AllClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -236,7 +236,7 @@ func (m *manager) status(ctx context.Context) error {
 		return nil
 	}
 
-	running, err := m.getRunningContainers(ctx)
+	running, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -617,7 +617,7 @@ func (m *manager) waitForDBus(ctx context.Context, name string) error {
 }
 
 func (m *manager) waitReady(ctx context.Context) error {
-	containers, err := m.getRunningContainers(ctx)
+	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -677,7 +677,7 @@ func (m *manager) PrintKubeconfig(ctx context.Context) error {
 	}
 
 	m.logger.Info("kubeconfig not found in StateDir, trying container", "path", m.cfg.DefaultKubeconfigPath)
-	containers, err := m.getRunningContainers(ctx)
+	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
 	}
@@ -754,38 +754,6 @@ func chownFromSudo(path string) error {
 	}
 
 	return os.Chown(path, uid, gid)
-}
-
-func (m *manager) getClusterContainers(ctx context.Context) ([]string, error) {
-	return m.listContainers(ctx, true)
-}
-
-func (m *manager) getRunningContainers(ctx context.Context) ([]string, error) {
-	return m.listContainers(ctx, false)
-}
-
-func (m *manager) listContainers(ctx context.Context, all bool) ([]string, error) {
-	args := []string{"podman", "ps", "--filter", "label=part-of=" + m.cfg.Name, "--format=json"}
-	if all {
-		args = []string{"podman", "ps", "-a", "--filter", "label=part-of=" + m.cfg.Name, "--format=json"}
-	}
-
-	result, err := execx.RunPodmanCommand(ctx, m.runner, args[1:]...)
-	if err != nil {
-		return nil, err
-	}
-
-	var containers []podmanContainer
-	if err := json.Unmarshal([]byte(result.Stdout), &containers); err != nil {
-		return nil, fmt.Errorf("parse podman ps json: %w", err)
-	}
-
-	names := make([]string, 0, len(containers))
-	for _, container := range containers {
-		names = append(names, container.Names...)
-	}
-
-	return names, nil
 }
 
 func (m *manager) systemdSubState(ctx context.Context, containerName, unit string) (string, error) {

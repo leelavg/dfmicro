@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 )
 
@@ -14,6 +17,7 @@ type bridgeConfig struct {
 	name         string
 	subnet       string
 	segmentCount int
+	stateDir     string
 }
 
 type bridgeManager struct {
@@ -62,7 +66,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		Subnet:       cfg.subnet,
 		SegmentCount: cfg.segmentCount,
 	}
-	if err := state.save(bridgeStateDir()); err != nil {
+	if err := state.save(cfg.stateDir); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)
 	}
 
@@ -103,7 +107,18 @@ func (m *bridgeManager) getSubnet(ctx context.Context, name string) (string, err
 	return subnet, nil
 }
 
-func (m *bridgeManager) delete(ctx context.Context, name string) error {
+func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error {
+
+	ipamPath := filepath.Join(stateDir, fmt.Sprintf("ipam-%s.json", name))
+	if err := os.Remove(ipamPath); err != nil && !os.IsNotExist(err) {
+		m.logger.Warn("failed to delete IPAM state file", "path", ipamPath, "error", err)
+	}
+
+	bridgeStatePath := filepath.Join(stateDir, fmt.Sprintf("bridge-%s.json", name))
+	if err := os.Remove(bridgeStatePath); err != nil && !os.IsNotExist(err) {
+		m.logger.Warn("failed to delete bridge state file", "path", bridgeStatePath, "error", err)
+	}
+
 	exists, err := m.exists(ctx, name)
 	if err != nil {
 		return err
@@ -119,4 +134,42 @@ func (m *bridgeManager) delete(ctx context.Context, name string) error {
 		return fmt.Errorf("failed to delete bridge: %w", err)
 	}
 	return nil
+}
+
+type bridgeState struct {
+	Name         string `json:"name"`
+	Subnet       string `json:"subnet"`
+	SegmentCount int    `json:"segmentCount"`
+}
+
+func loadBridgeState(stateDir, name string) (*bridgeState, error) {
+	path := filepath.Join(stateDir, fmt.Sprintf("bridge-%s.json", name))
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("bridge state not found for %s", name)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var state bridgeState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (b *bridgeState) save(stateDir string) error {
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return err
+	}
+	path := filepath.Join(stateDir, fmt.Sprintf("bridge-%s.json", b.Name))
+	data, err := json.MarshalIndent(b, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func bridgeStateDir() string {
+	return filepath.Join(rootconfig.ConfigDir(), ",networks")
 }

@@ -1,6 +1,7 @@
 package network
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -8,49 +9,32 @@ import (
 	"path/filepath"
 )
 
-type ipamAllocation struct {
+type ipamManager struct {
 	NetworkName string         `json:"network_name"`
 	Segments    map[string]int `json:"segments"`
 	NextIndex   int            `json:"last_index"`
 }
 
-func (a *ipamAllocation) allocateForCluster(clusterName string, maxSegments int) (int, error) {
-	if a.NextIndex >= maxSegments {
-		return 0, fmt.Errorf("no more available segments (max %d)", maxSegments)
-	}
-	index := a.NextIndex
-	a.Segments[clusterName] = index
-	a.NextIndex++
-	return index, nil
-}
-
-func (a *ipamAllocation) deallocateCluster(clusterName string) {
-	delete(a.Segments, clusterName)
-}
-
-func loadIPAMAllocation(networkName string) (*ipamAllocation, error) {
-	stateDir := bridgeStateDir()
+func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
 	path := filepath.Join(stateDir, fmt.Sprintf("ipam-%s.json", networkName))
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return &ipamAllocation{
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return &ipamManager{
 			NetworkName: networkName,
 			Segments:    make(map[string]int),
-			NextIndex:   0,
 		}, nil
 	}
-	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var alloc ipamAllocation
+	var alloc ipamManager
 	if err := json.Unmarshal(data, &alloc); err != nil {
 		return nil, err
 	}
 	return &alloc, nil
 }
 
-func (a *ipamAllocation) save() error {
-	stateDir := bridgeStateDir()
+func (a *ipamManager) save(stateDir string) error {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return err
 	}
@@ -62,67 +46,72 @@ func (a *ipamAllocation) save() error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func computeIPAMRange(subnet string, index int, segmentSize int, segmentCount int) (string, string, error) {
-	_, ipnet, err := net.ParseCIDR(subnet)
-	if err != nil {
-		return "", "", fmt.Errorf("invalid CIDR %s: %w", subnet, err)
+func (a *ipamManager) allocateForCluster(name string, maxSegments int) (int, error) {
+	if idx, ok := a.Segments[name]; ok {
+		return idx, nil
 	}
-
-	ones, bits := ipnet.Mask.Size()
-	hostBits := bits - ones
-	if hostBits < 2 {
-		return "", "", fmt.Errorf("subnet too small for segmentation")
+	if a.NextIndex >= maxSegments {
+		return 0, fmt.Errorf("no more available segments (max %d)", maxSegments)
 	}
+	index := a.NextIndex
+	a.Segments[name] = index
+	a.NextIndex++
+	return index, nil
+}
 
-	baseIP := ipnet.IP.To4()
-	if baseIP == nil {
-		return "", "", fmt.Errorf("only IPv4 supported")
-	}
-
-	reservedCount := segmentCount * 6
-	maxUsableIP := 256 - reservedCount - 1
-
-	offset := index*segmentSize + 2
-	startIP := addToIP(baseIP, offset)
-	endOffset := min(offset+segmentSize-3, maxUsableIP)
-	endIP := addToIP(baseIP, endOffset)
-
-	return startIP.String(), endIP.String(), nil
+func (a *ipamManager) deallocateCluster(name string) {
+	delete(a.Segments, name)
+	a.NextIndex = len(a.Segments)
 }
 
 func addToIP(ip net.IP, offset int) net.IP {
-	result := make(net.IP, len(ip))
-	copy(result, ip)
-	carry := offset
-	for i := len(result) - 1; i >= 0 && carry > 0; i-- {
-		sum := int(result[i]) + carry
-		result[i] = byte(sum % 256)
-		carry = sum / 256
-	}
+	result := make(net.IP, 4)
+	binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(ip)+uint32(offset))
 	return result
 }
 
-func computeReservedIPRange(subnet string, segmentCount int) (string, error) {
+func parseSubnetBounds(subnet string, segmentCount int) (baseIP net.IP, lastUsable int, reservedCount int, err error) {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return "", fmt.Errorf("invalid CIDR %s: %w", subnet, err)
+		return nil, 0, 0, fmt.Errorf("invalid CIDR %s: %w", subnet, err)
 	}
-
-	baseIP := ipnet.IP.To4()
+	baseIP = ipnet.IP.To4()
 	if baseIP == nil {
-		return "", fmt.Errorf("only IPv4 supported")
+		return nil, 0, 0, fmt.Errorf("only IPv4 supported")
 	}
-
 	ones, bits := ipnet.Mask.Size()
 	hostBits := bits - ones
 	if hostBits < 2 {
-		return "", fmt.Errorf("subnet too small")
+		return nil, 0, 0, fmt.Errorf("subnet too small")
 	}
+	hostCount := 1 << hostBits
+	lastUsable = hostCount - 2
+	reservedCount = segmentCount * 6
+	return baseIP, lastUsable, reservedCount, nil
+}
 
-	reservedCount := segmentCount * 6
+func computeIPAMRange(subnet string, index int, segmentCount int) (string, string, error) {
+	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, segmentCount)
+	if err != nil {
+		return "", "", err
+	}
+	segmentSize := (lastUsable + 2) / segmentCount
+	maxUsableIP := lastUsable - reservedCount
+	offset := index*segmentSize + 2
+	startIP := addToIP(baseIP, offset)
+	endIP := addToIP(baseIP, min(offset+segmentSize-3, maxUsableIP))
+	return startIP.String(), endIP.String(), nil
+}
 
-	reservedStart := addToIP(baseIP, 256-reservedCount-1)
-	reservedEnd := addToIP(baseIP, 254)
-
+func computeReservedIPRange(subnet string, segmentCount int) (string, error) {
+	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, segmentCount)
+	if err != nil {
+		return "", err
+	}
+	if reservedCount >= lastUsable {
+		return "", fmt.Errorf("subnet too small for %d segments", segmentCount)
+	}
+	reservedStart := addToIP(baseIP, lastUsable-reservedCount+1)
+	reservedEnd := addToIP(baseIP, lastUsable)
 	return fmt.Sprintf("%s-%s", reservedStart.String(), reservedEnd.String()), nil
 }

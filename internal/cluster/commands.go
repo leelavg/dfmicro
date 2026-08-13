@@ -37,7 +37,7 @@ func createFlags() []cli.Flag {
 			Value:    defaultRootConfig.Name,
 			Category: "Cluster:",
 			Validator: func(s string) error {
-				if len(s) > 0 && s[0] == '-' {
+				if len(s) > 0 && s[0] == ',' {
 					return fmt.Errorf("cluster name cannot start with ','")
 				}
 				return nil
