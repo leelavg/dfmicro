@@ -107,21 +107,37 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.BridgeSubnet); err != nil {
+	stateDir := m.cfg.networkStateDir()
+	bridgeMgr := support.NewBridgeManager(m.logger, m.runner)
+	if err := bridgeMgr.Create(ctx, support.BridgeConfig{
+		Name:                   m.cfg.BridgeName,
+		Subnet:                 m.cfg.BridgeSubnet,
+		SegmentCount:           m.cfg.BridgeSegmentCount,
+		ReservePerSegmentCount: m.cfg.ReservePerSegment,
+		StateDir:               stateDir,
+	}); err != nil {
 		return err
 	}
 
-	subnet, err := m.getSubnet(ctx, m.cfg.Network)
+	ipam, err := support.NewIPAMManager(stateDir, m.cfg.BridgeName)
+	if err != nil {
+		return err
+	}
+	segmentIndex, err := ipam.AllocateForCluster(m.cfg.Name, m.cfg.BridgeSegmentCount)
+	if err != nil {
+		return err
+	}
+	if err := ipam.Save(stateDir); err != nil {
+		return err
+	}
+
+	// TODO: rangeStart is node 0 only; extend when addNode supports multi-node clusters
+	nodeIP, _, err := support.ComputeIPAMRange(m.cfg.BridgeSubnet, segmentIndex, m.cfg.BridgeSegmentCount, m.cfg.ReservePerSegment)
 	if err != nil {
 		return err
 	}
 
-	ipAddress, err := getIPAddress(subnet, 1)
-	if err != nil {
-		return err
-	}
-
-	if err := m.addNode(ctx, containerName, m.cfg.Network, ipAddress); err != nil {
+	if err := m.addNode(ctx, containerName, m.cfg.BridgeName, nodeIP); err != nil {
 		return fmt.Errorf("create node %q: %w", containerName, err)
 	}
 	if err := m.waitReady(ctx); err != nil {
@@ -204,14 +220,14 @@ func (m *manager) delete(ctx context.Context) error {
 		}
 	}
 
-	networkExists, err := m.podmanNetworkExists(ctx, m.cfg.Network)
+	stateDir := m.cfg.networkStateDir()
+	ipam, err := support.NewIPAMManager(stateDir, m.cfg.BridgeName)
 	if err != nil {
-		return err
-	}
-	if networkExists {
-		m.logger.Info("removing podman network", "name", m.cfg.Name, "network", m.cfg.Network)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "network", "rm", m.cfg.Network); err != nil {
-			m.logger.Warn("failed to remove podman network", "name", m.cfg.Name, "network", m.cfg.Network, "error", err)
+		m.logger.Warn("failed to load IPAM for deallocation", "cluster", m.cfg.Name, "error", err)
+	} else {
+		ipam.DeallocateCluster(m.cfg.Name)
+		if err := ipam.Save(stateDir); err != nil {
+			m.logger.Warn("failed to save IPAM after deallocation", "cluster", m.cfg.Name, "error", err)
 		}
 	}
 
@@ -361,26 +377,6 @@ func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 	return os.RemoveAll(filepath.Dir(m.cfg.LVMDisk))
 }
 
-func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
-	exists, err := m.podmanNetworkExists(ctx, name)
-	if err != nil {
-		return err
-	}
-	if exists {
-		m.logger.Info("podman network already exists", "network", name)
-		return nil
-	}
-
-	m.logger.Info("creating podman network", "network", name, "subnet", subnet)
-	args := []string{"network", "create"}
-	if subnet != "" {
-		args = append(args, "--subnet", subnet)
-	}
-	args = append(args, name)
-	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
-	return err
-}
-
 func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
 	_, err := execx.RunPodmanCommand(ctx, m.runner, "network", "exists", name)
 	if err == nil {
@@ -403,40 +399,6 @@ func (m *manager) containerExists(ctx context.Context, name string) (bool, error
 		return false, nil
 	}
 	return false, err
-}
-
-func (m *manager) getSubnet(ctx context.Context, networkName string) (string, error) {
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "network", "inspect", networkName, "--format", "{{range .}}{{range .Subnets}}{{.Subnet}}{{end}}{{end}}")
-	if err != nil {
-		return "", err
-	}
-
-	subnetWithMask := strings.TrimSpace(result.Stdout)
-	if subnetWithMask == "" {
-		return "", fmt.Errorf("could not determine subnet for network %q", networkName)
-	}
-
-	prefix, _, found := strings.Cut(subnetWithMask, "/")
-	if !found || prefix == "" {
-		return "", fmt.Errorf("invalid subnet returned for network %q: %q", networkName, subnetWithMask)
-	}
-
-	return prefix, nil
-}
-
-func getIPAddress(subnet string, nodeID int) (string, error) {
-	ip := net.ParseIP(strings.TrimSpace(subnet))
-	if ip == nil {
-		return "", fmt.Errorf("invalid subnet ip: %q", subnet)
-	}
-
-	ip = ip.To4()
-	if ip == nil {
-		return "", fmt.Errorf("only ipv4 subnets are supported: %q", subnet)
-	}
-
-	ip[3] = byte(nodeID + 10)
-	return ip.String(), nil
 }
 
 func (m *manager) addNode(ctx context.Context, name, networkName, ipAddress string) error {

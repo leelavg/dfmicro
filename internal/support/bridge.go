@@ -17,6 +17,7 @@ type BridgeConfig struct {
 	SegmentCount           int
 	ReservePerSegmentCount int
 	StateDir               string
+	NoDefaultRoute         bool
 }
 
 type bridgeManager struct {
@@ -47,7 +48,10 @@ func (m *bridgeManager) Create(ctx context.Context, cfg BridgeConfig) error {
 	}
 
 	m.logger.Info("creating bridge", "name", cfg.Name, "subnet", cfg.Subnet)
-	args := []string{"network", "create", "--opt", "no_default_route=true"}
+	args := []string{"network", "create"}
+	if cfg.NoDefaultRoute {
+		args = append(args, "--opt", "no_default_route=true")
+	}
 	if cfg.Subnet != "" {
 		args = append(args, "--subnet", cfg.Subnet)
 	}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	rootconfig "dfmicro/internal/config"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -83,6 +84,10 @@ func deriveConfig(defaults rootconfig.Config, name string) config {
 		DefaultKubeconfigPath: filepath.Join(stateDir, "kubeconfig"),
 		VGName:                name,
 	}
+}
+
+func (c config) networkStateDir() string {
+	return support.NetworkStateDir(filepath.Dir(c.StateDir))
 }
 
 func clusterConfigPath(name string) (string, error) {

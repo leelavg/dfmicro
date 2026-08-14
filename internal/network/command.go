@@ -73,6 +73,7 @@ Example:
 				SegmentCount:           cmd.Int("segment-count"),
 				ReservePerSegmentCount: cmd.Int("reserver-per-segment"),
 				StateDir:               support.NetworkStateDir(rootconfig.ConfigDir()),
+				NoDefaultRoute:         true,
 			})
 		},
 	}
