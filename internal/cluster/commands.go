@@ -82,10 +82,9 @@ func createFlags() []cli.Flag {
 			},
 		},
 		&cli.StringFlag{
-			Name:      "node-cidr",
-			Usage:     "Node network CIDR",
-			Value:     defaultRootConfig.NodeCIDR,
-			Category:  "Network:",
+			Name:      "bridge-subnet",
+			Usage:     "Network subnet in CIDR notation",
+			Value:     rootconfig.Load().BridgeSubnet,
 			Validator: validateIPv4PrivateCIDR,
 		},
 		&cli.StringFlag{

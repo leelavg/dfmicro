@@ -128,6 +128,8 @@ Create a cluster, wait until ready, and print connection info
 
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
 
+**--bridge-subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/16")
+
 **--cluster-cidr**="": Pod CIDR for the cluster (default: "10.42.0.0/16")
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
@@ -147,8 +149,6 @@ Create a cluster, wait until ready, and print connection info
 **--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)
 
 **--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage
-
-**--node-cidr**="": Node network CIDR (default: "172.20.0.0/24")
 
 **--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
@@ -252,7 +252,7 @@ Create a bridge network for multi-cluster interconnect
 
 **--segment-count**="": Number of IPAM segments for clusters (default: 5)
 
-**--subnet**="": Network subnet in CIDR notation (default: "172.30.0.0/24")
+**--subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/16")
 
 ### delete
 

@@ -106,7 +106,8 @@ func (m *manager) create(ctx context.Context) error {
 	if err := m.createTopoLVMBackend(ctx); err != nil {
 		return err
 	}
-	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.NodeCIDR); err != nil {
+
+	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.BridgeSubnet); err != nil {
 		return err
 	}
 

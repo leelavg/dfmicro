@@ -14,22 +14,25 @@ import (
 var embeddedConfig []byte
 
 type Config struct {
-	Name                string  `json:"name"`
-	Image               string  `json:"image"`
+	Name        string `json:"name"`
+	Image       string `json:"image"`
+	PowerTuning bool   `json:"powerTuning"`
+
+	APIServerPort int    `json:"apiServerPort"`
+	ClusterCIDR   string `json:"clusterCIDR"`
+	ServiceCIDR   string `json:"serviceCIDR"`
+	ExposeKubeAPI bool   `json:"exposeKubeAPI"`
+
 	LVMVolSize          string  `json:"lvmVolSize"`
-	APIServerPort       int     `json:"apiServerPort"`
-	NodeCIDR            string  `json:"nodeCIDR"`
-	ClusterCIDR         string  `json:"clusterCIDR"`
-	ServiceCIDR         string  `json:"serviceCIDR"`
-	BridgeSubnet        string  `json:"bridgeSubnet"`
-	ExposeKubeAPI       bool    `json:"exposeKubeAPI"`
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
 	ShareHostContainers bool    `json:"shareHostContainers"`
-	PowerTuning         bool    `json:"powerTuning"`
 	EnableThinpool      bool    `json:"enableThinpool"`
-	NADNamespace        string  `json:"nadNamespace"`
-	BridgeSegmentCount  int     `json:"bridgeSegmentCount"`
-	ReservePerSegment   int     `json:"reservePerSegment"`
+
+	BridgeName         string `json:"bridgeName"`
+	BridgeSubnet       string `json:"bridgeSubnet"`
+	BridgeSegmentCount int    `json:"bridgeSegmentCount"`
+	ReservePerSegment  int    `json:"reservePerSegment"`
+	NADNamespace       string `json:"nadNamespace"`
 }
 
 type NetworkCIDRs struct {

@@ -34,7 +34,7 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	cfg.Image = cmd.String("image")
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
 	cfg.APIServerPort = cmd.Int("api-server-port")
-	cfg.NodeCIDR = cmd.String("node-cidr")
+	cfg.BridgeSubnet = cmd.String("bridge-subnet")
 	cfg.ClusterCIDR = cmd.String("cluster-cidr")
 	cfg.ServiceCIDR = cmd.String("service-cidr")
 	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
