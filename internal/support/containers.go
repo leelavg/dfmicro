@@ -27,3 +27,11 @@ func AllClusterContainers(ctx context.Context, runner execx.Runner, name string)
 func RunningClusterContainers(ctx context.Context, runner execx.Runner, name string) ([]string, error) {
 	return clusterContainers(ctx, runner, name, false)
 }
+
+func AllNetworkContainers(ctx context.Context, runner execx.Runner, networkName string) ([]string, error) {
+	result, err := execx.RunPodmanCommand(ctx, runner, "ps", "-a", "--filter", "network="+networkName, "--format", "{{.Names}}")
+	if err != nil {
+		return nil, err
+	}
+	return strings.Fields(result.Stdout), nil
+}

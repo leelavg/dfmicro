@@ -107,37 +107,11 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	stateDir := m.cfg.networkStateDir()
-	bridgeMgr := support.NewBridgeManager(m.logger, m.runner)
-	if err := bridgeMgr.Create(ctx, support.BridgeConfig{
-		Name:                   m.cfg.BridgeName,
-		Subnet:                 m.cfg.BridgeSubnet,
-		SegmentCount:           m.cfg.BridgeSegmentCount,
-		ReservePerSegmentCount: m.cfg.ReservePerSegment,
-		StateDir:               stateDir,
-	}); err != nil {
+	if err := m.ensurePodmanNetwork(ctx, m.cfg.BridgeName, m.cfg.BridgeSubnet); err != nil {
 		return err
 	}
 
-	ipam, err := support.NewIPAMManager(stateDir, m.cfg.BridgeName)
-	if err != nil {
-		return err
-	}
-	segmentIndex, err := ipam.AllocateForCluster(m.cfg.Name, m.cfg.BridgeSegmentCount)
-	if err != nil {
-		return err
-	}
-	if err := ipam.Save(stateDir); err != nil {
-		return err
-	}
-
-	// TODO: rangeStart is node 0 only; extend when addNode supports multi-node clusters
-	nodeIP, _, err := support.ComputeIPAMRange(m.cfg.BridgeSubnet, segmentIndex, m.cfg.BridgeSegmentCount, m.cfg.ReservePerSegment)
-	if err != nil {
-		return err
-	}
-
-	if err := m.addNode(ctx, containerName, m.cfg.BridgeName, nodeIP); err != nil {
+	if err := m.addNode(ctx, containerName, m.cfg.BridgeName); err != nil {
 		return fmt.Errorf("create node %q: %w", containerName, err)
 	}
 	if err := m.waitReady(ctx); err != nil {
@@ -222,21 +196,13 @@ func (m *manager) delete(ctx context.Context) error {
 			m.logger.Warn("failed to remove container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
-
-	stateDir := m.cfg.networkStateDir()
-	ipam, err := support.NewIPAMManager(stateDir, m.cfg.BridgeName)
+	remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
 	if err != nil {
-		m.logger.Warn("failed to load IPAM for deallocation", "cluster", m.cfg.Name, "error", err)
-	} else {
-		ipam.DeallocateCluster(m.cfg.Name)
-		if err := ipam.Save(stateDir); err != nil {
-			m.logger.Warn("failed to save IPAM after deallocation", "cluster", m.cfg.Name, "error", err)
-		}
-		if len(ipam.Segments) == 0 {
-			bridgeMgr := support.NewBridgeManager(m.logger, m.runner)
-			if err := bridgeMgr.Delete(ctx, m.cfg.BridgeName, stateDir); err != nil {
-				m.logger.Warn("failed to delete bridge", "bridge", m.cfg.BridgeName, "error", err)
-			}
+		m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
+	} else if len(remaining) == 0 {
+		m.logger.Info("no containers left on network, removing", "network", m.cfg.BridgeName)
+		if _, err := execx.RunPodmanCommand(ctx, m.runner, "network", "rm", m.cfg.BridgeName); err != nil {
+			m.logger.Warn("failed to remove network", "network", m.cfg.BridgeName, "error", err)
 		}
 	}
 
@@ -407,6 +373,25 @@ func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) e
 	return nil
 }
 
+func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
+	exists, err := m.podmanNetworkExists(ctx, name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		m.logger.Info("podman network already exists", "network", name)
+		return nil
+	}
+	m.logger.Info("creating podman network", "network", name, "subnet", subnet)
+	args := []string{"network", "create"}
+	if subnet != "" {
+		args = append(args, "--subnet", subnet)
+	}
+	args = append(args, name)
+	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
+	return err
+}
+
 func (m *manager) containerExists(ctx context.Context, name string) (bool, error) {
 	_, err := execx.RunPodmanCommand(ctx, m.runner, "container", "exists", name)
 	if err == nil {
@@ -419,7 +404,7 @@ func (m *manager) containerExists(ctx context.Context, name string) (bool, error
 	return false, err
 }
 
-func (m *manager) addNode(ctx context.Context, name, networkName, ipAddress string) error {
+func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	args := []string{
 		"podman", "run", "--privileged", "-d",
 		"--ulimit", "nofile=524288:524288",
@@ -437,7 +422,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		}
 	}
 
-	args = append(args, "--network", networkName, "--ip", ipAddress, "--dns-search=.")
+	args = append(args, "--network", networkName, "--dns-search=.")
 
 	if m.cfg.EnableThinpool {
 		lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")

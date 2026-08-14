@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	rootconfig "dfmicro/internal/config"
-	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -17,7 +16,6 @@ const configFileName = "config.json"
 type config struct {
 	rootconfig.Config
 	Name                  string   `json:"name,omitempty"`
-	Network               string   `json:"network,omitempty"`
 	StateDir              string   `json:"stateDir,omitempty"`
 	LVMDisk               string   `json:"lvmDisk,omitempty"`
 	ExtraConfig           string   `json:"extraConfig,omitempty"`
@@ -77,17 +75,12 @@ func deriveConfig(defaults rootconfig.Config, name string) config {
 	return config{
 		Config:                defaults,
 		Name:                  name,
-		Network:               name,
 		StateDir:              stateDir,
 		LVMDisk:               filepath.Join(stateDir, name+".image"),
 		ExtraConfig:           filepath.Join(stateDir, "custom_config.yaml"),
 		DefaultKubeconfigPath: filepath.Join(stateDir, "kubeconfig"),
 		VGName:                name,
 	}
-}
-
-func (c config) networkStateDir() string {
-	return support.NetworkStateDir(filepath.Dir(c.StateDir))
 }
 
 func clusterConfigPath(name string) (string, error) {
