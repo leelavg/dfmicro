@@ -18,7 +18,9 @@ type Config struct {
 	Image               string  `json:"image"`
 	LVMVolSize          string  `json:"lvmVolSize"`
 	APIServerPort       int     `json:"apiServerPort"`
-	NetworkSubnet       string  `json:"networkSubnet"`
+	NodeCIDR            string  `json:"nodeCIDR"`
+	ClusterCIDR         string  `json:"clusterCIDR"`
+	ServiceCIDR         string  `json:"serviceCIDR"`
 	BridgeSubnet        string  `json:"bridgeSubnet"`
 	ExposeKubeAPI       bool    `json:"exposeKubeAPI"`
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
@@ -27,6 +29,11 @@ type Config struct {
 	EnableThinpool      bool    `json:"enableThinpool"`
 	NADNamespace        string  `json:"nadNamespace"`
 	BridgeSegmentCount  int     `json:"bridgeSegmentCount"`
+}
+
+type NetworkCIDRs struct {
+	Cluster string
+	Service string
 }
 
 var Load = sync.OnceValue(func() Config {

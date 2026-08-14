@@ -27,10 +27,19 @@ data:
               overprovision-ratio: {{printf "%.1f" .OverprovisionRatio}}
 `
 
-const apiServerConfigTmpl = `apiServer:
+const networkConfigTmpl = `{{- if .Clients }}
+apiServer:
   subjectAltNames:
-{{range .}}    - {{.}}
-{{end}}`
+{{- range .Clients }}
+    - {{ . }}
+{{- end }}
+{{- end }}
+network:
+  clusterNetwork:
+    - {{ .ClusterCIDR }}
+  serviceNetwork:
+    - {{ .ServiceCIDR }}
+`
 
 const multusDropinConfig = `[crio.network]
 # Enable Multus as default CNI and add plugin directories

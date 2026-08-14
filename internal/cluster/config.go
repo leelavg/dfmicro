@@ -34,7 +34,9 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	cfg.Image = cmd.String("image")
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
 	cfg.APIServerPort = cmd.Int("api-server-port")
-	cfg.NetworkSubnet = cmd.String("network-subnet")
+	cfg.NodeCIDR = cmd.String("node-cidr")
+	cfg.ClusterCIDR = cmd.String("cluster-cidr")
+	cfg.ServiceCIDR = cmd.String("service-cidr")
 	cfg.OverprovisionRatio = cmd.Float32("overprovision-ratio")
 	if s := cmd.String("pull-secret"); s != "" {
 		abs, err := filepath.Abs(s)
@@ -93,6 +95,17 @@ func Kubeconfig(name string) (string, error) {
 		return "", err
 	}
 	return cfg.DefaultKubeconfigPath, nil
+}
+
+func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
+	cfg, err := readClusterConfig(name)
+	if err != nil {
+		return rootconfig.NetworkCIDRs{}, err
+	}
+	return rootconfig.NetworkCIDRs{
+		Cluster: cfg.ClusterCIDR,
+		Service: cfg.ServiceCIDR,
+	}, nil
 }
 
 func readClusterConfig(name string) (config, error) {

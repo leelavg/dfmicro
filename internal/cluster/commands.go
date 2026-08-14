@@ -15,6 +15,20 @@ import (
 
 var defaultRootConfig = rootconfig.Load()
 
+func validateIPv4PrivateCIDR(s string) error {
+	ip, _, err := net.ParseCIDR(s)
+	if err != nil {
+		return fmt.Errorf("invalid CIDR: %w", err)
+	}
+	if ip.To4() == nil {
+		return fmt.Errorf("only IPv4 subnets are supported")
+	}
+	if !ip.IsPrivate() {
+		return fmt.Errorf("CIDR must be a private range")
+	}
+	return nil
+}
+
 func nameFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:  "name",
@@ -68,23 +82,25 @@ func createFlags() []cli.Flag {
 			},
 		},
 		&cli.StringFlag{
-			Name:     "network-subnet",
-			Usage:    "IPv4 private CIDR for the Podman network (RFC 1918 only)",
-			Value:    defaultRootConfig.NetworkSubnet,
-			Category: "Network:",
-			Validator: func(s string) error {
-				ip, _, err := net.ParseCIDR(s)
-				if err != nil {
-					return fmt.Errorf("invalid CIDR: %w", err)
-				}
-				if ip.To4() == nil {
-					return fmt.Errorf("only IPv4 subnets are supported")
-				}
-				if !ip.IsPrivate() {
-					return fmt.Errorf("subnet must be a private range (RFC 1918)")
-				}
-				return nil
-			},
+			Name:      "node-cidr",
+			Usage:     "Node network CIDR",
+			Value:     defaultRootConfig.NodeCIDR,
+			Category:  "Network:",
+			Validator: validateIPv4PrivateCIDR,
+		},
+		&cli.StringFlag{
+			Name:      "cluster-cidr",
+			Usage:     "Pod CIDR for the cluster",
+			Value:     defaultRootConfig.ClusterCIDR,
+			Category:  "Network:",
+			Validator: validateIPv4PrivateCIDR,
+		},
+		&cli.StringFlag{
+			Name:      "service-cidr",
+			Usage:     "Service CIDR for the cluster",
+			Value:     defaultRootConfig.ServiceCIDR,
+			Category:  "Network:",
+			Validator: validateIPv4PrivateCIDR,
 		},
 		&cli.BoolFlag{
 			Name:     "no-expose-kubeapi",
@@ -157,7 +173,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 
 Examples:
   dfmicro cluster create
-  dfmicro cluster create --name dev --network-subnet 10.88.0.0/24
+  dfmicro cluster create --name dev --node-cidr 10.88.0.0/24
   dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
   dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml`,
 				Flags: createFlags(),

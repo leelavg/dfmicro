@@ -122,11 +122,13 @@ Create a cluster, wait until ready, and print connection info
     
     Examples:
       dfmicro cluster create
-      dfmicro cluster create --name dev --network-subnet 10.88.0.0/24
+      dfmicro cluster create --name dev --node-cidr 10.88.0.0/24
       dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
       dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml
 
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
+
+**--cluster-cidr**="": Pod CIDR for the cluster (default: "10.42.0.0/16")
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
@@ -138,8 +140,6 @@ Create a cluster, wait until ready, and print connection info
 
 **--name**="": Cluster name, used to identify containers and stored config (default: "micro")
 
-**--network-subnet**="": IPv4 private CIDR for the Podman network (RFC 1918 only) (default: "172.20.0.0/24")
-
 **--no-expose-kubeapi**: Do not bind the API server port on the host (cluster-internal access only)
 
 **--no-power-tuning**: Do not apply MicroShift power tuning on create
@@ -148,9 +148,13 @@ Create a cluster, wait until ready, and print connection info
 
 **--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage
 
+**--node-cidr**="": Node network CIDR (default: "172.20.0.0/24")
+
 **--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
 **--pull-secret**="": Path to a pull secret JSON file for accessing private image registries
+
+**--service-cidr**="": Service CIDR for the cluster (default: "10.43.0.0/16")
 
 ### delete, rm
 
@@ -273,6 +277,28 @@ Detach clusters from a network
 **--from**="": Network name to detach from
 
 **--namespace**="": Namespace of the NAD to delete (default: "default")
+
+### peer
+
+Establish direct peering between clusters
+
+    Establish direct peering between clusters.
+    
+    Example:
+      dfmicro network peer --cluster first --cluster second
+
+**--cluster**="": Cluster name (repeatable, at least 2 required)
+
+### unpeer
+
+Remove direct peering between clusters
+
+    Remove direct peering between clusters.
+    
+    Example:
+      dfmicro network unpeer --cluster first --cluster second
+
+**--cluster**="": Cluster name (repeatable, at least 2 required)
 
 ## ops
 

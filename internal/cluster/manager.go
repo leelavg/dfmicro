@@ -106,7 +106,7 @@ func (m *manager) create(ctx context.Context) error {
 	if err := m.createTopoLVMBackend(ctx); err != nil {
 		return err
 	}
-	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.NetworkSubnet); err != nil {
+	if err := m.ensurePodmanNetwork(ctx, m.cfg.Network, m.cfg.NodeCIDR); err != nil {
 		return err
 	}
 
@@ -472,27 +472,37 @@ func (m *manager) addNode(ctx context.Context, name, networkName, ipAddress stri
 		)
 	}
 
+	var clients []string
 	if m.cfg.ExposeKubeAPI {
-		clients, err := getClients()
+		var err error
+		clients, err = getClients()
 		if err != nil {
 			return err
 		}
-
-		var sanBuf bytes.Buffer
-		tmpl := template.Must(template.New("").Parse(apiServerConfigTmpl))
-		if err := tmpl.Execute(&sanBuf, clients); err != nil {
-			return err
-		}
-
-		if err := os.WriteFile(m.cfg.ExtraConfig, sanBuf.Bytes(), 0o644); err != nil {
-			return err
-		}
-
-		args = append(args,
-			"-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort),
-			"--volume", m.cfg.ExtraConfig+":/etc/microshift/config.d/99-api-server.yaml:ro",
-		)
+		args = append(args, "-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort))
 	}
+
+	networkData := struct {
+		Clients     []string
+		ClusterCIDR string
+		ServiceCIDR string
+	}{
+		Clients:     clients,
+		ClusterCIDR: m.cfg.ClusterCIDR,
+		ServiceCIDR: m.cfg.ServiceCIDR,
+	}
+
+	var networkBuf bytes.Buffer
+	tmpl := template.Must(template.New("").Parse(networkConfigTmpl))
+	if err := tmpl.Execute(&networkBuf, networkData); err != nil {
+		return err
+	}
+
+	networkPath := filepath.Join(m.cfg.StateDir, "15-networking.yaml")
+	if err := os.WriteFile(networkPath, networkBuf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	args = append(args, "--volume", networkPath+":/etc/microshift/config.d/15-networking.yaml:ro")
 
 	if m.cfg.PowerTuning {
 		powerTuningPath := filepath.Join(m.cfg.StateDir, "power-tuning.yaml")

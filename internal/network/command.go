@@ -23,6 +23,8 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			attachCommand(logger, runner),
 			detachCommand(logger, runner),
 			deleteCommand(logger, runner),
+			peerCommand(logger, runner),
+			unpeerCommand(logger, runner),
 		},
 	}
 }
@@ -83,6 +85,16 @@ Example:
 				Name:     "cluster",
 				Usage:    "Cluster name (repeatable)",
 				Required: true,
+				Validator: func(names []string) error {
+					seen := make(map[string]bool)
+					for _, name := range names {
+						if seen[name] {
+							return fmt.Errorf("duplicate cluster name: %s", name)
+						}
+						seen[name] = true
+					}
+					return nil
+				},
 			},
 			&cli.StringFlag{
 				Name:     "to",
@@ -108,7 +120,7 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-			ops := &netOps{
+			ops := &multusOps{
 				logger: logger,
 				runner: runner,
 				nad:    newNADManager(logger, runner, "oc"),
@@ -162,7 +174,7 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-			ops := &netOps{
+			ops := &multusOps{
 				logger: logger,
 				runner: runner,
 				nad:    newNADManager(logger, runner, "oc"),
@@ -197,6 +209,78 @@ Example:
 			networkName := cmd.String("name")
 			mgr := newBridgeManager(logger, runner)
 			return mgr.delete(ctx, networkName, bridgeStateDir())
+		},
+	}
+}
+
+func peerCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+	return &cli.Command{
+		Name:  "peer",
+		Usage: "Establish direct peering between clusters",
+		UsageText: `Establish direct peering between clusters.
+
+Example:
+  dfmicro network peer --cluster first --cluster second`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:     "cluster",
+				Usage:    "Cluster name (repeatable, at least 2 required)",
+				Required: true,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			clusterNames := cmd.StringSlice("cluster")
+			if len(clusterNames) < 2 {
+				return fmt.Errorf("at least 2 clusters required")
+			}
+			seen := make(map[string]bool)
+			for _, name := range clusterNames {
+				if seen[name] {
+					return fmt.Errorf("duplicate cluster name: %s", name)
+				}
+				seen[name] = true
+			}
+			ops := &peerOps{
+				logger: logger,
+				runner: runner,
+			}
+			return ops.peer(ctx, clusterNames)
+		},
+	}
+}
+
+func unpeerCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+	return &cli.Command{
+		Name:  "unpeer",
+		Usage: "Remove direct peering between clusters",
+		UsageText: `Remove direct peering between clusters.
+
+Example:
+  dfmicro network unpeer --cluster first --cluster second`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:     "cluster",
+				Usage:    "Cluster name (repeatable, at least 2 required)",
+				Required: true,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			clusterNames := cmd.StringSlice("cluster")
+			if len(clusterNames) < 2 {
+				return fmt.Errorf("at least 2 clusters required")
+			}
+			seen := make(map[string]bool)
+			for _, name := range clusterNames {
+				if seen[name] {
+					return fmt.Errorf("duplicate cluster name: %s", name)
+				}
+				seen[name] = true
+			}
+			ops := &peerOps{
+				logger: logger,
+				runner: runner,
+			}
+			return ops.unpeer(ctx, clusterNames)
 		},
 	}
 }
