@@ -11,13 +11,15 @@ import (
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 )
 
 type bridgeConfig struct {
-	name         string
-	subnet       string
-	segmentCount int
-	stateDir     string
+	name                   string
+	subnet                 string
+	segmentCount           int
+	reservePerSegmentCount int
+	stateDir               string
 }
 
 type bridgeManager struct {
@@ -42,7 +44,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		return nil
 	}
 
-	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.segmentCount)
+	reservedEnd, err := support.ComputeReservedIPRange(cfg.subnet, cfg.segmentCount, cfg.reservePerSegmentCount)
 	if err != nil {
 		return fmt.Errorf("failed to compute reserved IP range: %w", err)
 	}
@@ -137,9 +139,10 @@ func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error
 }
 
 type bridgeState struct {
-	Name         string `json:"name"`
-	Subnet       string `json:"subnet"`
-	SegmentCount int    `json:"segmentCount"`
+	Name              string `json:"name"`
+	Subnet            string `json:"subnet"`
+	SegmentCount      int    `json:"segmentCount"`
+	ReservePerSegment int    `json:"reservePerSegment"`
 }
 
 func loadBridgeState(stateDir, name string) (*bridgeState, error) {

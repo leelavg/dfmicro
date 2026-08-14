@@ -59,14 +59,20 @@ Example:
 				Usage: "Number of IPAM segments for clusters",
 				Value: rootconfig.Load().BridgeSegmentCount,
 			},
+			&cli.IntFlag{
+				Name:  "reserve-per-segment",
+				Usage: "Number of IPs to reserve per IPAM segment",
+				Value: rootconfig.Load().ReservePerSegment,
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			mgr := newBridgeManager(logger, runner)
 			return mgr.create(ctx, bridgeConfig{
-				name:         cmd.String("name"),
-				subnet:       cmd.String("subnet"),
-				segmentCount: cmd.Int("segment-count"),
-				stateDir:     bridgeStateDir(),
+				name:                   cmd.String("name"),
+				subnet:                 cmd.String("subnet"),
+				segmentCount:           cmd.Int("segment-count"),
+				reservePerSegmentCount: cmd.Int("reserver-per-segment"),
+				stateDir:               bridgeStateDir(),
 			})
 		},
 	}
@@ -116,7 +122,7 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load bridge state for network %s: %w", networkName, err)
 			}
-			ipam, err := newIPAMManager(bridgeStateDir(), networkName)
+			ipam, err := support.NewIPAMManager(bridgeStateDir(), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
@@ -131,7 +137,7 @@ Example:
 				if err := ops.attach(ctx, bridgeState, clusterName, networkName, namespace); err != nil {
 					return err
 				}
-				if err := ipam.save(bridgeStateDir()); err != nil {
+				if err := ipam.Save(bridgeStateDir()); err != nil {
 					return fmt.Errorf("failed to save IPAM state for cluster %s: %w", clusterName, err)
 				}
 			}
@@ -170,7 +176,7 @@ Example:
 			networkName := cmd.String("from")
 			namespace := cmd.String("namespace")
 
-			ipam, err := newIPAMManager(bridgeStateDir(), networkName)
+			ipam, err := support.NewIPAMManager(bridgeStateDir(), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
@@ -185,7 +191,7 @@ Example:
 					return err
 				}
 			}
-			return ipam.save(bridgeStateDir())
+			return ipam.Save(bridgeStateDir())
 		},
 	}
 }

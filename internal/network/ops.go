@@ -15,7 +15,7 @@ type multusOps struct {
 	logger *slog.Logger
 	runner execx.Runner
 	nad    *nadManager
-	ipam   *ipamManager
+	ipam   *support.IPAMManager
 }
 
 type peerOps struct {
@@ -46,12 +46,12 @@ func (o *multusOps) attach(ctx context.Context, state *bridgeState, clusterName,
 		}
 	}
 
-	segmentIndex, err := o.ipam.allocateForCluster(clusterName, state.SegmentCount)
+	segmentIndex, err := o.ipam.AllocateForCluster(clusterName, state.SegmentCount)
 	if err != nil {
 		return fmt.Errorf("failed to allocate IPAM segment for cluster %s: %w", clusterName, err)
 	}
 
-	rangeStart, rangeEnd, err := computeIPAMRange(state.Subnet, segmentIndex, state.SegmentCount)
+	rangeStart, rangeEnd, err := support.ComputeIPAMRange(state.Subnet, segmentIndex, state.SegmentCount, state.ReservePerSegment)
 	if err != nil {
 		return fmt.Errorf("failed to compute IPAM range for cluster %s: %w", clusterName, err)
 	}
@@ -93,7 +93,7 @@ func (o *multusOps) detach(ctx context.Context, clusterName, networkName, namesp
 		return fmt.Errorf("failed to delete NAD for cluster %s: %w", clusterName, err)
 	}
 
-	o.ipam.deallocateCluster(clusterName)
+	o.ipam.DeallocateCluster(clusterName)
 	o.logger.Info("detached cluster from network", "cluster", clusterName, "network", networkName)
 	return nil
 }

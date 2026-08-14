@@ -13,5 +13,6 @@
   "powerTuning": true,
   "enableThinpool": true,
   "nadNamespace": "default",
-  "bridgeSegmentCount": 5
+  "bridgeSegmentCount": 5,
+  "reservePerSegment": 5
 }

@@ -248,6 +248,8 @@ Create a bridge network for multi-cluster interconnect
 
 **--name**="": Network name
 
+**--reserve-per-segment**="": Number of IPs to reserve per IPAM segment (default: 5)
+
 **--segment-count**="": Number of IPAM segments for clusters (default: 5)
 
 **--subnet**="": Network subnet in CIDR notation (default: "172.30.0.0/24")

@@ -29,6 +29,7 @@ type Config struct {
 	EnableThinpool      bool    `json:"enableThinpool"`
 	NADNamespace        string  `json:"nadNamespace"`
 	BridgeSegmentCount  int     `json:"bridgeSegmentCount"`
+	ReservePerSegment   int     `json:"reservePerSegment"`
 }
 
 type NetworkCIDRs struct {
