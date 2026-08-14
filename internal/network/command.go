@@ -36,7 +36,7 @@ func createCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		UsageText: `Create a bridge network that clusters can attach to.
 
 Example:
-  dfmicro network create --name backbone --segment-count 5`,
+  dfmicro network create --name backbone --segment-count 5 --subnet 172.30.0.0/16`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "name",
@@ -71,7 +71,7 @@ Example:
 				Name:                   cmd.String("name"),
 				Subnet:                 cmd.String("subnet"),
 				SegmentCount:           cmd.Int("segment-count"),
-				ReservePerSegmentCount: cmd.Int("reserver-per-segment"),
+				ReservePerSegmentCount: cmd.Int("reserve-per-segment"),
 				StateDir:               support.NetworkStateDir(rootconfig.ConfigDir()),
 				NoDefaultRoute:         true,
 			})

@@ -172,7 +172,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 
 Examples:
   dfmicro cluster create
-  dfmicro cluster create --name dev --node-cidr 10.88.0.0/24
+  dfmicro cluster create --name dev
   dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
   dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml`,
 				Flags: createFlags(),

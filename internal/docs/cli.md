@@ -122,7 +122,7 @@ Create a cluster, wait until ready, and print connection info
     
     Examples:
       dfmicro cluster create
-      dfmicro cluster create --name dev --node-cidr 10.88.0.0/24
+      dfmicro cluster create --name dev
       dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
       dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml
 
@@ -244,7 +244,7 @@ Create a bridge network for multi-cluster interconnect
     Create a bridge network that clusters can attach to.
     
     Example:
-      dfmicro network create --name backbone --segment-count 5
+      dfmicro network create --name backbone --segment-count 5 --subnet 172.30.0.0/16
 
 **--name**="": Network name
 
