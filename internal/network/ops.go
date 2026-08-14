@@ -167,6 +167,9 @@ func (o *peerOps) peer(ctx context.Context, clusterNames []string) error {
 					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.serviceCIDR, dstNetwork.nodeIP))
 					commands.WriteString(fmt.Sprintf("iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.clusterCIDR))
 					commands.WriteString(fmt.Sprintf("iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.serviceCIDR))
+					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.clusterCIDR))
+					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.serviceCIDR))
+					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --add-source=%s/32\n", dstNetwork.nodeIP))
 				}
 			}
 			return commands.String()
@@ -189,10 +192,13 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 					continue
 				}
 				o.logger.Info("removing peering", "from", srcName, "to", dstName)
-				commands.WriteString(fmt.Sprintf("ip route del %s 2>/dev/null || true\n", dstNetwork.clusterCIDR))
-				commands.WriteString(fmt.Sprintf("ip route del %s 2>/dev/null || true\n", dstNetwork.serviceCIDR))
-				commands.WriteString(fmt.Sprintf("iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN 2>/dev/null || true\n", dstNetwork.clusterCIDR))
-				commands.WriteString(fmt.Sprintf("iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN 2>/dev/null || true\n", dstNetwork.serviceCIDR))
+				commands.WriteString(fmt.Sprintf("ip route del %s\n", dstNetwork.clusterCIDR))
+				commands.WriteString(fmt.Sprintf("ip route del %s\n", dstNetwork.serviceCIDR))
+				commands.WriteString(fmt.Sprintf("iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN\n", dstNetwork.clusterCIDR))
+				commands.WriteString(fmt.Sprintf("iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN\n", dstNetwork.serviceCIDR))
+				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --remove-source=%s\n", dstNetwork.clusterCIDR))
+				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --remove-source=%s\n", dstNetwork.serviceCIDR))
+				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --remove-source=%s/32\n", dstNetwork.nodeIP))
 			}
 			return commands.String()
 		},

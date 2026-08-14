@@ -143,6 +143,9 @@ func (m *manager) create(ctx context.Context) error {
 	if err := m.waitReady(ctx); err != nil {
 		return err
 	}
+	if err := m.trustClusterCIDRs(ctx, containerName); err != nil {
+		return err
+	}
 	if err := m.copyKubeconfig(ctx, containerName); err != nil {
 		return err
 	}
@@ -228,6 +231,12 @@ func (m *manager) delete(ctx context.Context) error {
 		ipam.DeallocateCluster(m.cfg.Name)
 		if err := ipam.Save(stateDir); err != nil {
 			m.logger.Warn("failed to save IPAM after deallocation", "cluster", m.cfg.Name, "error", err)
+		}
+		if len(ipam.Segments) == 0 {
+			bridgeMgr := support.NewBridgeManager(m.logger, m.runner)
+			if err := bridgeMgr.Delete(ctx, m.cfg.BridgeName, stateDir); err != nil {
+				m.logger.Warn("failed to delete bridge", "bridge", m.cfg.BridgeName, "error", err)
+			}
 		}
 	}
 
@@ -387,6 +396,15 @@ func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, e
 		return false, nil
 	}
 	return false, err
+}
+
+func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) error {
+	for _, cidr := range []string{m.cfg.ClusterCIDR, m.cfg.ServiceCIDR} {
+		if _, err := execx.RunPodmanCommand(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
+			return fmt.Errorf("trust CIDR %s: %w", cidr, err)
+		}
+	}
+	return nil
 }
 
 func (m *manager) containerExists(ctx context.Context, name string) (bool, error) {
