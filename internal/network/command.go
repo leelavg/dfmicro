@@ -66,13 +66,13 @@ Example:
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			mgr := newBridgeManager(logger, runner)
-			return mgr.create(ctx, bridgeConfig{
-				name:                   cmd.String("name"),
-				subnet:                 cmd.String("subnet"),
-				segmentCount:           cmd.Int("segment-count"),
-				reservePerSegmentCount: cmd.Int("reserver-per-segment"),
-				stateDir:               bridgeStateDir(),
+			mgr := support.NewBridgeManager(logger, runner)
+			return mgr.Create(ctx, support.BridgeConfig{
+				Name:                   cmd.String("name"),
+				Subnet:                 cmd.String("subnet"),
+				SegmentCount:           cmd.Int("segment-count"),
+				ReservePerSegmentCount: cmd.Int("reserver-per-segment"),
+				StateDir:               support.NetworkStateDir(rootconfig.ConfigDir()),
 			})
 		},
 	}
@@ -118,11 +118,11 @@ Example:
 			networkName := cmd.String("to")
 			namespace := cmd.String("namespace")
 
-			bridgeState, err := loadBridgeState(bridgeStateDir(), networkName)
+			bridgeState, err := support.LoadBridgeState(support.NetworkStateDir(rootconfig.ConfigDir()), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load bridge state for network %s: %w", networkName, err)
 			}
-			ipam, err := support.NewIPAMManager(bridgeStateDir(), networkName)
+			ipam, err := support.NewIPAMManager(support.NetworkStateDir(rootconfig.ConfigDir()), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
@@ -137,7 +137,7 @@ Example:
 				if err := ops.attach(ctx, bridgeState, clusterName, networkName, namespace); err != nil {
 					return err
 				}
-				if err := ipam.Save(bridgeStateDir()); err != nil {
+				if err := ipam.Save(support.NetworkStateDir(rootconfig.ConfigDir())); err != nil {
 					return fmt.Errorf("failed to save IPAM state for cluster %s: %w", clusterName, err)
 				}
 			}
@@ -176,7 +176,7 @@ Example:
 			networkName := cmd.String("from")
 			namespace := cmd.String("namespace")
 
-			ipam, err := support.NewIPAMManager(bridgeStateDir(), networkName)
+			ipam, err := support.NewIPAMManager(support.NetworkStateDir(rootconfig.ConfigDir()), networkName)
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
@@ -191,7 +191,7 @@ Example:
 					return err
 				}
 			}
-			return ipam.Save(bridgeStateDir())
+			return ipam.Save(support.NetworkStateDir(rootconfig.ConfigDir()))
 		},
 	}
 }
@@ -213,8 +213,8 @@ Example:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			networkName := cmd.String("name")
-			mgr := newBridgeManager(logger, runner)
-			return mgr.delete(ctx, networkName, bridgeStateDir())
+			mgr := support.NewBridgeManager(logger, runner)
+			return mgr.Delete(ctx, networkName, support.NetworkStateDir(rootconfig.ConfigDir()))
 		},
 	}
 }

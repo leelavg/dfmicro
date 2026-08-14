@@ -29,7 +29,7 @@ type networkInfo struct {
 	serviceCIDR string
 }
 
-func (o *multusOps) attach(ctx context.Context, state *bridgeState, clusterName, networkName, namespace string) error {
+func (o *multusOps) attach(ctx context.Context, state *support.BridgeState, clusterName, networkName, namespace string) error {
 	kcPath, err := cluster.Kubeconfig(clusterName)
 	if err != nil {
 		return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
