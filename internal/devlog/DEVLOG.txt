@@ -1,17 +1,14 @@
 ## Do
 
-- cluster: test running multiple named clusters simultaneously to verify config dirs, networks, and loop devices don't collide
 - ops resources: flag to choose bulk vs per-ns stats strategy, pluggable transport beyond podman exec
 - replace kubectl/crictl exec chains with podman API and client-go for cluster operations
-- VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
 - Skip reapply option for resources already present, keyed by GVK + namespaced name
 - force-conflicts flag on server-side apply for configure (needs apply.go refactor)
-- Overlayfs deadlock: fix kubeconfig copy race condition that triggers machine restart on rapid file access
 - StorageCluster configuration: expose key fields (sizing, device class, placement) as configure flags
-- Multus configuration: secondary network attachment for storage traffic isolation
 - Hub and spoke: multi-cluster topology with a hub managing spoke MicroShift clusters
 - Infrastructure configuration: node labeling, machine config, kernel module management
 - ODF Disaster Recovery: Regional-DR and Metro-DR using Ramen/ACM on MicroShift
+- Support multi-node clusters, could require changes to Microshift itself
 
 ## Done
 
@@ -31,3 +28,7 @@
 - MicroShift power tuning on create, opt-out via --no-power-tuning
 - ExposeKubeAPI: generate cert with all host IPs and hostname as SANs, merge all kubeconfigs into single file with multiple contexts per client
 - LoadBalancer services: node acting as load balancer working
+- cluster: test running multiple named clusters simultaneously to verify config dirs, networks, and loop devices don't collide
+- VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
+- Overlayfs deadlock: fix kubeconfig copy race condition that triggers machine restart on rapid file access (antivirus was the issue)
+- Multus configuration: secondary network attachment for storage traffic isolation

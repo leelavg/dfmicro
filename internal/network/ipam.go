@@ -1,4 +1,4 @@
-package support
+package network
 
 import (
 	"encoding/binary"
@@ -9,17 +9,17 @@ import (
 	"path/filepath"
 )
 
-type IPAMManager struct {
+type ipamManager struct {
 	NetworkName string         `json:"network_name"`
 	Segments    map[string]int `json:"segments"`
 	NextIndex   int            `json:"last_index"`
 }
 
-func NewIPAMManager(stateDir, networkName string) (*IPAMManager, error) {
+func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
 	path := filepath.Join(stateDir, fmt.Sprintf("ipam-%s.json", networkName))
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return &IPAMManager{
+		return &ipamManager{
 			NetworkName: networkName,
 			Segments:    make(map[string]int),
 		}, nil
@@ -27,14 +27,14 @@ func NewIPAMManager(stateDir, networkName string) (*IPAMManager, error) {
 	if err != nil {
 		return nil, err
 	}
-	var alloc IPAMManager
+	var alloc ipamManager
 	if err := json.Unmarshal(data, &alloc); err != nil {
 		return nil, err
 	}
 	return &alloc, nil
 }
 
-func (a *IPAMManager) Save(stateDir string) error {
+func (a *ipamManager) save(stateDir string) error {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func (a *IPAMManager) Save(stateDir string) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func (a *IPAMManager) AllocateForCluster(name string, maxSegments int) (int, error) {
+func (a *ipamManager) allocateForCluster(name string, maxSegments int) (int, error) {
 	if idx, ok := a.Segments[name]; ok {
 		return idx, nil
 	}
@@ -59,7 +59,7 @@ func (a *IPAMManager) AllocateForCluster(name string, maxSegments int) (int, err
 	return index, nil
 }
 
-func (a *IPAMManager) DeallocateCluster(name string) {
+func (a *ipamManager) deallocateCluster(name string) {
 	delete(a.Segments, name)
 	a.NextIndex = len(a.Segments)
 }
@@ -90,7 +90,7 @@ func parseSubnetBounds(subnet string, segmentCount, reserverPerSegment int) (bas
 	return baseIP, lastUsable, reservedCount, nil
 }
 
-func ComputeIPAMRange(subnet string, index, segmentCount, reservePerSegment int) (string, string, error) {
+func computeIPAMRange(subnet string, index, segmentCount, reservePerSegment int) (string, string, error) {
 	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, segmentCount, reservePerSegment)
 	if err != nil {
 		return "", "", err
@@ -103,7 +103,7 @@ func ComputeIPAMRange(subnet string, index, segmentCount, reservePerSegment int)
 	return startIP.String(), endIP.String(), nil
 }
 
-func ComputeReservedIPRange(subnet string, segmentCount, reservePerSegment int) (string, error) {
+func computeReservedIPRange(subnet string, segmentCount, reservePerSegment int) (string, error) {
 	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, segmentCount, reservePerSegment)
 	if err != nil {
 		return "", err

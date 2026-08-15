@@ -15,7 +15,7 @@ type multusOps struct {
 	logger *slog.Logger
 	runner execx.Runner
 	nad    *nadManager
-	ipam   *support.IPAMManager
+	ipam   *ipamManager
 }
 
 type peerOps struct {
@@ -29,7 +29,7 @@ type networkInfo struct {
 	serviceCIDR string
 }
 
-func (o *multusOps) attach(ctx context.Context, state *support.BridgeState, clusterName, networkName, namespace string) error {
+func (o *multusOps) attach(ctx context.Context, state *bridgeState, clusterName, networkName, namespace string) error {
 	kcPath, err := cluster.Kubeconfig(clusterName)
 	if err != nil {
 		return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
@@ -46,12 +46,12 @@ func (o *multusOps) attach(ctx context.Context, state *support.BridgeState, clus
 		}
 	}
 
-	segmentIndex, err := o.ipam.AllocateForCluster(clusterName, state.SegmentCount)
+	segmentIndex, err := o.ipam.allocateForCluster(clusterName, state.SegmentCount)
 	if err != nil {
 		return fmt.Errorf("failed to allocate IPAM segment for cluster %s: %w", clusterName, err)
 	}
 
-	rangeStart, rangeEnd, err := support.ComputeIPAMRange(state.Subnet, segmentIndex, state.SegmentCount, state.ReservePerSegment)
+	rangeStart, rangeEnd, err := computeIPAMRange(state.Subnet, segmentIndex, state.SegmentCount, state.ReservePerSegment)
 	if err != nil {
 		return fmt.Errorf("failed to compute IPAM range for cluster %s: %w", clusterName, err)
 	}
@@ -93,7 +93,7 @@ func (o *multusOps) detach(ctx context.Context, clusterName, networkName, namesp
 		return fmt.Errorf("failed to delete NAD for cluster %s: %w", clusterName, err)
 	}
 
-	o.ipam.DeallocateCluster(clusterName)
+	o.ipam.deallocateCluster(clusterName)
 	o.logger.Info("detached cluster from network", "cluster", clusterName, "network", networkName)
 	return nil
 }

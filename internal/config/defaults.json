@@ -15,6 +15,7 @@
 
   "bridgeName": "micro",
   "bridgeSubnet": "172.20.0.0/16",
+
   "bridgeSegmentCount": 5,
   "reservePerSegment": 5,
   "nadNamespace": "default"

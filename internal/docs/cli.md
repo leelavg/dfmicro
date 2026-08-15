@@ -252,7 +252,7 @@ Create a bridge network for multi-cluster interconnect
 
 **--segment-count**="": Number of IPAM segments for clusters (default: 5)
 
-**--subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/16")
+**--subnet**="": Network subnet in CIDR notation
 
 ### delete
 

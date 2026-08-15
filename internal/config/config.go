@@ -28,8 +28,9 @@ type Config struct {
 	ShareHostContainers bool    `json:"shareHostContainers"`
 	EnableThinpool      bool    `json:"enableThinpool"`
 
-	BridgeName         string `json:"bridgeName"`
-	BridgeSubnet       string `json:"bridgeSubnet"`
+	BridgeName   string `json:"bridgeName"`
+	BridgeSubnet string `json:"bridgeSubnet"`
+
 	BridgeSegmentCount int    `json:"bridgeSegmentCount"`
 	ReservePerSegment  int    `json:"reservePerSegment"`
 	NADNamespace       string `json:"nadNamespace"`

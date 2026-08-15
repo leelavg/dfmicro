@@ -1,4 +1,4 @@
-package support
+package network
 
 import (
 	"context"
@@ -11,13 +11,13 @@ import (
 	"dfmicro/internal/execx"
 )
 
-type BridgeConfig struct {
-	Name                   string
-	Subnet                 string
-	SegmentCount           int
-	ReservePerSegmentCount int
-	StateDir               string
-	NoDefaultRoute         bool
+type bridgeConfig struct {
+	name                   string
+	subnet                 string
+	segmentCount           int
+	reservePerSegmentCount int
+	stateDir               string
+	noDefaultRoute         bool
 }
 
 type bridgeManager struct {
@@ -25,51 +25,51 @@ type bridgeManager struct {
 	runner execx.Runner
 }
 
-func NewBridgeManager(logger *slog.Logger, runner execx.Runner) *bridgeManager {
+func newBridgeManager(logger *slog.Logger, runner execx.Runner) *bridgeManager {
 	return &bridgeManager{
 		logger: logger,
 		runner: runner,
 	}
 }
 
-func (m *bridgeManager) Create(ctx context.Context, cfg BridgeConfig) error {
-	exists, err := m.exists(ctx, cfg.Name)
+func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
+	exists, err := m.exists(ctx, cfg.name)
 	if err != nil {
 		return err
 	}
 	if exists {
-		m.logger.Info("bridge already exists", "name", cfg.Name)
+		m.logger.Info("bridge already exists", "name", cfg.name)
 		return nil
 	}
 
-	reservedEnd, err := ComputeReservedIPRange(cfg.Subnet, cfg.SegmentCount, cfg.ReservePerSegmentCount)
+	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.segmentCount, cfg.reservePerSegmentCount)
 	if err != nil {
 		return fmt.Errorf("failed to compute reserved IP range: %w", err)
 	}
 
-	m.logger.Info("creating bridge", "name", cfg.Name, "subnet", cfg.Subnet)
+	m.logger.Info("creating bridge", "name", cfg.name, "subnet", cfg.subnet)
 	args := []string{"network", "create"}
-	if cfg.NoDefaultRoute {
+	if cfg.noDefaultRoute {
 		args = append(args, "--opt", "no_default_route=true")
 	}
-	if cfg.Subnet != "" {
-		args = append(args, "--subnet", cfg.Subnet)
+	if cfg.subnet != "" {
+		args = append(args, "--subnet", cfg.subnet)
 	}
 	if reservedEnd != "" {
 		args = append(args, "--ip-range", reservedEnd)
 	}
-	args = append(args, cfg.Name)
+	args = append(args, cfg.name)
 	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
 	if err != nil {
 		return fmt.Errorf("failed to create bridge: %w", err)
 	}
 
-	state := &BridgeState{
-		Name:         cfg.Name,
-		Subnet:       cfg.Subnet,
-		SegmentCount: cfg.SegmentCount,
+	state := &bridgeState{
+		Name:         cfg.name,
+		Subnet:       cfg.subnet,
+		SegmentCount: cfg.segmentCount,
 	}
-	if err := state.Save(cfg.StateDir); err != nil {
+	if err := state.save(cfg.stateDir); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)
 	}
 
@@ -85,7 +85,7 @@ func (m *bridgeManager) exists(ctx context.Context, name string) (bool, error) {
 	return false, nil
 }
 
-func (m *bridgeManager) Delete(ctx context.Context, name, stateDir string) error {
+func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error {
 
 	ipamPath := filepath.Join(stateDir, fmt.Sprintf("ipam-%s.json", name))
 	if err := os.Remove(ipamPath); err != nil && !os.IsNotExist(err) {
@@ -114,14 +114,14 @@ func (m *bridgeManager) Delete(ctx context.Context, name, stateDir string) error
 	return nil
 }
 
-type BridgeState struct {
+type bridgeState struct {
 	Name              string `json:"name"`
 	Subnet            string `json:"subnet"`
 	SegmentCount      int    `json:"segmentCount"`
 	ReservePerSegment int    `json:"reservePerSegment"`
 }
 
-func LoadBridgeState(stateDir, name string) (*BridgeState, error) {
+func loadBridgeState(stateDir, name string) (*bridgeState, error) {
 	path := filepath.Join(stateDir, fmt.Sprintf("bridge-%s.json", name))
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, fmt.Errorf("bridge state not found for %s", name)
@@ -130,14 +130,14 @@ func LoadBridgeState(stateDir, name string) (*BridgeState, error) {
 	if err != nil {
 		return nil, err
 	}
-	var state BridgeState
+	var state bridgeState
 	if err := json.Unmarshal(data, &state); err != nil {
 		return nil, err
 	}
 	return &state, nil
 }
 
-func (b *BridgeState) Save(stateDir string) error {
+func (b *bridgeState) save(stateDir string) error {
 	if err := os.MkdirAll(stateDir, 0o755); err != nil {
 		return err
 	}
@@ -147,8 +147,4 @@ func (b *BridgeState) Save(stateDir string) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
-}
-
-func NetworkStateDir(baseDir string) string {
-	return filepath.Join(baseDir, ",networks")
 }
