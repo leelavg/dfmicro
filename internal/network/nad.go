@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"dfmicro/internal/execx"
@@ -17,6 +18,7 @@ type nadConfig struct {
 	rangeStart string
 	rangeEnd   string
 	vlanid     int
+	group      string
 }
 
 type nadManager struct {
@@ -61,6 +63,10 @@ func (m *nadManager) render(cfg nadConfig) (string, error) {
 		"Subnet":     cfg.subnet,
 		"RangeStart": cfg.rangeStart,
 		"RangeEnd":   cfg.rangeEnd,
+		"Group":      cfg.group,
+	}
+	if cfg.vlanid > 0 {
+		nadCfg["VlanID"] = fmt.Sprintf("%d", cfg.vlanid)
 	}
 	return support.Render(nadTemplate, nadCfg)
 }

@@ -17,6 +17,7 @@
   "bridgeSubnet": "172.20.0.0/24",
 
   "groupCount": 5,
+  "clustersPerGroup": 5,
   "reservePerGroup": 5,
   "nadNamespace": "default"
 }

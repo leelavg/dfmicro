@@ -229,13 +229,24 @@ Attach clusters to a network
     Attach one or more clusters to a bridge network.
     
     Example:
-      dfmicro network attach --cluster first --cluster second --to backbone
+      dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1,gp2 --to backbone
 
-**--cluster**="": Cluster name (repeatable)
+**--cluster**="": Cluster name with optional groups (name[:group1[,group2,...]]). Without group, cluster joins 'default'
 
 **--namespace**="": Namespace for NAD creation (default: "default")
 
 **--to**="": Network name to attach to
+
+### config
+
+Show bridge and IPAM configuration
+
+    Show bridge and IPAM state for a network.
+    
+    Example:
+      dfmicro network config --name backbone
+
+**--name**="": Network name
 
 ### create
 
@@ -244,13 +255,15 @@ Create a bridge network for multi-cluster interconnect
     Create a bridge network that clusters can attach to.
     
     Example:
-      dfmicro network create --name backbone --segment-count 5 --subnet 172.30.0.0/16
+      dfmicro network create --name backbone --group-count 5 --subnet 172.30.0.0/16
 
-**--group-count**="": Number of IPAM groups for clusters (default: 5)
+**--cluster-count**="": Number of clusters per IPAM group (default: 5)
+
+**--group-count**="": Number of IPAM groups for the subnet (default: 5)
 
 **--name**="": Network name
 
-**--reserve-per-group**="": Number of IPs to reserve per IPAM group (default: 5)
+**--reserve-count**="": Number of IPs to reserve per group (default: 5)
 
 **--subnet**="": Network subnet in CIDR notation
 
@@ -272,9 +285,9 @@ Detach clusters from a network
     Detach one or more clusters from a bridge network.
     
     Example:
-      dfmicro network detach --cluster first --cluster second --from backbone
+      dfmicro network detach --cluster first:gp1 --cluster second:gp2 --from backbone
 
-**--cluster**="": Cluster name (repeatable)
+**--cluster**="": Cluster name with optional groups (name[:group1[,group2,...]]). Without group, detaches from 'default'
 
 **--from**="": Network name to detach from
 

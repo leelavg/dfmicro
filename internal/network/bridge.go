@@ -9,15 +9,17 @@ import (
 	"path/filepath"
 
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 )
 
 type bridgeConfig struct {
-	name            string
-	subnet          string
-	groupCount      int
-	reservePerGroup int
-	stateDir        string
-	noDefaultRoute  bool
+	name             string
+	subnet           string
+	groupCount       int
+	clustersPerGroup int
+	reservePerGroup  int
+	stateDir         string
+	noDefaultRoute   bool
 }
 
 type bridgeManager struct {
@@ -48,15 +50,14 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	}
 
 	m.logger.Info("creating bridge", "name", cfg.name, "subnet", cfg.subnet)
-	args := []string{"network", "create"}
+	args := []string{"network", "create",
+		"--subnet", cfg.subnet,
+		"--ip-range", reservedEnd,
+		"--interface-name", cfg.name,
+		"--opt", "vlan=1",
+	}
 	if cfg.noDefaultRoute {
 		args = append(args, "--opt", "no_default_route=true")
-	}
-	if cfg.subnet != "" {
-		args = append(args, "--subnet", cfg.subnet)
-	}
-	if reservedEnd != "" {
-		args = append(args, "--ip-range", reservedEnd)
 	}
 	args = append(args, cfg.name)
 	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
@@ -65,15 +66,17 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	}
 
 	state := &bridgeState{
-		Name:         cfg.name,
-		Subnet:       cfg.subnet,
-		SegmentCount: cfg.groupCount,
+		Name:             cfg.name,
+		Subnet:           cfg.subnet,
+		GroupCount:       cfg.groupCount,
+		ClustersPerGroup: cfg.clustersPerGroup,
+		ReservePerGroup:  cfg.reservePerGroup,
 	}
 	if err := state.save(cfg.stateDir); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)
 	}
 
-	m.logger.Info("bridge created and state saved", "name", state.Name, "segmentCount", state.SegmentCount)
+	m.logger.Info("bridge created and state saved", "name", state.Name, "groupCount", state.GroupCount)
 	return nil
 }
 
@@ -115,10 +118,11 @@ func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error
 }
 
 type bridgeState struct {
-	Name              string `json:"name"`
-	Subnet            string `json:"subnet"`
-	SegmentCount      int    `json:"segmentCount"`
-	ReservePerSegment int    `json:"reservePerSegment"`
+	Name             string `json:"name"`
+	Subnet           string `json:"subnet"`
+	GroupCount       int    `json:"groupCount"`
+	ClustersPerGroup int    `json:"clustersPerGroup"`
+	ReservePerGroup  int    `json:"reservePerGroup"`
 }
 
 func loadBridgeState(stateDir, name string) (*bridgeState, error) {

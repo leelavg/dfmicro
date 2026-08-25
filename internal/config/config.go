@@ -31,9 +31,10 @@ type Config struct {
 	BridgeName   string `json:"bridgeName"`
 	BridgeSubnet string `json:"bridgeSubnet"`
 
-	GroupCount      int    `json:"groupCount"`
-	ReservePerGroup int    `json:"reservePerGroup"`
-	NADNamespace    string `json:"nadNamespace"`
+	GroupCount       int    `json:"groupCount"`
+	ClustersPerGroup int    `json:"clustersPerGroup"`
+	ReservePerGroup  int    `json:"reservePerGroup"`
+	NADNamespace     string `json:"nadNamespace"`
 }
 
 type NetworkCIDRs struct {

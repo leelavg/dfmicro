@@ -27,6 +27,7 @@ const sudoersTemplate = `# %[2]s - passwordless sudo for cluster management
 %[1]s ALL=(root) NOPASSWD: /usr/bin/truncate
 %[1]s ALL=(root) NOPASSWD: /usr/sbin/modprobe
 %[1]s ALL=(root) NOPASSWD: /usr/bin/install
+%[1]s ALL=(root) NOPASSWD: /usr/bin/bridge
 `
 
 func createSudoers(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {

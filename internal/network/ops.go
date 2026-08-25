@@ -29,72 +29,118 @@ type networkInfo struct {
 	serviceCIDR string
 }
 
-func (o *multusOps) attach(ctx context.Context, state *bridgeState, clusterName, networkName, namespace string) error {
-	kcPath, err := cluster.Kubeconfig(clusterName)
-	if err != nil {
-		return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
-	}
+func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clusterToGroups map[string][]string, networkName, namespace string) error {
 
-	containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
-	if err != nil {
-		return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
-	}
-	for _, c := range containers {
-		o.logger.Info("connecting container to network", "container", c, "network", networkName)
-		if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "connect", networkName, c); err != nil {
-			return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
+	groupToClusters := make(map[string][]string)
+	for clusterName, groups := range clusterToGroups {
+		for _, group := range groups {
+			groupToClusters[group] = append(groupToClusters[group], clusterName)
 		}
 	}
 
-	segmentIndex, err := o.ipam.allocateForCluster(clusterName, state.SegmentCount)
-	if err != nil {
-		return fmt.Errorf("failed to allocate IPAM segment for cluster %s: %w", clusterName, err)
-	}
+	for groupName := range groupToClusters {
+		clusterNames := groupToClusters[groupName]
 
-	rangeStart, rangeEnd, err := computeIPAMRange(state.Subnet, segmentIndex, state.SegmentCount, state.ReservePerSegment)
-	if err != nil {
-		return fmt.Errorf("failed to compute IPAM range for cluster %s: %w", clusterName, err)
-	}
+		group, err := o.ipam.addGroup(groupName, state.Subnet, state.GroupCount, state.ReservePerGroup)
+		if err != nil {
+			return fmt.Errorf("failed to allocate group %s: %w", groupName, err)
+		}
 
-	if err := o.nad.create(ctx, nadConfig{
-		name:       networkName,
-		namespace:  namespace,
-		kubeconfig: kcPath,
-		bridge:     networkName,
-		subnet:     state.Subnet,
-		rangeStart: rangeStart,
-		rangeEnd:   rangeEnd,
-	}); err != nil {
-		return fmt.Errorf("failed to create NAD for cluster %s: %w", clusterName, err)
-	}
+		var clusterRange *clusterRange
+		for _, clusterName := range clusterNames {
+			clusterRange, err = group.addCluster(clusterName, state.ClustersPerGroup)
+			_ = clusterRange
+			if err != nil {
+				return fmt.Errorf("failed to add cluster %s to group %s: %w", clusterName, groupName, err)
+			}
+			containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
+			if err != nil {
+				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
+			}
+			for _, c := range containers {
+				o.logger.Info("connecting container to network", "container", c, "network", networkName)
+				if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "connect", networkName, c); err != nil {
+					return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
+				}
+			}
+			kcPath, err := cluster.Kubeconfig(clusterName)
+			if err != nil {
+				return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
+			}
 
-	o.logger.Info("attached cluster to network", "cluster", clusterName, "network", networkName, "segment", segmentIndex)
+			nadName := fmt.Sprintf("%s-%s", networkName, groupName)
+			if err := o.nad.create(ctx, nadConfig{
+				name:       nadName,
+				namespace:  namespace,
+				kubeconfig: kcPath,
+				bridge:     networkName,
+				subnet:     state.Subnet,
+				rangeStart: clusterRange.RangeStart,
+				rangeEnd:   clusterRange.RangeEnd,
+				vlanid:     group.VlanID,
+				group:      groupName,
+			}); err != nil {
+				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
+			}
+			o.logger.Info("created NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
+		}
+
+		vidRange := fmt.Sprintf("%d-%d", 10, 10+state.GroupCount-1)
+		if _, err := support.RunPrivileged(ctx, o.runner, "bridge", "vlan", "add", "vid", vidRange, "dev", networkName, "self"); err != nil {
+			return fmt.Errorf("failed to add vlan range to brige: %w", err)
+		}
+	}
 	return nil
 }
 
-func (o *multusOps) detach(ctx context.Context, clusterName, networkName, namespace string) error {
-	kcPath, err := cluster.Kubeconfig(clusterName)
-	if err != nil {
-		return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
-	}
+func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[string][]string, networkName, namespace string) error {
 
-	containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
-	if err != nil {
-		return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
-	}
-	for _, c := range containers {
-		o.logger.Info("disconnecting container from network", "container", c, "network", networkName)
-		if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
-			o.logger.Warn("failed to disconnect container from network", "container", c, "network", networkName, "error", err)
+	groupToClusters := make(map[string][]string)
+	for clusterName, groups := range clusterToGroups {
+		for _, group := range groups {
+			groupToClusters[group] = append(groupToClusters[group], clusterName)
 		}
 	}
 
-	if err := o.nad.delete(ctx, networkName, namespace, kcPath); err != nil {
-		return fmt.Errorf("failed to delete NAD for cluster %s: %w", clusterName, err)
-	}
+	for groupName := range groupToClusters {
+		clusterNames := groupToClusters[groupName]
 
-	o.ipam.deallocateCluster(clusterName)
-	o.logger.Info("detached cluster from network", "cluster", clusterName, "network", networkName)
+		groupIdx, group, err := o.ipam.getGroup(groupName)
+		if err != nil {
+			o.logger.Warn(err.Error())
+			continue
+		}
+
+		for _, clusterName := range clusterNames {
+			if err := group.removeCluster(clusterName); err != nil {
+				return fmt.Errorf("failed to remove cluster %s from group %s: %w", clusterName, groupName, err)
+			}
+			containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
+			if err != nil {
+				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
+			}
+			for _, c := range containers {
+				o.logger.Info("disconnection container to network", "container", c, "network", networkName)
+				if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
+					return fmt.Errorf("disconnect container %s from network %s: %w", c, networkName, err)
+				}
+			}
+			kcPath, err := cluster.Kubeconfig(clusterName)
+			if err != nil {
+				return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
+			}
+
+			nadName := fmt.Sprintf("%s-%s", networkName, groupName)
+			if err := o.nad.delete(ctx, nadName, namespace, kcPath); err != nil {
+				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
+			}
+			o.logger.Info("deleted NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
+		}
+
+		if err := o.ipam.removeGroup(groupIdx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
