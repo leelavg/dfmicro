@@ -12,12 +12,12 @@ import (
 )
 
 type bridgeConfig struct {
-	name                   string
-	subnet                 string
-	segmentCount           int
-	reservePerSegmentCount int
-	stateDir               string
-	noDefaultRoute         bool
+	name            string
+	subnet          string
+	groupCount      int
+	reservePerGroup int
+	stateDir        string
+	noDefaultRoute  bool
 }
 
 type bridgeManager struct {
@@ -42,7 +42,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		return nil
 	}
 
-	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.segmentCount, cfg.reservePerSegmentCount)
+	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.groupCount, cfg.reservePerGroup)
 	if err != nil {
 		return fmt.Errorf("failed to compute reserved IP range: %w", err)
 	}
@@ -67,7 +67,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	state := &bridgeState{
 		Name:         cfg.name,
 		Subnet:       cfg.subnet,
-		SegmentCount: cfg.segmentCount,
+		SegmentCount: cfg.groupCount,
 	}
 	if err := state.save(cfg.stateDir); err != nil {
 		return fmt.Errorf("failed to save bridge state: %w", err)

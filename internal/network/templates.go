@@ -13,6 +13,9 @@ spec:
       "type": "macvlan",
       "master": "eth1",
       "mode": "bridge",
+{{- if .VlanID }}
+      "vlan": {{.VlanID}},
+{{- end}}
       "ipam": {
         "type": "host-local",
         "subnet": "{{.Subnet}}",

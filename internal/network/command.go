@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"path/filepath"
 
 	rootconfig "dfmicro/internal/config"
@@ -45,36 +44,31 @@ Example:
 				Required: true,
 			},
 			&cli.StringFlag{
-				Name:     "subnet",
-				Usage:    "Network subnet in CIDR notation",
-				Required: true,
-				Validator: func(s string) error {
-					if _, _, err := net.ParseCIDR(s); err != nil {
-						return fmt.Errorf("invalid CIDR %s: %w", s, err)
-					}
-					return nil
-				},
+				Name:      "subnet",
+				Usage:     "Network subnet in CIDR notation",
+				Required:  true,
+				Validator: support.ValidateIPv4PrivateCIDR,
 			},
 			&cli.IntFlag{
-				Name:  "segment-count",
-				Usage: "Number of IPAM segments for clusters",
-				Value: rootconfig.Load().BridgeSegmentCount,
+				Name:  "group-count",
+				Usage: "Number of IPAM groups for clusters",
+				Value: rootconfig.Load().GroupCount,
 			},
 			&cli.IntFlag{
-				Name:  "reserve-per-segment",
-				Usage: "Number of IPs to reserve per IPAM segment",
-				Value: rootconfig.Load().ReservePerSegment,
+				Name:  "reserve-per-group",
+				Usage: "Number of IPs to reserve per IPAM group",
+				Value: rootconfig.Load().ReservePerGroup,
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			mgr := newBridgeManager(logger, runner)
 			return mgr.create(ctx, bridgeConfig{
-				name:                   cmd.String("name"),
-				subnet:                 cmd.String("subnet"),
-				segmentCount:           cmd.Int("segment-count"),
-				reservePerSegmentCount: cmd.Int("reserve-per-segment"),
-				stateDir:               networkStateDir(rootconfig.ConfigDir()),
-				noDefaultRoute:         true,
+				name:            cmd.String("name"),
+				subnet:          cmd.String("subnet"),
+				groupCount:      cmd.Int("group-count"),
+				reservePerGroup: cmd.Int("reserve-per-group"),
+				stateDir:        networkStateDir(rootconfig.ConfigDir()),
+				noDefaultRoute:  true,
 			})
 		},
 	}

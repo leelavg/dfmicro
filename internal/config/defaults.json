@@ -14,9 +14,9 @@
   "enableThinpool": true,
 
   "bridgeName": "micro",
-  "bridgeSubnet": "172.20.0.0/16",
+  "bridgeSubnet": "172.20.0.0/24",
 
-  "bridgeSegmentCount": 5,
-  "reservePerSegment": 5,
+  "groupCount": 5,
+  "reservePerGroup": 5,
   "nadNamespace": "default"
 }

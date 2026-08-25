@@ -16,6 +16,7 @@ type nadConfig struct {
 	subnet     string
 	rangeStart string
 	rangeEnd   string
+	vlanid     int
 }
 
 type nadManager struct {

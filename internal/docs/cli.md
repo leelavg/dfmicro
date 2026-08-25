@@ -128,7 +128,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
 
-**--bridge-subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/16")
+**--bridge-subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/24")
 
 **--cluster-cidr**="": Pod CIDR for the cluster (default: "10.42.0.0/16")
 
@@ -246,11 +246,11 @@ Create a bridge network for multi-cluster interconnect
     Example:
       dfmicro network create --name backbone --segment-count 5 --subnet 172.30.0.0/16
 
+**--group-count**="": Number of IPAM groups for clusters (default: 5)
+
 **--name**="": Network name
 
-**--reserve-per-segment**="": Number of IPs to reserve per IPAM segment (default: 5)
-
-**--segment-count**="": Number of IPAM segments for clusters (default: 5)
+**--reserve-per-group**="": Number of IPs to reserve per IPAM group (default: 5)
 
 **--subnet**="": Network subnet in CIDR notation
 

@@ -3,6 +3,7 @@ package support
 import (
 	"context"
 	"fmt"
+	"net"
 	"slices"
 	"sort"
 	"strings"
@@ -34,4 +35,18 @@ func SortCommand(cmd *cli.Command) {
 	for _, subCmd := range cmd.Commands {
 		SortCommand(subCmd)
 	}
+}
+
+func ValidateIPv4PrivateCIDR(s string) error {
+	ip, _, err := net.ParseCIDR(s)
+	if err != nil {
+		return fmt.Errorf("invalid CIDR: %w", err)
+	}
+	if ip.To4() == nil {
+		return fmt.Errorf("only IPv4 subnets are supported")
+	}
+	if !ip.IsPrivate() {
+		return fmt.Errorf("CIDR must be a private range")
+	}
+	return nil
 }
