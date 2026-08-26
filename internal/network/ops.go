@@ -85,9 +85,18 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 			o.logger.Info("created NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}
 
-		vidRange := fmt.Sprintf("%d-%d", 10, 10+state.GroupCount-1)
-		if _, err := support.RunPrivileged(ctx, o.runner, "bridge", "vlan", "add", "vid", vidRange, "dev", networkName, "self"); err != nil {
-			return fmt.Errorf("failed to add vlan range to brige: %w", err)
+		devName := fmt.Sprintf("%s.%d", networkName, group.VlanID)
+		if res, err := support.RunPrivileged(ctx, o.runner, "ip", "link", "add",
+			"link", networkName,
+			"name", devName, "up",
+			"type", "vlan",
+			"id", fmt.Sprint(group.VlanID),
+		); err != nil {
+			if strings.Contains(res.Stderr, "File exists") {
+				o.logger.Warn("vlan already exists", "bridge", networkName, "id", group.VlanID)
+			} else {
+				return fmt.Errorf("failed to add vlan on the brige: %w", err)
+			}
 		}
 	}
 	return nil
@@ -137,6 +146,7 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 			o.logger.Info("deleted NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}
 
+		// TODO: remove vlan on bridge corresponding to the group
 		if err := o.ipam.removeGroup(groupIdx); err != nil {
 			return err
 		}

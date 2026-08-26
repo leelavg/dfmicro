@@ -12,12 +12,9 @@ spec:
     {
       "cniVersion": "1.0.0",
       "name": "{{.Bridge}}",
-      "type": "bridge",
-      "bridge": "{{.Bridge}}",
+      "type": "macvlan",
+      "master": "{{.Bridge}}.{{.VlanID}}",
       "mode": "bridge",
-{{- if .VlanID }}
-      "vlan": {{.VlanID}},
-{{- end}}
       "ipam": {
         "type": "host-local",
         "subnet": "{{.Subnet}}",

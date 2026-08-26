@@ -54,7 +54,6 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		"--subnet", cfg.subnet,
 		"--ip-range", reservedEnd,
 		"--interface-name", cfg.name,
-		"--opt", "vlan=1",
 	}
 	if cfg.noDefaultRoute {
 		args = append(args, "--opt", "no_default_route=true")
