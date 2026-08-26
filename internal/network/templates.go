@@ -13,7 +13,7 @@ spec:
       "cniVersion": "1.0.0",
       "name": "{{.Bridge}}",
       "type": "macvlan",
-      "master": "{{.Bridge}}.{{.VlanID}}",
+      "master": "{{.Master}}",
       "mode": "bridge",
       "ipam": {
         "type": "host-local",

@@ -47,6 +47,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 		}
 
 		var clusterRange *clusterRange
+		var clusterEth string
 		for _, clusterName := range clusterNames {
 			clusterRange, err = group.addCluster(clusterName, state.ClustersPerGroup)
 			_ = clusterRange
@@ -61,6 +62,21 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				o.logger.Info("connecting container to network", "container", c, "network", networkName)
 				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, c); err != nil {
 					return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
+				}
+				var err error
+				clusterEth, err = getContainerEth(ctx, o.runner, networkName, c)
+				if err != nil {
+					o.logger.Warn("failed to get container eth", "container", c, "error", err)
+					continue
+				}
+				devName := fmt.Sprintf("%s.%d", clusterEth, group.VlanID)
+				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", c, "ip", "link", "add",
+					"link", clusterEth,
+					"name", devName, "up",
+					"type", "vlan",
+					"id", fmt.Sprint(group.VlanID),
+				); err != nil {
+					o.logger.Warn("failed to create vlan subif", "container", c, "subif", devName, "error", err)
 				}
 			}
 			kcPath, err := cluster.Kubeconfig(clusterName)
@@ -77,27 +93,14 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				subnet:     state.Subnet,
 				rangeStart: clusterRange.RangeStart,
 				rangeEnd:   clusterRange.RangeEnd,
-				vlanid:     group.VlanID,
 				group:      groupName,
+				master:     fmt.Sprintf("%s.%d", clusterEth, group.VlanID),
 			}); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
 			}
 			o.logger.Info("created NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}
 
-		devName := fmt.Sprintf("%s.%d", networkName, group.VlanID)
-		if res, err := support.RunPrivileged(ctx, o.runner, "ip", "link", "add",
-			"link", networkName,
-			"name", devName, "up",
-			"type", "vlan",
-			"id", fmt.Sprint(group.VlanID),
-		); err != nil {
-			if strings.Contains(res.Stderr, "File exists") {
-				o.logger.Warn("vlan already exists", "bridge", networkName, "id", group.VlanID)
-			} else {
-				return fmt.Errorf("failed to add vlan on the brige: %w", err)
-			}
-		}
 	}
 	return nil
 }
@@ -146,7 +149,6 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 			o.logger.Info("deleted NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}
 
-		// TODO: remove vlan on bridge corresponding to the group
 		if err := o.ipam.removeGroup(groupIdx); err != nil {
 			return err
 		}
@@ -277,4 +279,19 @@ func (o *peerOps) getNodeIP(ctx context.Context, container string) (string, erro
 	}
 
 	return nodeIP, nil
+}
+
+func getContainerEth(ctx context.Context, runner execx.Runner, networkName, containerName string) (string, error) {
+	template := `{{range $cid, $cont := .Containers}}{{if eq $cont.Name "` + containerName + `"}}{{range $ifname, $ifdata := .Interfaces}}{{$ifname}}{{end}}{{end}}{{end}}`
+
+	result, err := support.RunPodmanPrivileged(ctx, runner, "network", "inspect", "--format", template, networkName)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect network %s: %w", networkName, err)
+	}
+
+	eth := strings.TrimSpace(result.Stdout)
+	if eth == "" {
+		return "", fmt.Errorf("container %s not found in network %s", containerName, networkName)
+	}
+	return eth, nil
 }

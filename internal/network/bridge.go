@@ -53,7 +53,6 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	args := []string{"network", "create",
 		"--subnet", cfg.subnet,
 		"--ip-range", reservedEnd,
-		"--interface-name", cfg.name,
 	}
 	if cfg.noDefaultRoute {
 		args = append(args, "--opt", "no_default_route=true")
