@@ -87,6 +87,14 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, e
 	return result, nil
 }
 
+func (OSRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func Run(ctx context.Context, runner Runner, name string, args ...string) (Result, error) {
 	return runner.Run(ctx, name, args...)
 }
@@ -96,10 +104,7 @@ func RunSudo(ctx context.Context, runner Runner, name string, args ...string) (R
 	return runner.Run(ctx, "sudo", sudoArgs...)
 }
 
-func (OSRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+func RunSudoInteractive(ctx context.Context, runner Runner, name string, args ...string) error {
+	sudoArgs := append([]string{name}, args...)
+	return runner.RunInteractive(ctx, "sudo", sudoArgs...)
 }

@@ -20,28 +20,6 @@ import (
 	"dfmicro/internal/support"
 )
 
-var runLVMCommand func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
-var runPodmanInteractive func(context.Context, execx.Runner, ...string) error
-
-func init() {
-	if support.IsMacOS {
-		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
-			return execx.Run(ctx, runner, "podman", "machine", "ssh", "sudo", sshCmd(cmd, args...))
-		}
-		runPodmanInteractive = func(ctx context.Context, runner execx.Runner, args ...string) error {
-			return runner.RunInteractive(ctx, "podman", args...)
-		}
-	} else {
-		runLVMCommand = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
-			return execx.RunSudo(ctx, runner, cmd, args...)
-		}
-		runPodmanInteractive = func(ctx context.Context, runner execx.Runner, args ...string) error {
-			sudoArgs := append([]string{"podman"}, args...)
-			return runner.RunInteractive(ctx, "sudo", sudoArgs...)
-		}
-	}
-}
-
 func checkMacOSRootful() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -56,15 +34,6 @@ func checkMacOSRootful() error {
 		return fmt.Errorf("podman machine must be running in rootful mode\nPlease recreate with: podman machine init --rootful")
 	}
 	return nil
-}
-
-func sshCmd(cmd string, args ...string) string {
-	parts := make([]string, 0, len(args)+1)
-	parts = append(parts, cmd)
-	for _, a := range args {
-		parts = append(parts, support.ShellQuote(a))
-	}
-	return strings.Join(parts, " ")
 }
 
 type podmanContainer struct {
@@ -143,7 +112,7 @@ func (m *manager) start(ctx context.Context) error {
 	m.logger.Info("starting cluster", "name", m.cfg.Name, "containers", len(containers))
 	for _, container := range containers {
 		m.logger.Info("starting container", "name", m.cfg.Name, "container", container)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "start", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "start", container); err != nil {
 			m.logger.Warn("failed to start container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -172,7 +141,7 @@ func (m *manager) stop(ctx context.Context) error {
 	m.logger.Info("stopping cluster", "name", m.cfg.Name, "containers", len(containers))
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "stop", "--time", "0", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "0", container); err != nil {
 			m.logger.Warn("failed to stop container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -187,12 +156,12 @@ func (m *manager) delete(ctx context.Context) error {
 
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "stop", "--time", "0", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "0", container); err != nil {
 			m.logger.Warn("failed to stop container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 
 		m.logger.Info("removing container", "name", m.cfg.Name, "container", container)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "rm", "-f", "--volumes", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "rm", "-f", "--volumes", container); err != nil {
 			m.logger.Warn("failed to remove container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -201,7 +170,7 @@ func (m *manager) delete(ctx context.Context) error {
 		m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
 	} else if len(remaining) == 0 {
 		m.logger.Info("no containers left on network, removing", "network", m.cfg.BridgeName)
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "network", "rm", m.cfg.BridgeName); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", m.cfg.BridgeName); err != nil {
 			m.logger.Warn("failed to remove network", "network", m.cfg.BridgeName, "error", err)
 		}
 	}
@@ -249,7 +218,7 @@ func (m *manager) status(ctx context.Context) error {
 	}
 
 	m.logger.Info("cluster is running", "name", m.cfg.Name, "container", running[0], "kubeconfig", m.cfg.DefaultKubeconfigPath)
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", running[0], "kubectl", "get", "nodes,pods", "-A", "-o", "wide")
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", running[0], "kubectl", "get", "nodes,pods", "-A", "-o", "wide")
 	if err != nil {
 		m.logger.Warn("unable to retrieve cluster status", "name", m.cfg.Name, "error", err)
 		return nil
@@ -262,7 +231,7 @@ func (m *manager) createTopoLVMBackend(ctx context.Context) error {
 	imageExists := false
 	if _, err := os.Stat(m.cfg.LVMDisk); err == nil {
 		imageExists = true
-		result, err := runLVMCommand(ctx, m.runner, "vgs", "--noheadings", "-o", "vg_name", m.cfg.VGName)
+		result, err := support.RunPrivileged(ctx, m.runner, "vgs", "--noheadings", "-o", "vg_name", m.cfg.VGName)
 		if err == nil && strings.TrimSpace(result.Stdout) == m.cfg.VGName {
 			m.logger.Info("reusing existing topolvm backend", "path", m.cfg.LVMDisk, "vg", m.cfg.VGName)
 			return nil
@@ -277,12 +246,12 @@ func (m *manager) createTopoLVMBackend(ctx context.Context) error {
 	}
 
 	if !imageExists {
-		if _, err := runLVMCommand(ctx, m.runner, "truncate", "--size="+m.cfg.LVMVolSize, m.cfg.LVMDisk); err != nil {
+		if _, err := support.RunPrivileged(ctx, m.runner, "truncate", "--size="+m.cfg.LVMVolSize, m.cfg.LVMDisk); err != nil {
 			return err
 		}
 	}
 
-	result, err := runLVMCommand(ctx, m.runner, "losetup", "--find", "--show", "--nooverlap", m.cfg.LVMDisk)
+	result, err := support.RunPrivileged(ctx, m.runner, "losetup", "--find", "--show", "--nooverlap", m.cfg.LVMDisk)
 	if err != nil {
 		return err
 	}
@@ -291,10 +260,10 @@ func (m *manager) createTopoLVMBackend(ctx context.Context) error {
 		return errors.New("losetup did not return a device name")
 	}
 
-	if _, err := runLVMCommand(ctx, m.runner, "vgcreate", "-f", "-y", m.cfg.VGName, deviceName); err != nil {
+	if _, err := support.RunPrivileged(ctx, m.runner, "vgcreate", "-f", "-y", m.cfg.VGName, deviceName); err != nil {
 		return err
 	}
-	if _, err := runLVMCommand(ctx, m.runner, "lvcreate", "-l", "99%FREE", "--thinpool", "thin", m.cfg.VGName); err != nil {
+	if _, err := support.RunPrivileged(ctx, m.runner, "lvcreate", "-l", "99%FREE", "--thinpool", "thin", m.cfg.VGName); err != nil {
 		return err
 	}
 
@@ -312,7 +281,7 @@ func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 
 	// force-remove dm entries for LVs that belong to our VG and are still held by topolvm PVCs;
 	// cross-check against lvs output to avoid accidentally touching unrelated dm devices
-	if lvResult, err := runLVMCommand(ctx, m.runner, "lvs", "--noheadings", "-o", "lv_name", m.cfg.VGName); err == nil {
+	if lvResult, err := support.RunPrivileged(ctx, m.runner, "lvs", "--noheadings", "-o", "lv_name", m.cfg.VGName); err == nil {
 		knownLVs := map[string]bool{}
 		for lv := range strings.SplitSeq(strings.TrimSpace(lvResult.Stdout), "\n") {
 			lv = strings.TrimSpace(lv)
@@ -320,30 +289,30 @@ func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 				knownLVs[m.cfg.VGName+"-"+lv] = true
 			}
 		}
-		if dmResult, err := runLVMCommand(ctx, m.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name"); err == nil {
+		if dmResult, err := support.RunPrivileged(ctx, m.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name"); err == nil {
 			for name := range strings.SplitSeq(strings.TrimSpace(dmResult.Stdout), "\n") {
 				name = strings.TrimSpace(name)
 				if knownLVs[name] {
-					if _, err := runLVMCommand(ctx, m.runner, "dmsetup", "remove", "--force", name); err != nil {
+					if _, err := support.RunPrivileged(ctx, m.runner, "dmsetup", "remove", "--force", name); err != nil {
 						m.logger.Warn("failed to remove dm device", "device", name, "error", err)
 					}
 				}
 			}
 		}
 
-		if _, err := runLVMCommand(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
+		if _, err := support.RunPrivileged(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
 			m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
 		}
-		if _, err := runLVMCommand(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
+		if _, err := support.RunPrivileged(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
 			m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
 		}
 	}
 
-	result, err := runLVMCommand(ctx, m.runner, "losetup", "--associated", m.cfg.LVMDisk, "--output", "NAME", "--noheadings")
+	result, err := support.RunPrivileged(ctx, m.runner, "losetup", "--associated", m.cfg.LVMDisk, "--output", "NAME", "--noheadings")
 	if err == nil {
 		deviceName := strings.TrimSpace(result.Stdout)
 		if deviceName != "" {
-			if _, err := runLVMCommand(ctx, m.runner, "losetup", "--detach", deviceName); err != nil {
+			if _, err := support.RunPrivileged(ctx, m.runner, "losetup", "--detach", deviceName); err != nil {
 				m.logger.Warn("failed to detach loop device", "device", deviceName, "error", err)
 			}
 		}
@@ -353,7 +322,7 @@ func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 }
 
 func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
-	_, err := execx.RunPodmanCommand(ctx, m.runner, "network", "exists", name)
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "exists", name)
 	if err == nil {
 		return true, nil
 	}
@@ -366,7 +335,7 @@ func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, e
 
 func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) error {
 	for _, cidr := range []string{m.cfg.ClusterCIDR, m.cfg.ServiceCIDR} {
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
 			return fmt.Errorf("trust CIDR %s: %w", cidr, err)
 		}
 	}
@@ -388,12 +357,12 @@ func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) 
 		args = append(args, "--subnet", subnet)
 	}
 	args = append(args, name)
-	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
+	_, err = support.RunPodmanPrivileged(ctx, m.runner, args...)
 	return err
 }
 
 func (m *manager) containerExists(ctx context.Context, name string) (bool, error) {
-	_, err := execx.RunPodmanCommand(ctx, m.runner, "container", "exists", name)
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "container", "exists", name)
 	if err == nil {
 		return true, nil
 	}
@@ -523,7 +492,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	)
 
 	m.logger.Info("starting container (downloading base image if not cached, ~2GB, may take time)", "name", name, "image", m.cfg.Image)
-	if _, err := execx.RunPodmanCommand(ctx, m.runner, args[1:]...); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, args[1:]...); err != nil {
 		return err
 	}
 
@@ -580,7 +549,7 @@ func getClients() ([]string, error) {
 
 func (m *manager) waitForDBus(ctx context.Context, name string) error {
 	for range 60 {
-		if _, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
 			return nil
 		}
 		select {
@@ -633,7 +602,7 @@ func (m *manager) waitReady(ctx context.Context) error {
 }
 
 func (m *manager) checkNodesReady(ctx context.Context, containerName string) error {
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "oc", "get", "nodes", "--no-headers")
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "oc", "get", "nodes", "--no-headers")
 	if err != nil {
 		return err
 	}
@@ -667,7 +636,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 	m.logger.Info("delaying kubeconfig reads to prevent watchdog starvation on systems with hardware watchdog (see FAQ)")
 	time.Sleep(5 * time.Second)
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
 	if err == nil {
 		writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.DefaultKubeconfigPath)
 	}
@@ -679,7 +648,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 			for _, client := range clients {
 				time.Sleep(5 * time.Second)
 				sourcePath = fmt.Sprintf("/var/lib/microshift/resources/kubeadmin/%s/kubeconfig", client)
-				result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
+				result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
 				if err == nil {
 					kubeconfigs = append(kubeconfigs, result.Stdout)
 					m.logger.Info("kubeconfig found for client", "client", client)
@@ -733,7 +702,7 @@ func chownFromSudo(path string) error {
 }
 
 func (m *manager) systemdSubState(ctx context.Context, containerName, unit string) (string, error) {
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "exec", "-i", containerName, "systemctl", "show", "--property=SubState", "--value", unit)
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "systemctl", "show", "--property=SubState", "--value", unit)
 	if err != nil {
 		return "unknown", nil
 	}
@@ -741,7 +710,7 @@ func (m *manager) systemdSubState(ctx context.Context, containerName, unit strin
 }
 
 func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) error {
-	result, err := execx.RunPodmanCommand(ctx, runner, "ps", "-a", "--filter", "label=created-by=dfmicro", "--format=json")
+	result, err := support.RunPodmanPrivileged(ctx, runner, "ps", "-a", "--filter", "label=created-by=dfmicro", "--format=json")
 	if err != nil {
 		return err
 	}
@@ -785,7 +754,7 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 }
 
 func (m *manager) exec(ctx context.Context, containerName string) error {
-	result, err := execx.RunPodmanCommand(ctx, m.runner, "ps", "-a", "--filter", "label=part-of="+m.cfg.Name, "--format=json")
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "ps", "-a", "--filter", "label=part-of="+m.cfg.Name, "--format=json")
 	if err != nil {
 		return err
 	}
@@ -833,5 +802,5 @@ func (m *manager) exec(ctx context.Context, containerName string) error {
 	m.logger.Info("executing shell in container", "container", targetContainer)
 
 	args := []string{"exec", "-it", targetContainer, "sh"}
-	return runPodmanInteractive(ctx, m.runner, args...)
+	return support.RunPodmanPrivilegedInteractive(ctx, m.runner, args...)
 }

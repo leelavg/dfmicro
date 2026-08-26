@@ -139,7 +139,7 @@ type nodeListOutput struct {
 
 // looks for a single container for now
 func (r *resources) resolveContainer(ctx context.Context) (string, error) {
-	result, err := support.RunPodman(ctx, r.runner, "ps",
+	result, err := support.RunPodmanPrivileged(ctx, r.runner, "ps",
 		"--filter", "label=part-of="+r.cluster,
 		"--filter", "label=created-by=dfmicro",
 		"--filter", "status=running",
@@ -156,7 +156,7 @@ func (r *resources) resolveContainer(ctx context.Context) (string, error) {
 }
 
 func (r *resources) podman(ctx context.Context, container string, args ...string) (execx.Result, error) {
-	return support.RunPodman(ctx, r.runner, append([]string{"exec", container}, args...)...)
+	return support.RunPodmanPrivileged(ctx, r.runner, append([]string{"exec", container}, args...)...)
 }
 
 func (r *resources) kubectl(ctx context.Context, container string, args ...string) (execx.Result, error) {

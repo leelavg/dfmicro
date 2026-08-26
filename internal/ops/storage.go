@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"dfmicro/internal/execx"
+	"dfmicro/internal/support"
 
 	"github.com/urfave/cli/v3"
 )
@@ -16,7 +17,7 @@ func storageCommand(runner execx.Runner) *cli.Command {
 		Name:  "storage",
 		Usage: "Show storage paths for all dfmicro clusters",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			result, err := execx.RunPodmanCommand(ctx, runner, "ps", "--all", "--filter", "label=created-by=dfmicro", "--format", "json")
+			result, err := support.RunPodmanPrivileged(ctx, runner, "ps", "--all", "--filter", "label=created-by=dfmicro", "--format", "json")
 			if err != nil {
 				return err
 			}
@@ -35,7 +36,7 @@ func storageCommand(runner execx.Runner) *cli.Command {
 				}
 				name := c.Names[0]
 
-				result, err := execx.RunPodmanCommand(ctx, runner, "inspect", name, "--format", "{{.GraphDriver.Data.MergedDir}}")
+				result, err := support.RunPodmanPrivileged(ctx, runner, "inspect", name, "--format", "{{.GraphDriver.Data.MergedDir}}")
 				if err != nil {
 					fmt.Printf("%s\terror\n", name)
 					continue

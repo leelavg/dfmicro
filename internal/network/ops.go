@@ -59,7 +59,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 			}
 			for _, c := range containers {
 				o.logger.Info("connecting container to network", "container", c, "network", networkName)
-				if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "connect", networkName, c); err != nil {
+				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, c); err != nil {
 					return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
 				}
 			}
@@ -121,7 +121,7 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 			}
 			for _, c := range containers {
 				o.logger.Info("disconnection container to network", "container", c, "network", networkName)
-				if _, err := execx.RunPodmanCommand(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
+				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
 					return fmt.Errorf("disconnect container %s from network %s: %w", c, networkName, err)
 				}
 			}
@@ -191,7 +191,7 @@ func (o *peerOps) run(
 
 	for srcName, containers := range clusterContainers {
 		for _, container := range containers {
-			if _, err := execx.RunPodmanCommand(ctx, o.runner, "exec", container, "bash", "-c", commandBuilder(networkByClusterName, srcName, dstNames)); err != nil {
+			if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", container, "bash", "-c", commandBuilder(networkByClusterName, srcName, dstNames)); err != nil {
 				return fmt.Errorf("failed to configure on container %s: %w", container, err)
 			}
 		}
@@ -256,7 +256,7 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 }
 
 func (o *peerOps) getNodeIP(ctx context.Context, container string) (string, error) {
-	result, err := execx.RunPodmanCommand(ctx, o.runner, "inspect", container, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	result, err := support.RunPodmanPrivileged(ctx, o.runner, "inspect", container, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
 	if err != nil {
 		return "", fmt.Errorf("failed to get node IP: %w", err)
 	}

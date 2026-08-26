@@ -60,7 +60,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		args = append(args, "--opt", "no_default_route=true")
 	}
 	args = append(args, cfg.name)
-	_, err = execx.RunPodmanCommand(ctx, m.runner, args...)
+	_, err = support.RunPodmanPrivileged(ctx, m.runner, args...)
 	if err != nil {
 		return fmt.Errorf("failed to create bridge: %w", err)
 	}
@@ -81,7 +81,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 }
 
 func (m *bridgeManager) exists(ctx context.Context, name string) (bool, error) {
-	_, err := execx.RunPodmanCommand(ctx, m.runner, "network", "exists", name)
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "exists", name)
 	if err == nil {
 		return true, nil
 	}
@@ -110,7 +110,7 @@ func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error
 	}
 
 	m.logger.Info("deleting bridge", "name", name)
-	_, err = execx.RunPodmanCommand(ctx, m.runner, "network", "rm", name)
+	_, err = support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", name)
 	if err != nil {
 		return fmt.Errorf("failed to delete bridge: %w", err)
 	}

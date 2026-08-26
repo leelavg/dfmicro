@@ -13,7 +13,7 @@ func clusterContainers(ctx context.Context, runner execx.Runner, name string, al
 		args = append(args, "-a")
 	}
 	args = append(args, "--filter", "label=part-of="+name, "--format", "{{.Names}}")
-	result, err := execx.RunPodmanCommand(ctx, runner, args...)
+	result, err := RunPodmanPrivileged(ctx, runner, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func RunningClusterContainers(ctx context.Context, runner execx.Runner, name str
 }
 
 func AllNetworkContainers(ctx context.Context, runner execx.Runner, networkName string) ([]string, error) {
-	result, err := execx.RunPodmanCommand(ctx, runner, "ps", "-a", "--filter", "network="+networkName, "--format", "{{.Names}}")
+	result, err := RunPodmanPrivileged(ctx, runner, "ps", "-a", "--filter", "network="+networkName, "--format", "{{.Names}}")
 	if err != nil {
 		return nil, err
 	}
