@@ -22,6 +22,7 @@ type groupAlloc struct {
 	Clusters   []clusterRange `json:"clusters"`
 	Index      int            `json:"index"`
 	VlanID     int            `json:"vlanId"`
+	Subnet     string         `json:"subnet"`
 	RangeStart string         `json:"rangeStart"`
 	RangeEnd   string         `json:"rangeEnd"`
 }
@@ -81,19 +82,20 @@ func (a *ipamManager) getGroup(name string) (int, *groupAlloc, error) {
 	return -1, nil, fmt.Errorf("group not found: %s", name)
 }
 
-func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup int) (*groupAlloc, error) {
+func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup, clustersPerGroup int) (*groupAlloc, error) {
 	for i := range a.Groups {
 		if a.Groups[i].Name == name {
 			return &a.Groups[i], nil
 		}
 	}
+
 	index := freeSlot(a.Groups, func(g groupAlloc) int { return g.Index })
 	if index >= groupCount {
 		return nil, fmt.Errorf("no more available groups (max %d)", groupCount)
 	}
 
 	a.Subnet = subnet
-	rangeStart, rangeEnd, err := computeIPAMRange(subnet, index, groupCount, reservePerGroup)
+	groupSubnet, rangeStart, rangeEnd, err := computeIPAMRange(subnet, index, clustersPerGroup, reservePerGroup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute IPAM range for group %s: %w", name, err)
 	}
@@ -103,6 +105,7 @@ func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePe
 		Clusters:   []clusterRange{},
 		Index:      index,
 		VlanID:     10 + index,
+		Subnet:     groupSubnet,
 		RangeStart: rangeStart,
 		RangeEnd:   rangeEnd,
 	}
@@ -164,49 +167,38 @@ func addToIP(ip net.IP, offset int) net.IP {
 	return result
 }
 
-func parseSubnetBounds(subnet string, groupCount, reserverPerGroup int) (baseIP net.IP, lastUsable int, reservedCount int, err error) {
+func computeIPAMRange(subnet string, index, clustersPerGroup, reservePerGroup int) (string, string, string, error) {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return nil, 0, 0, fmt.Errorf("invalid CIDR %s: %w", subnet, err)
+		return "", "", "", fmt.Errorf("invalid CIDR %s: %w", subnet, err)
 	}
-	baseIP = ipnet.IP.To4()
-	if baseIP == nil {
-		return nil, 0, 0, fmt.Errorf("only IPv4 supported")
-	}
-	ones, bits := ipnet.Mask.Size()
-	hostBits := bits - ones
-	if hostBits < 2 {
-		return nil, 0, 0, fmt.Errorf("subnet too small")
-	}
-	hostCount := 1 << hostBits
-	lastUsable = hostCount - 2
-	reservedCount = groupCount * reserverPerGroup
-	return baseIP, lastUsable, reservedCount, nil
+	baseIP := ipnet.IP.To4()
+
+	groupIP := make(net.IP, 4)
+	copy(groupIP, baseIP)
+	groupIP[2] = byte(index + 1)
+
+	groupSubnet := fmt.Sprintf("%s/24", groupIP.String())
+	startIP := addToIP(groupIP, 2)
+	endIP := addToIP(groupIP, 254-reservePerGroup)
+
+	return groupSubnet, startIP.String(), endIP.String(), nil
 }
 
-func computeIPAMRange(subnet string, index, groupCount, reservePerGroup int) (string, string, error) {
-	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, groupCount, reservePerGroup)
+func computeReservedIPRange(subnet string) (string, error) {
+	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
-		return "", "", err
+		return "", fmt.Errorf("invalid CIDR %s: %w", subnet, err)
 	}
-	segmentSize := (lastUsable + 2) / groupCount
-	maxUsableIP := lastUsable - reservedCount
-	offset := index*segmentSize + 2
-	startIP := addToIP(baseIP, offset)
-	endIP := addToIP(baseIP, min(offset+segmentSize-3, maxUsableIP))
-	return startIP.String(), endIP.String(), nil
-}
+	baseIP := ipnet.IP.To4()
 
-func computeReservedIPRange(subnet string, groupCount, reservePerGroup int) (string, error) {
-	baseIP, lastUsable, reservedCount, err := parseSubnetBounds(subnet, groupCount, reservePerGroup)
-	if err != nil {
-		return "", err
-	}
-	if reservedCount >= lastUsable {
-		return "", fmt.Errorf("subnet too small for %d segments", groupCount)
-	}
-	reservedStart := addToIP(baseIP, lastUsable-reservedCount+1)
-	reservedEnd := addToIP(baseIP, lastUsable)
+	// use x.x.254.2-254 for bridge node IPs
+	nodeIP := make(net.IP, 4)
+	copy(nodeIP, baseIP)
+	nodeIP[2] = 254
+
+	reservedStart := addToIP(nodeIP, 2)
+	reservedEnd := addToIP(nodeIP, 254)
 	return fmt.Sprintf("%s-%s", reservedStart.String(), reservedEnd.String()), nil
 }
 
@@ -220,6 +212,7 @@ func computeClusterSubrange(groupStart, groupEnd string, clusterIdx, clustersPer
 		return "", "", fmt.Errorf("invalid IP %s", groupEnd)
 	}
 
+	// divide group range into equal slices per cluster
 	startNum := binary.BigEndian.Uint32(startIP.To4())
 	endNum := binary.BigEndian.Uint32(endIP.To4())
 	totalIPs := endNum - startNum + 1

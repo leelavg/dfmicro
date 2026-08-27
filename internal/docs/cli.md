@@ -259,13 +259,13 @@ Create a bridge network for multi-cluster interconnect
 
 **--cluster-count**="": Number of clusters per IPAM group (default: 5)
 
-**--group-count**="": Number of IPAM groups for the subnet (default: 5)
+**--group-count**="": Number of IPAM groups for the subnet (1-253) (default: 5)
 
 **--name**="": Network name
 
-**--reserve-count**="": Number of IPs to reserve per group (default: 5)
+**--reserve-count**="": Number of IPs to reserve per group (max 253) (default: 5)
 
-**--subnet**="": Network subnet in CIDR notation
+**--subnet**="": Network subnet in CIDR notation (minimum /16)
 
 ### delete
 

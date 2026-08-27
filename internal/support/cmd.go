@@ -38,7 +38,11 @@ func SortCommand(cmd *cli.Command) {
 }
 
 func ValidateIPv4PrivateCIDR(s string) error {
-	ip, _, err := net.ParseCIDR(s)
+	return ValidateIPv4PrivateCIDRWithMinPrefix(s, 0)
+}
+
+func ValidateIPv4PrivateCIDRWithMinPrefix(s string, minPrefix int) error {
+	ip, ipnet, err := net.ParseCIDR(s)
 	if err != nil {
 		return fmt.Errorf("invalid CIDR: %w", err)
 	}
@@ -47,6 +51,12 @@ func ValidateIPv4PrivateCIDR(s string) error {
 	}
 	if !ip.IsPrivate() {
 		return fmt.Errorf("CIDR must be a private range")
+	}
+	if minPrefix > 0 {
+		ones, _ := ipnet.Mask.Size()
+		if ones > minPrefix {
+			return fmt.Errorf("subnet must be /%d or larger (got /%d)", minPrefix, ones)
+		}
 	}
 	return nil
 }

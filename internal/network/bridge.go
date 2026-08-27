@@ -44,7 +44,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 		return nil
 	}
 
-	reservedEnd, err := computeReservedIPRange(cfg.subnet, cfg.groupCount, cfg.reservePerGroup)
+	reservedEnd, err := computeReservedIPRange(cfg.subnet)
 	if err != nil {
 		return fmt.Errorf("failed to compute reserved IP range: %w", err)
 	}

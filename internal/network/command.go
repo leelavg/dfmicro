@@ -49,17 +49,17 @@ Example:
 			},
 			&cli.StringFlag{
 				Name:      "subnet",
-				Usage:     "Network subnet in CIDR notation",
+				Usage:     "Network subnet in CIDR notation (minimum /16)",
 				Required:  true,
-				Validator: support.ValidateIPv4PrivateCIDR,
+				Validator: func(s string) error { return support.ValidateIPv4PrivateCIDRWithMinPrefix(s, 16) },
 			},
 			&cli.IntFlag{
 				Name:  "group-count",
-				Usage: "Number of IPAM groups for the subnet",
+				Usage: "Number of IPAM groups for the subnet (1-253)",
 				Value: rootconfig.Load().GroupCount,
 				Validator: func(i int) error {
-					if i < 1 {
-						return fmt.Errorf("invalid count, should be more than 0")
+					if i < 1 || i > 253 {
+						return fmt.Errorf("group-count must be between 1 and 253 (got %d)", i)
 					}
 					return nil
 				},
@@ -77,15 +77,34 @@ Example:
 			},
 			&cli.IntFlag{
 				Name:  "reserve-count",
-				Usage: "Number of IPs to reserve per group",
+				Usage: "Number of IPs to reserve per group (max 253)",
 				Value: rootconfig.Load().ReservePerGroup,
 				Validator: func(i int) error {
-					if i < 1 {
-						return fmt.Errorf("invalid count, should be more than 0")
+					if i < 1 || i > 253 {
+						return fmt.Errorf("reserve-count must be between 1 and 253 (got %d)", i)
 					}
 					return nil
 				},
 			},
+		},
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			groupCount := cmd.Int("group-count")
+			clustersPerGroup := cmd.Int("cluster-count")
+			reservePerGroup := cmd.Int("reserve-count")
+
+			availableForClusters := 254 - reservePerGroup
+			if clustersPerGroup > availableForClusters {
+				return ctx, fmt.Errorf("/24 has %d IPs for clusters after %d reserved, need at most %d clusters",
+					availableForClusters, reservePerGroup, availableForClusters)
+			}
+
+			neededBridgeIPs := groupCount * clustersPerGroup
+			if neededBridgeIPs > 253 {
+				return ctx, fmt.Errorf("bridge needs %d IPs (group-count %d * cluster-count %d) but x.x.254.0/24 only provides 253",
+					neededBridgeIPs, groupCount, clustersPerGroup)
+			}
+
+			return ctx, nil
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			mgr := newBridgeManager(logger, runner)
@@ -168,7 +187,7 @@ Example:
 			ops := &multusOps{
 				logger: logger,
 				runner: runner,
-				nad:    newNADManager(logger, runner, "oc"),
+				nad:    newNADManager(logger, runner, "kubectl"),
 				ipam:   ipam,
 			}
 
@@ -241,7 +260,7 @@ Example:
 			ops := &multusOps{
 				logger: logger,
 				runner: runner,
-				nad:    newNADManager(logger, runner, "oc"),
+				nad:    newNADManager(logger, runner, "kubectl"),
 				ipam:   ipam,
 			}
 

@@ -41,7 +41,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 	for groupName := range groupToClusters {
 		clusterNames := groupToClusters[groupName]
 
-		group, err := o.ipam.addGroup(groupName, state.Subnet, state.GroupCount, state.ReservePerGroup)
+		group, err := o.ipam.addGroup(groupName, state.Subnet, state.GroupCount, state.ReservePerGroup, state.ClustersPerGroup)
 		if err != nil {
 			return fmt.Errorf("failed to allocate group %s: %w", groupName, err)
 		}
@@ -106,7 +106,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				namespace:  namespace,
 				kubeconfig: kcPath,
 				bridge:     networkName,
-				subnet:     state.Subnet,
+				subnet:     group.Subnet,
 				rangeStart: clusterRange.RangeStart,
 				rangeEnd:   clusterRange.RangeEnd,
 				master:     fmt.Sprintf("%s.%d", clusterEth, group.VlanID),

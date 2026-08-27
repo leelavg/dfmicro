@@ -8,10 +8,13 @@ MAKEFLAGS += --no-builtin-rules
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
 
-.PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch
+.PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch revive
 
 vet:
 	go vet -tags fetch ./...
+
+revive:
+	revive -config revive.toml ./...
 
 fmt:
 	go fmt ./...

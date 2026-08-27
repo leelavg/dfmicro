@@ -1,0 +1,15 @@
+ignoreGeneratedHeader = true
+severity = "warning"
+confidence = 0.8
+
+[formatter]
+  name = "friendly"
+
+[directive.exclude]
+  list = ["./bin/..."]
+
+[rule.package-comments]
+  disabled = true
+
+[rule.exported]
+  disabled = true
