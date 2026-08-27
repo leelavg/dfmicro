@@ -5,8 +5,6 @@ kind: NetworkAttachmentDefinition
 metadata:
   name: {{.Name}}
   namespace: {{.Namespace}}
-  labels:
-    dfmicro.cli/group: {{.Group}}
 spec:
   config: |
     {
@@ -17,9 +15,15 @@ spec:
       "mode": "bridge",
       "ipam": {
         "type": "host-local",
-        "subnet": "{{.Subnet}}",
-        "rangeStart": "{{.RangeStart}}",
-        "rangeEnd": "{{.RangeEnd}}"
+        "ranges": [
+          [
+            {
+              "subnet": "{{.Subnet}}",
+              "rangeStart": "{{.RangeStart}}",
+              "rangeEnd": "{{.RangeEnd}}"
+            }
+          ]
+        ]
       }
     }
 `

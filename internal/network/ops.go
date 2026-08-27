@@ -50,7 +50,6 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 		var clusterEth string
 		for _, clusterName := range clusterNames {
 			clusterRange, err = group.addCluster(clusterName, state.ClustersPerGroup)
-			_ = clusterRange
 			if err != nil {
 				return fmt.Errorf("failed to add cluster %s to group %s: %w", clusterName, groupName, err)
 			}
@@ -59,24 +58,41 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				o.logger.Info("connecting container to network", "container", c, "network", networkName)
-				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, c); err != nil {
-					return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
+				if !support.ContainerConnectedToNetwork(ctx, o.runner, networkName, c) {
+					o.logger.Info("connecting container to network", "container", c, "network", networkName)
+					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, c); err != nil {
+						return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
+					}
+				} else {
+					o.logger.Info("container already connected to network", "container", c, "network", networkName)
 				}
-				var err error
-				clusterEth, err = getContainerEth(ctx, o.runner, networkName, c)
+
+				containerEth, err := support.GetContainerEth(ctx, o.runner, networkName, c)
 				if err != nil {
 					o.logger.Warn("failed to get container eth", "container", c, "error", err)
 					continue
 				}
+				if clusterEth == "" {
+					clusterEth = containerEth
+				} else if clusterEth != containerEth {
+					return fmt.Errorf(
+						"cluster %s has inconsistent eth interfaces: %s vs %s (container %s is part of multiple networks)",
+						clusterName, clusterEth, containerEth, c,
+					)
+				}
 				devName := fmt.Sprintf("%s.%d", clusterEth, group.VlanID)
-				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", c, "ip", "link", "add",
-					"link", clusterEth,
-					"name", devName, "up",
-					"type", "vlan",
-					"id", fmt.Sprint(group.VlanID),
-				); err != nil {
-					o.logger.Warn("failed to create vlan subif", "container", c, "subif", devName, "error", err)
+				if !support.VlanInterfaceExists(ctx, o.runner, c, devName) {
+					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", c, "ip", "link", "add",
+						"link", clusterEth,
+						"name", devName, "up",
+						"type", "vlan",
+						"id", fmt.Sprint(group.VlanID),
+					); err != nil {
+						o.logger.Warn("failed to create vlan subif", "container", c, "subif", devName, "error", err)
+						continue
+					}
+				} else {
+					o.logger.Info("vlan interface already exists", "container", c, "subif", devName)
 				}
 			}
 			kcPath, err := cluster.Kubeconfig(clusterName)
@@ -93,7 +109,6 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				subnet:     state.Subnet,
 				rangeStart: clusterRange.RangeStart,
 				rangeEnd:   clusterRange.RangeEnd,
-				group:      groupName,
 				master:     fmt.Sprintf("%s.%d", clusterEth, group.VlanID),
 			}); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
@@ -132,9 +147,13 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				o.logger.Info("disconnection container to network", "container", c, "network", networkName)
-				if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
-					return fmt.Errorf("disconnect container %s from network %s: %w", c, networkName, err)
+				if support.ContainerConnectedToNetwork(ctx, o.runner, networkName, c) {
+					o.logger.Info("disconnecting container from network", "container", c, "network", networkName)
+					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
+						return fmt.Errorf("disconnect container %s from network %s: %w", c, networkName, err)
+					}
+				} else {
+					o.logger.Info("container not connected to network", "container", c, "network", networkName)
 				}
 			}
 			kcPath, err := cluster.Kubeconfig(clusterName)
@@ -279,19 +298,4 @@ func (o *peerOps) getNodeIP(ctx context.Context, container string) (string, erro
 	}
 
 	return nodeIP, nil
-}
-
-func getContainerEth(ctx context.Context, runner execx.Runner, networkName, containerName string) (string, error) {
-	template := `{{range $cid, $cont := .Containers}}{{if eq $cont.Name "` + containerName + `"}}{{range $ifname, $ifdata := .Interfaces}}{{$ifname}}{{end}}{{end}}{{end}}`
-
-	result, err := support.RunPodmanPrivileged(ctx, runner, "network", "inspect", "--format", template, networkName)
-	if err != nil {
-		return "", fmt.Errorf("failed to inspect network %s: %w", networkName, err)
-	}
-
-	eth := strings.TrimSpace(result.Stdout)
-	if eth == "" {
-		return "", fmt.Errorf("container %s not found in network %s", containerName, networkName)
-	}
-	return eth, nil
 }

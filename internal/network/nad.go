@@ -17,7 +17,6 @@ type nadConfig struct {
 	rangeStart string
 	rangeEnd   string
 	master     string
-	group      string
 }
 
 type nadManager struct {
@@ -62,7 +61,6 @@ func (m *nadManager) render(cfg nadConfig) (string, error) {
 		"Subnet":     cfg.subnet,
 		"RangeStart": cfg.rangeStart,
 		"RangeEnd":   cfg.rangeEnd,
-		"Group":      cfg.group,
 		"Master":     cfg.master,
 	}
 	return support.Render(nadTemplate, nadCfg)

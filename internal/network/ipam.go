@@ -7,28 +7,38 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 type clusterRange struct {
 	Name       string `json:"name"`
+	Index      int    `json:"index"`
 	RangeStart string `json:"rangeStart"`
 	RangeEnd   string `json:"rangeEnd"`
 }
 
 type groupAlloc struct {
-	Name             string         `json:"name"`
-	Clusters         []clusterRange `json:"clusters"`
-	VlanID           int            `json:"vlanid"`
-	RangeStart       string         `json:"rangeStart"`
-	RangeEnd         string         `json:"rangeEnd"`
-	NextClusterIndex int            `json:"nextClusterIndex"`
+	Name       string         `json:"name"`
+	Clusters   []clusterRange `json:"clusters"`
+	Index      int            `json:"index"`
+	VlanID     int            `json:"vlanId"`
+	RangeStart string         `json:"rangeStart"`
+	RangeEnd   string         `json:"rangeEnd"`
 }
 
 type ipamManager struct {
-	NetworkName    string       `json:"networkName"`
-	Subnet         string       `json:"subnet"`
-	Groups         []groupAlloc `json:"groups"`
-	NextGroupIndex int          `json:"nextGroupIndex"`
+	NetworkName string       `json:"networkName"`
+	Subnet      string       `json:"subnet"`
+	Groups      []groupAlloc `json:"groups"`
+}
+
+func freeSlot[T any](items []T, index func(T) int) int {
+	for i, it := range items {
+		if index(it) != i {
+			return i
+		}
+	}
+	return len(items)
 }
 
 func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
@@ -77,14 +87,12 @@ func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePe
 			return &a.Groups[i], nil
 		}
 	}
-	if a.NextGroupIndex >= groupCount {
+	index := freeSlot(a.Groups, func(g groupAlloc) int { return g.Index })
+	if index >= groupCount {
 		return nil, fmt.Errorf("no more available groups (max %d)", groupCount)
 	}
-	index := a.NextGroupIndex
-	a.NextGroupIndex++
 
 	a.Subnet = subnet
-	vlanID := 10 + index
 	rangeStart, rangeEnd, err := computeIPAMRange(subnet, index, groupCount, reservePerGroup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute IPAM range for group %s: %w", name, err)
@@ -93,12 +101,13 @@ func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePe
 	g := groupAlloc{
 		Name:       name,
 		Clusters:   []clusterRange{},
-		VlanID:     vlanID,
+		Index:      index,
+		VlanID:     10 + index,
 		RangeStart: rangeStart,
 		RangeEnd:   rangeEnd,
 	}
-	a.Groups = append(a.Groups, g)
-	return &a.Groups[len(a.Groups)-1], nil
+	a.Groups = slices.Insert(a.Groups, index, g)
+	return &a.Groups[index], nil
 }
 
 func (a *ipamManager) removeGroup(idx int) error {
@@ -107,14 +116,7 @@ func (a *ipamManager) removeGroup(idx int) error {
 	}
 
 	if len(a.Groups[idx].Clusters) == 0 {
-		if len(a.Groups) == 1 {
-			a.Groups = nil
-		} else {
-			a.Groups = append(a.Groups[:idx], a.Groups[idx+1:]...)
-		}
-		if a.NextGroupIndex > 0 {
-			a.NextGroupIndex--
-		}
+		a.Groups = slices.Delete(a.Groups, idx, idx+1)
 	}
 
 	return nil
@@ -127,11 +129,10 @@ func (g *groupAlloc) addCluster(clusterName string, clustersPerGroup int) (*clus
 		}
 	}
 
-	if g.NextClusterIndex >= clustersPerGroup {
+	index := freeSlot(g.Clusters, func(c clusterRange) int { return c.Index })
+	if index >= clustersPerGroup {
 		return nil, fmt.Errorf("group %s has reached max clusters (%d)", g.Name, clustersPerGroup)
 	}
-	index := g.NextClusterIndex
-	g.NextClusterIndex++
 
 	clusterStart, clusterEnd, err := computeClusterSubrange(g.RangeStart, g.RangeEnd, index, clustersPerGroup)
 	if err != nil {
@@ -139,24 +140,18 @@ func (g *groupAlloc) addCluster(clusterName string, clustersPerGroup int) (*clus
 	}
 	cr := clusterRange{
 		Name:       clusterName,
+		Index:      index,
 		RangeStart: clusterStart,
 		RangeEnd:   clusterEnd,
 	}
-	g.Clusters = append(g.Clusters, cr)
+	g.Clusters = slices.Insert(g.Clusters, index, cr)
 	return &g.Clusters[index], nil
 }
 
 func (g *groupAlloc) removeCluster(clusterName string) error {
-	for i := len(g.Clusters) - 1; i >= 0; i-- {
+	for i := range g.Clusters {
 		if g.Clusters[i].Name == clusterName {
-			if len(g.Clusters) == 1 {
-				g.Clusters = nil
-			} else {
-				g.Clusters = append(g.Clusters[:i], g.Clusters[i+1:]...)
-			}
-			if g.NextClusterIndex > 0 {
-				g.NextClusterIndex--
-			}
+			g.Clusters = slices.Delete(g.Clusters, i, i+1)
 			return nil
 		}
 	}

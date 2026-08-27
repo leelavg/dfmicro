@@ -109,11 +109,11 @@ func attachCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		UsageText: `Attach one or more clusters to a bridge network.
 
 Example:
-  dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1,gp2 --to backbone`,
+  dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1/gp2 --to backbone`,
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
 				Name:     "cluster",
-				Usage:    "Cluster name with optional groups (name[:group1[,group2,...]]). Without group, cluster joins 'default'",
+				Usage:    "Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'",
 				Required: true,
 				Validator: func(clusterGroups []string) error {
 					seen := make(map[string]bool)
@@ -407,7 +407,7 @@ func parseClusterGroup(spec string) (string, []string, error) {
 	var groups []string
 	if len(parts) > 1 {
 		groupStr := parts[1]
-		for g := range strings.SplitSeq(groupStr, ",") {
+		for g := range strings.SplitSeq(groupStr, "/") {
 			g = strings.TrimSpace(g)
 			if g == "" {
 				return "", nil, fmt.Errorf("invalid cluster spec: empty group name in %s", spec)

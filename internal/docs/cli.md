@@ -229,9 +229,9 @@ Attach clusters to a network
     Attach one or more clusters to a bridge network.
     
     Example:
-      dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1,gp2 --to backbone
+      dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1/gp2 --to backbone
 
-**--cluster**="": Cluster name with optional groups (name[:group1[,group2,...]]). Without group, cluster joins 'default'
+**--cluster**="": Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'
 
 **--namespace**="": Namespace for NAD creation (default: "default")
 
