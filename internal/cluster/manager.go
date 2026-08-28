@@ -20,7 +20,7 @@ import (
 	"dfmicro/internal/support"
 )
 
-func checkMacOSRootful() error {
+func checkRootfulMacOS() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -185,45 +185,6 @@ func (m *manager) delete(ctx context.Context) error {
 	}
 
 	m.logger.Info("cluster removed", "name", m.cfg.Name)
-	return nil
-}
-
-func (m *manager) status(ctx context.Context) error {
-	createdContainers, err := support.AllClusterContainers(ctx, m.runner, m.cfg.Name)
-	if err != nil {
-		return err
-	}
-	if len(createdContainers) == 0 {
-		return nil
-	}
-
-	running, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
-	if err != nil {
-		return err
-	}
-	if len(running) == 0 {
-		m.logger.Info("cluster is down", "name", m.cfg.Name)
-		return nil
-	}
-
-	runningSet := make(map[string]struct{}, len(running))
-	for _, container := range running {
-		runningSet[container] = struct{}{}
-	}
-
-	for _, container := range createdContainers {
-		if _, ok := runningSet[container]; !ok {
-			m.logger.Info("node is not running", "name", m.cfg.Name, "container", container)
-		}
-	}
-
-	m.logger.Info("cluster is running", "name", m.cfg.Name, "container", running[0], "kubeconfig", m.cfg.DefaultKubeconfigPath)
-	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", running[0], "kubectl", "get", "nodes,pods", "-A", "-o", "wide")
-	if err != nil {
-		m.logger.Warn("unable to retrieve cluster status", "name", m.cfg.Name, "error", err)
-		return nil
-	}
-	fmt.Print(result.Stdout)
 	return nil
 }
 
