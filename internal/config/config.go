@@ -27,6 +27,7 @@ type Config struct {
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`
 	ShareHostContainers bool    `json:"shareHostContainers"`
 	EnableThinpool      bool    `json:"enableThinpool"`
+	UseEtcd             bool    `json:"useEtcd"`
 
 	BridgeName   string `json:"bridgeName"`
 	BridgeSubnet string `json:"bridgeSubnet"`

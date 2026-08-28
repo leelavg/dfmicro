@@ -101,6 +101,11 @@ func createFlags() []cli.Flag {
 			Usage:    "Do not apply MicroShift power tuning on create",
 			Category: "Mounts (immutable on creation):",
 		},
+		&cli.BoolFlag{
+			Name:     "etcd",
+			Usage:    "Use etcd storage backend (default: SQLite)",
+			Category: "Storage:",
+		},
 		&cli.StringFlag{
 			Name:     "pull-secret",
 			Usage:    "Path to a pull secret JSON file for accessing private image registries",

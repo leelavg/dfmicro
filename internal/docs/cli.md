@@ -132,6 +132,8 @@ Create a cluster, wait until ready, and print connection info
 
 **--cluster-cidr**="": Pod CIDR for the cluster (default: "10.42.0.0/16")
 
+**--etcd**: Use etcd storage backend (default: SQLite)
+
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
 **--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202608090303_gd026782c2_5.0.0_okd_scos.ec.6")

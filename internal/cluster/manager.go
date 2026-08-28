@@ -405,8 +405,16 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		if err := os.WriteFile(powerTuningPath, []byte(powerTuningConfig), 0o644); err != nil {
 			return err
 		}
+		args = append(args, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
+	}
+
+	if m.cfg.UseEtcd {
+		etcdFlagPath := filepath.Join(m.cfg.StateDir, ".use-etcd")
+		if err := os.WriteFile(etcdFlagPath, []byte(""), 0o644); err != nil {
+			return err
+		}
 		args = append(args,
-			"--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro",
+			"--volume", etcdFlagPath+":/var/lib/microshift/.use-etcd:ro",
 			"--tmpfs", "/var/lib/etcd:size=1G",
 		)
 	}
@@ -594,8 +602,12 @@ func (m *manager) PrintKubeconfig(ctx context.Context) error {
 }
 
 func (m *manager) copyKubeconfig(ctx context.Context, containerName string) error {
+	delay := 2 * time.Second
+	if m.cfg.UseEtcd {
+		delay = 5 * time.Second
+	}
 	m.logger.Info("delaying kubeconfig reads to prevent watchdog starvation on systems with hardware watchdog (see FAQ)")
-	time.Sleep(5 * time.Second)
+	time.Sleep(delay)
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
 	if err == nil {
@@ -607,7 +619,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 		if err == nil && len(clients) > 0 {
 			var kubeconfigs []string
 			for _, client := range clients {
-				time.Sleep(5 * time.Second)
+				time.Sleep(delay)
 				sourcePath = fmt.Sprintf("/var/lib/microshift/resources/kubeadmin/%s/kubeconfig", client)
 				result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
 				if err == nil {

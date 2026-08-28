@@ -65,6 +65,9 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	if cmd.IsSet("no-thinpool") {
 		cfg.EnableThinpool = !cmd.Bool("no-thinpool")
 	}
+	if cmd.IsSet("etcd") {
+		cfg.UseEtcd = cmd.Bool("etcd")
+	}
 
 	return cfg, nil
 }
