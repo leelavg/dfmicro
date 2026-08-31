@@ -152,6 +152,8 @@ Create a cluster, wait until ready, and print connection info
 
 **--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage
 
+**--no-topolvm**: Disable TopoLVM storage provisioner (all other topolvm flags are disregarded)
+
 **--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
 **--pull-secret**="": Path to a pull secret JSON file for accessing private image registries

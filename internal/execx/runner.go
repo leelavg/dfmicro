@@ -3,8 +3,12 @@ package execx
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -51,17 +55,17 @@ func (e *CommandError) Unwrap() error {
 
 type PanicRunner struct{}
 
-func (PanicRunner) Run(_ context.Context, name string, args ...string) (Result, error) {
+func (*PanicRunner) Run(_ context.Context, name string, args ...string) (Result, error) {
 	panic("PanicRunner: unexpected call to Run: " + name)
 }
 
-func (PanicRunner) RunInteractive(_ context.Context, name string, args ...string) error {
+func (*PanicRunner) RunInteractive(_ context.Context, name string, args ...string) error {
 	panic("PanicRunner: unexpected call to RunInteractive: " + name)
 }
 
 type OSRunner struct{}
 
-func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, error) {
+func (*OSRunner) Run(ctx context.Context, name string, args ...string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	var stdout bytes.Buffer
@@ -87,7 +91,7 @@ func (OSRunner) Run(ctx context.Context, name string, args ...string) (Result, e
 	return result, nil
 }
 
-func (OSRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
+func (*OSRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -107,4 +111,41 @@ func RunSudo(ctx context.Context, runner Runner, name string, args ...string) (R
 func RunSudoInteractive(ctx context.Context, runner Runner, name string, args ...string) error {
 	sudoArgs := append([]string{name}, args...)
 	return runner.RunInteractive(ctx, "sudo", sudoArgs...)
+}
+
+type LoggingRunner struct {
+	inner  Runner
+	logger *slog.Logger
+}
+
+func NewLoggingRunner(inner Runner, logger *slog.Logger) *LoggingRunner {
+	return &LoggingRunner{inner: inner, logger: logger}
+}
+
+// TODO: fragile but does the job during dev/testing or the alternate is to
+// have a trace func at every call.
+func findCaller() (string, int) {
+	for skip := 3; skip <= 5; skip++ {
+		_, file, line, ok := runtime.Caller(skip)
+		if !ok {
+			break
+		}
+		if !strings.Contains(file, "execx") && !strings.Contains(file, "support") {
+			return filepath.Base(file), line
+		}
+	}
+	_, file, line, _ := runtime.Caller(3)
+	return filepath.Base(file), line
+}
+
+func (l *LoggingRunner) Run(ctx context.Context, name string, args ...string) (Result, error) {
+	file, line := findCaller()
+	l.logger.Info("command", "caller", fmt.Sprintf("%s:%d", file, line), "name", name, "args", args)
+	return l.inner.Run(ctx, name, args...)
+}
+
+func (l *LoggingRunner) RunInteractive(ctx context.Context, name string, args ...string) error {
+	file, line := findCaller()
+	l.logger.Info("command", "caller", fmt.Sprintf("%s:%d", file, line), "name", name, "args", args)
+	return l.inner.RunInteractive(ctx, name, args...)
 }

@@ -2,8 +2,10 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
@@ -54,6 +56,11 @@ func createFlags() []cli.Flag {
 			Value:    defaultRootConfig.LVMVolSize,
 			Category: "Storage:",
 		},
+		&cli.BoolFlag{
+			Name:     "no-topolvm",
+			Usage:    "Disable TopoLVM storage provisioner (all other topolvm flags are disregarded)",
+			Category: "Storage:",
+		},
 		&cli.IntFlag{
 			Name:     "api-server-port",
 			Usage:    "Host port to expose the Kubernetes API server on (1024-65535)",
@@ -71,6 +78,7 @@ func createFlags() []cli.Flag {
 			Usage:     "Network subnet in CIDR notation",
 			Value:     rootconfig.Load().BridgeSubnet,
 			Validator: support.ValidateIPv4PrivateCIDR,
+			Category:  "Network:",
 		},
 		&cli.StringFlag{
 			Name:      "cluster-cidr",
@@ -198,10 +206,12 @@ Examples:
 				Flags:     clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := readClusterConfig(cmd.String("name"))
-					if err != nil {
+					if err != nil && !errors.Is(err, os.ErrNotExist) {
 						return err
 					}
-					return newManager(cfg, logger, runner).delete(ctx)
+					// TODO: ugly hack, revisit
+					cfg.Name = cmd.String("name")
+					return newManager(cfg, logger, runner).delete(ctx, errors.Is(err, os.ErrNotExist))
 				},
 			},
 			{

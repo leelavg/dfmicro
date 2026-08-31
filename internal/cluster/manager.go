@@ -72,8 +72,10 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	if err := m.createTopoLVMBackend(ctx); err != nil {
-		return err
+	if m.cfg.EnableTopoLVM {
+		if err := m.createTopoLVMBackend(ctx); err != nil {
+			return err
+		}
 	}
 
 	if err := m.ensurePodmanNetwork(ctx, m.cfg.BridgeName, m.cfg.BridgeSubnet); err != nil {
@@ -141,14 +143,14 @@ func (m *manager) stop(ctx context.Context) error {
 	m.logger.Info("stopping cluster", "name", m.cfg.Name, "containers", len(containers))
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "0", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "3", container); err != nil {
 			m.logger.Warn("failed to stop container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
 	return nil
 }
 
-func (m *manager) delete(ctx context.Context) error {
+func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 	containers, err := support.AllClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
@@ -156,7 +158,7 @@ func (m *manager) delete(ctx context.Context) error {
 
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "0", container); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "3", container); err != nil {
 			m.logger.Warn("failed to stop container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 
@@ -165,6 +167,12 @@ func (m *manager) delete(ctx context.Context) error {
 			m.logger.Warn("failed to remove container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
+
+	if onlyContainer {
+		m.logger.Info("deleted container(s) only")
+		return nil
+	}
+
 	remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
 	if err != nil {
 		m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
@@ -175,8 +183,10 @@ func (m *manager) delete(ctx context.Context) error {
 		}
 	}
 
-	if err := m.deleteTopoLVMBackend(ctx); err != nil {
-		return err
+	if m.cfg.EnableTopoLVM {
+		if err := m.deleteTopoLVMBackend(ctx); err != nil {
+			return err
+		}
 	}
 
 	if len(containers) == 0 {
@@ -354,7 +364,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	args = append(args, "--network", networkName, "--dns-search=.")
 
-	if m.cfg.EnableThinpool {
+	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
 		lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
 		var lvmdBuf bytes.Buffer
 		if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
@@ -365,6 +375,14 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		}
 		args = append(args,
 			"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
+		)
+	}
+
+	if !m.cfg.EnableTopoLVM {
+		args = append(args,
+			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/01-namespace.yaml:ro",
+			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/02-topolvm.yaml:ro",
+			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
 		)
 	}
 

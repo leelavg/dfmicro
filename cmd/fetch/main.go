@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	logger := support.NewLogger()
+	logger := support.NewLogger(os.Stdout)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

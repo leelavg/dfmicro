@@ -18,7 +18,7 @@ func main() {
 		out = os.Args[1]
 	}
 
-	cmd := app.Command(slog.Default(), execx.PanicRunner{})
+	cmd := app.Command(slog.Default(), &execx.PanicRunner{})
 	md, err := docs.ToMarkdown(cmd)
 	if err != nil {
 		slog.Error("failed to generate docs", "error", err)

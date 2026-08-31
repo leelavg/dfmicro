@@ -82,7 +82,10 @@ Quick start:
   kubectl get nodes
   dfmicro cluster delete                       # tear everything down`,
 		EnableShellCompletion: true,
-		Action:                support.UnknownSubcommand,
+		ConfigureShellCompletionCommand: func(cmd *cli.Command) {
+			cmd.Hidden = false
+		},
+		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			addon.Command(logger, runner),
 			cluster.Command(logger, runner),

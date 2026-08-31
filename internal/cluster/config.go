@@ -62,6 +62,9 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	if cmd.IsSet("no-power-tuning") {
 		cfg.PowerTuning = !cmd.Bool("no-power-tuning")
 	}
+	if cmd.IsSet("no-topolvm") {
+		cfg.EnableTopoLVM = !cmd.Bool("no-topolvm")
+	}
 	if cmd.IsSet("no-thinpool") {
 		cfg.EnableThinpool = !cmd.Bool("no-thinpool")
 	}
@@ -86,8 +89,8 @@ func deriveConfig(defaults rootconfig.Config, name string) config {
 	}
 }
 
-func clusterConfigPath(name string) (string, error) {
-	return filepath.Join(rootconfig.ConfigDir(), name, configFileName), nil
+func clusterConfigPath(name string) string {
+	return filepath.Join(rootconfig.ConfigDir(), name, configFileName)
 }
 
 func Kubeconfig(name string) (string, error) {
@@ -110,10 +113,7 @@ func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
 }
 
 func readClusterConfig(name string) (config, error) {
-	path, err := clusterConfigPath(name)
-	if err != nil {
-		return config{}, err
-	}
+	path := clusterConfigPath(name)
 
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -128,10 +128,7 @@ func readClusterConfig(name string) (config, error) {
 }
 
 func writeClusterConfig(cfg config) error {
-	path, err := clusterConfigPath(cfg.Name)
-	if err != nil {
-		return err
-	}
+	path := clusterConfigPath(cfg.Name)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

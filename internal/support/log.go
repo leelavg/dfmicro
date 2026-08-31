@@ -1,13 +1,13 @@
 package support
 
 import (
+	"io"
 	"log/slog"
-	"os"
 	"time"
 )
 
-func NewLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+func NewLogger(w io.Writer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(w, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 		ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
 			if attr.Key == slog.TimeKey {

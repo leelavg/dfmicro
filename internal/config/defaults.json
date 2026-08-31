@@ -12,6 +12,7 @@
   "overprovisionRatio": 20.0,
   "shareHostContainers": true,
   "enableThinpool": true,
+  "enableTopoLVM": true,
   "useEtcd": false,
 
   "bridgeName": "micro",
