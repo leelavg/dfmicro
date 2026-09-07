@@ -16,6 +16,7 @@ import (
 	"text/template"
 	"time"
 
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
 )
@@ -75,6 +76,11 @@ func (m *manager) create(ctx context.Context) error {
 	if m.cfg.EnableTopoLVM {
 		if err := m.createTopoLVMBackend(ctx); err != nil {
 			return err
+		}
+		if m.cfg.EnableThinpool {
+			if err := WriteTopoLVMManifest(m.cfg, []string{containerName}); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -173,6 +179,20 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		return nil
 	}
 
+	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
+		if err := m.deleteTopoLVMNodeBackends(ctx); err != nil {
+			return err
+		}
+	}
+	if m.cfg.EnableTopoLVM {
+		if err := m.deleteTopoLVMBackend(ctx); err != nil {
+			return err
+		}
+	}
+	if err := m.removeStateDirs(); err != nil {
+		m.logger.Warn("failed to remove cluster state directories", "cluster", m.cfg.Name, "error", err)
+	}
+
 	remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
 	if err != nil {
 		m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
@@ -183,113 +203,43 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		}
 	}
 
-	if m.cfg.EnableTopoLVM {
-		if err := m.deleteTopoLVMBackend(ctx); err != nil {
-			return err
-		}
-	}
-
 	if len(containers) == 0 {
-		m.logger.Info("cluster not found", "name", m.cfg.Name)
-		return nil
+		m.logger.Info("cluster state removed", "name", m.cfg.Name)
+	} else {
+		m.logger.Info("cluster removed", "name", m.cfg.Name)
 	}
-
-	m.logger.Info("cluster removed", "name", m.cfg.Name)
 	return nil
 }
 
-func (m *manager) createTopoLVMBackend(ctx context.Context) error {
-	imageExists := false
-	if _, err := os.Stat(m.cfg.LVMDisk); err == nil {
-		imageExists = true
-		result, err := support.RunPrivileged(ctx, m.runner, "vgs", "--noheadings", "-o", "vg_name", m.cfg.VGName)
-		if err == nil && strings.TrimSpace(result.Stdout) == m.cfg.VGName {
-			m.logger.Info("reusing existing topolvm backend", "path", m.cfg.LVMDisk, "vg", m.cfg.VGName)
+func (m *manager) removeStateDirs() error {
+	configDir := rootconfig.ConfigDir()
+	entries, err := os.ReadDir(configDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		m.logger.Info("image exists but volume group missing, recreating LVM stack", "path", m.cfg.LVMDisk, "vg", m.cfg.VGName)
-	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(m.cfg.LVMDisk), 0o755); err != nil {
-		return err
-	}
-
-	if !imageExists {
-		if _, err := support.RunPrivileged(ctx, m.runner, "truncate", "--size="+m.cfg.LVMVolSize, m.cfg.LVMDisk); err != nil {
-			return err
+	prefix := m.cfg.Name + "-"
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if name != m.cfg.Name {
+			if !strings.HasPrefix(name, prefix) {
+				continue
+			}
+			if _, err := strconv.Atoi(strings.TrimPrefix(name, prefix)); err != nil {
+				continue
+			}
+		}
+		if err := os.RemoveAll(filepath.Join(configDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", name, err)
 		}
 	}
-
-	result, err := support.RunPrivileged(ctx, m.runner, "losetup", "--find", "--show", "--nooverlap", m.cfg.LVMDisk)
-	if err != nil {
-		return err
-	}
-	deviceName := strings.TrimSpace(result.Stdout)
-	if deviceName == "" {
-		return errors.New("losetup did not return a device name")
-	}
-
-	if _, err := support.RunPrivileged(ctx, m.runner, "vgcreate", "-f", "-y", m.cfg.VGName, deviceName); err != nil {
-		return err
-	}
-	if _, err := support.RunPrivileged(ctx, m.runner, "lvcreate", "-l", "99%FREE", "--thinpool", "thin", m.cfg.VGName); err != nil {
-		return err
-	}
-
 	return nil
-}
-
-func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
-	if _, err := os.Stat(m.cfg.LVMDisk); errors.Is(err, os.ErrNotExist) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	m.logger.Info("deleting topolvm backend", "path", m.cfg.LVMDisk)
-
-	// force-remove dm entries for LVs that belong to our VG and are still held by topolvm PVCs;
-	// cross-check against lvs output to avoid accidentally touching unrelated dm devices
-	if lvResult, err := support.RunPrivileged(ctx, m.runner, "lvs", "--noheadings", "-o", "lv_name", m.cfg.VGName); err == nil {
-		knownLVs := map[string]bool{}
-		for lv := range strings.SplitSeq(strings.TrimSpace(lvResult.Stdout), "\n") {
-			lv = strings.TrimSpace(lv)
-			if lv != "" {
-				knownLVs[m.cfg.VGName+"-"+lv] = true
-			}
-		}
-		if dmResult, err := support.RunPrivileged(ctx, m.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name"); err == nil {
-			for name := range strings.SplitSeq(strings.TrimSpace(dmResult.Stdout), "\n") {
-				name = strings.TrimSpace(name)
-				if knownLVs[name] {
-					if _, err := support.RunPrivileged(ctx, m.runner, "dmsetup", "remove", "--force", name); err != nil {
-						m.logger.Warn("failed to remove dm device", "device", name, "error", err)
-					}
-				}
-			}
-		}
-
-		if _, err := support.RunPrivileged(ctx, m.runner, "lvremove", "--force", "-y", m.cfg.VGName); err != nil {
-			m.logger.Warn("failed to remove logical volume", "vg", m.cfg.VGName, "error", err)
-		}
-		if _, err := support.RunPrivileged(ctx, m.runner, "vgremove", "--force", "-y", m.cfg.VGName); err != nil {
-			m.logger.Warn("failed to remove volume group", "vg", m.cfg.VGName, "error", err)
-		}
-	}
-
-	result, err := support.RunPrivileged(ctx, m.runner, "losetup", "--associated", m.cfg.LVMDisk, "--output", "NAME", "--noheadings")
-	if err == nil {
-		deviceName := strings.TrimSpace(result.Stdout)
-		if deviceName != "" {
-			if _, err := support.RunPrivileged(ctx, m.runner, "losetup", "--detach", deviceName); err != nil {
-				m.logger.Warn("failed to detach loop device", "device", deviceName, "error", err)
-			}
-		}
-	}
-
-	return os.RemoveAll(filepath.Dir(m.cfg.LVMDisk))
 }
 
 func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
@@ -309,6 +259,13 @@ func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) e
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
 			return fmt.Errorf("trust CIDR %s: %w", cidr, err)
 		}
+	}
+	return nil
+}
+
+func (m *manager) openKubeletPort(ctx context.Context, containerName string) error {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=public", "--add-port=10250/tcp"); err != nil {
+		return fmt.Errorf("open kubelet port: %w", err)
 	}
 	return nil
 }
@@ -365,6 +322,14 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	args = append(args, "--network", networkName, "--dns-search=.")
 
 	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
+		args = append(args,
+			"--volume", topoLVMKustomizationPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/kustomization.yaml:ro",
+			"--volume", TopoLVMManifestPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/04-dfmicro-topolvm.yaml:ro",
+			"--volume", topoLVMKustomizationPatchPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/dfmicro-topolvm-patch.yaml:ro",
+		)
+	}
+
+	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
 		lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
 		var lvmdBuf bytes.Buffer
 		if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
@@ -379,10 +344,12 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	}
 
 	if !m.cfg.EnableTopoLVM {
+		emptyTopoLVMDir := filepath.Join(m.cfg.StateDir, "empty-topolvm")
+		if err := os.MkdirAll(emptyTopoLVMDir, 0o755); err != nil {
+			return err
+		}
 		args = append(args,
-			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/01-namespace.yaml:ro",
-			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/02-topolvm.yaml:ro",
-			"--volume", "/dev/null:/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
+			"--volume", emptyTopoLVMDir+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
 		)
 	}
 
@@ -448,16 +415,16 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	args = append(args, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
 
 	if len(m.cfg.IDMSFiles) > 0 {
-		result, err := convertIDMSFiles(m.cfg.IDMSFiles)
+		result, err := support.ConvertIDMSFiles(m.cfg.IDMSFiles)
 		if err != nil {
 			return err
 		}
 		mirrorsPath := filepath.Join(m.cfg.StateDir, "99-mirrors.conf")
-		if err := os.WriteFile(mirrorsPath, []byte(result.registriesConf), 0o644); err != nil {
+		if err := os.WriteFile(mirrorsPath, []byte(result.RegistriesConf), 0o644); err != nil {
 			return err
 		}
 		policyPath := filepath.Join(m.cfg.StateDir, "policy.json")
-		if err := os.WriteFile(policyPath, []byte(result.policyJSON), 0o644); err != nil {
+		if err := os.WriteFile(policyPath, []byte(result.PolicyJSON), 0o644); err != nil {
 			return err
 		}
 		args = append(args,

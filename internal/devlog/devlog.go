@@ -2,5 +2,5 @@ package devlog
 
 import _ "embed"
 
-//go:embed DEVLOG.txt
+//go:embed devlog.txt
 var Content string

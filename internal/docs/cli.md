@@ -319,6 +319,28 @@ Remove direct peering between clusters
 
 **--cluster**="": Cluster name (repeatable, at least 2 required)
 
+## node
+
+Manage cluster nodes
+
+>Add worker nodes to existing cluster.
+
+### add
+
+add worker node to existing cluster
+
+**--cluster**="": cluster name
+
+**--force**: skip control plane readiness checks
+
+### remove, rm, delete
+
+remove worker node from cluster
+
+**--cluster**="": cluster name
+
+**--name**="": worker node name
+
 ## ops
 
 Operational utilities for running clusters

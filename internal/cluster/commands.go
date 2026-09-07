@@ -205,7 +205,7 @@ Examples:
 				UsageText: "Stops and removes all cluster containers, networking, and storage stack.",
 				Flags:     clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil && !errors.Is(err, os.ErrNotExist) {
 						return err
 					}
@@ -220,7 +220,7 @@ Examples:
 				UsageText: "Use after 'cluster stop' or after a host reboot.",
 				Flags:     clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
@@ -233,7 +233,7 @@ Examples:
 				UsageText: "Preserves all state. Resume with 'cluster start'.",
 				Flags:     clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
@@ -258,7 +258,7 @@ Examples:
   dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml`,
 				Flags: []cli.Flag{nameFlag()},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
@@ -277,7 +277,7 @@ Examples:
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := readClusterConfig(cmd.String("name"))
+					cfg, err := ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}

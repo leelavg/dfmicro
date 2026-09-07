@@ -13,6 +13,8 @@ import (
 
 const configFileName = "config.json"
 
+type Config = config
+
 type config struct {
 	rootconfig.Config
 	Name                  string   `json:"name,omitempty"`
@@ -94,7 +96,7 @@ func clusterConfigPath(name string) string {
 }
 
 func Kubeconfig(name string) (string, error) {
-	cfg, err := readClusterConfig(name)
+	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +104,7 @@ func Kubeconfig(name string) (string, error) {
 }
 
 func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
-	cfg, err := readClusterConfig(name)
+	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return rootconfig.NetworkCIDRs{}, err
 	}
@@ -112,7 +114,7 @@ func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
 	}, nil
 }
 
-func readClusterConfig(name string) (config, error) {
+func ReadClusterConfig(name string) (Config, error) {
 	path := clusterConfigPath(name)
 
 	data, err := os.ReadFile(path)
@@ -144,7 +146,7 @@ func writeClusterConfig(cfg config) error {
 }
 
 func printClusterConfig(name string) error {
-	cfg, err := readClusterConfig(name)
+	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return err
 	}

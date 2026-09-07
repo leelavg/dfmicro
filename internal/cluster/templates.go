@@ -20,6 +20,7 @@ data:
         device-classes:
           - name: ssd
             volume-group: {{.Name}}
+            default: true
             type: thin
             spare-gb: 0
             thin-pool:

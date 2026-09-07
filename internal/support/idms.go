@@ -1,4 +1,4 @@
-package cluster
+package support
 
 import (
 	"encoding/json"
@@ -18,9 +18,9 @@ type idms struct {
 	} `yaml:"spec"`
 }
 
-type idmsResult struct {
-	registriesConf string
-	policyJSON     string
+type IDMSResult struct {
+	RegistriesConf string
+	PolicyJSON     string
 }
 
 type policyRule struct {
@@ -34,19 +34,19 @@ type policy struct {
 	Transports map[string]policyScopes `json:"transports"`
 }
 
-func convertIDMSFiles(paths []string) (idmsResult, error) {
+func ConvertIDMSFiles(paths []string) (IDMSResult, error) {
 	var mirrors strings.Builder
 	sources := map[string]struct{}{}
 
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return idmsResult{}, fmt.Errorf("read idms %s: %w", path, err)
+			return IDMSResult{}, fmt.Errorf("read idms %s: %w", path, err)
 		}
 
 		var doc idms
 		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return idmsResult{}, fmt.Errorf("parse idms %s: %w", path, err)
+			return IDMSResult{}, fmt.Errorf("parse idms %s: %w", path, err)
 		}
 
 		for _, entry := range doc.Spec.ImageDigestMirrors {
@@ -60,8 +60,6 @@ func convertIDMSFiles(paths []string) (idmsResult, error) {
 		}
 	}
 
-	// IDMS mirrors point to unsigned dev images, so the sigstore policy for
-	// source registries must be relaxed to allow CRI-O to use the mirrors.
 	accept := []policyRule{{Type: "insecureAcceptAnything"}}
 	scopes := policyScopes{}
 	for src := range sources {
@@ -73,8 +71,8 @@ func convertIDMSFiles(paths []string) (idmsResult, error) {
 	}
 	policyData, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
-		return idmsResult{}, err
+		return IDMSResult{}, err
 	}
 
-	return idmsResult{registriesConf: mirrors.String(), policyJSON: string(policyData) + "\n"}, nil
+	return IDMSResult{RegistriesConf: mirrors.String(), PolicyJSON: string(policyData) + "\n"}, nil
 }

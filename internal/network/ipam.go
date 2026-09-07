@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"dfmicro/internal/support"
 )
 
 type clusterRange struct {
@@ -31,15 +33,6 @@ type ipamManager struct {
 	NetworkName string       `json:"networkName"`
 	Subnet      string       `json:"subnet"`
 	Groups      []groupAlloc `json:"groups"`
-}
-
-func freeSlot[T any](items []T, index func(T) int) int {
-	for i, it := range items {
-		if index(it) != i {
-			return i
-		}
-	}
-	return len(items)
 }
 
 func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
@@ -89,7 +82,7 @@ func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePe
 		}
 	}
 
-	index := freeSlot(a.Groups, func(g groupAlloc) int { return g.Index })
+	index := support.FirstAvailableIndex(a.Groups, func(g groupAlloc) int { return g.Index })
 	if index >= groupCount {
 		return nil, fmt.Errorf("no more available groups (max %d)", groupCount)
 	}
@@ -132,7 +125,7 @@ func (g *groupAlloc) addCluster(clusterName string, clustersPerGroup int) (*clus
 		}
 	}
 
-	index := freeSlot(g.Clusters, func(c clusterRange) int { return c.Index })
+	index := support.FirstAvailableIndex(g.Clusters, func(c clusterRange) int { return c.Index })
 	if index >= clustersPerGroup {
 		return nil, fmt.Errorf("group %s has reached max clusters (%d)", g.Name, clustersPerGroup)
 	}

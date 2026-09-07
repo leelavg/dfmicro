@@ -14,6 +14,7 @@ import (
 	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/network"
+	"dfmicro/internal/node"
 	"dfmicro/internal/ops"
 	"dfmicro/internal/support"
 
@@ -89,6 +90,7 @@ Quick start:
 		Commands: []*cli.Command{
 			addon.Command(logger, runner),
 			cluster.Command(logger, runner),
+			node.Command(logger, runner),
 			configCommand(),
 			docsCommand(),
 			devlogCommand(),

@@ -31,4 +31,5 @@
 - cluster: test running multiple named clusters simultaneously to verify config dirs, networks, and loop devices don't collide
 - VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
 - Overlayfs deadlock: fix kubeconfig copy race condition that triggers machine restart on rapid file access (antivirus was the issue)
-- Multus configuration: secondary network attachment for storage traffic isolation
+- Multus configuration: secondary network attachment for storage traffic isolation in various groups via VLANs
+- cluster peering for non-overlapping service and cluster ip ranges
