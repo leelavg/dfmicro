@@ -222,6 +222,8 @@ Print full command reference as markdown
 
 >dfmicro docs > cli.md
 
+**--examples**: Print command examples
+
 ## network
 
 Manage multi-cluster networks

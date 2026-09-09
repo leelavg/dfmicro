@@ -6,3 +6,6 @@ import _ "embed"
 
 //go:embed cli.md
 var CLI string
+
+//go:embed examples.md
+var Examples string

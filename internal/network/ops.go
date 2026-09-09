@@ -190,8 +190,12 @@ func (o *peerOps) run(
 		}
 		clusterContainers[name] = containers
 
-		gatewayNode := containers[0]
-		nodeIP, err := o.getNodeIP(ctx, gatewayNode)
+		gatewayNode := name + "-1"
+		cfg, err := cluster.ReadClusterConfig(name)
+		if err != nil {
+			return fmt.Errorf("failed to read config for cluster %s: %w", name, err)
+		}
+		nodeIP, err := support.GetContainerIP(ctx, o.runner, cfg.BridgeName, gatewayNode)
 		if err != nil {
 			return fmt.Errorf("failed to get node IP for cluster %s: %w", name, err)
 		}
@@ -284,18 +288,4 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 	}
 	o.logger.Info("clusters unpeered successfully", "clusters", clusterNames)
 	return nil
-}
-
-func (o *peerOps) getNodeIP(ctx context.Context, container string) (string, error) {
-	result, err := support.RunPodmanPrivileged(ctx, o.runner, "inspect", container, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
-	if err != nil {
-		return "", fmt.Errorf("failed to get node IP: %w", err)
-	}
-
-	nodeIP := strings.TrimSpace(result.Stdout)
-	if nodeIP == "" {
-		return "", fmt.Errorf("could not determine node IP for container %s", container)
-	}
-
-	return nodeIP, nil
 }

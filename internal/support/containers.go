@@ -78,3 +78,17 @@ func GetContainerEth(ctx context.Context, runner execx.Runner, networkName, cont
 	}
 	return eth, nil
 }
+
+func GetContainerIP(ctx context.Context, runner execx.Runner, networkName, containerName string) (string, error) {
+	format := fmt.Sprintf("{{with index .NetworkSettings.Networks %q}}{{.IPAddress}}{{end}}", networkName)
+	result, err := RunPodmanPrivileged(ctx, runner, "inspect", containerName, "--format", format)
+	if err != nil {
+		return "", fmt.Errorf("failed to inspect container %s: %w", containerName, err)
+	}
+
+	address := strings.TrimSpace(result.Stdout)
+	if address == "" {
+		return "", fmt.Errorf("container %s has no IP on network %s", containerName, networkName)
+	}
+	return address, nil
+}

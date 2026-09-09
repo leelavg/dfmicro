@@ -118,7 +118,7 @@ func (m *manager) add(ctx context.Context, force bool) error {
 		return fmt.Errorf("extract CNI config: %w", err)
 	}
 
-	controlNodeIP, err := m.getNodeIP(ctx, controlNodeName)
+	controlNodeIP, err := support.GetContainerIP(ctx, m.runner, cfg.BridgeName, controlNodeName)
 	if err != nil {
 		return fmt.Errorf("get control node IP: %w", err)
 	}
@@ -190,20 +190,6 @@ func (m *manager) waitForControlPlane(ctx context.Context, cfg cluster.Config, c
 	}
 	m.logger.Info("control plane is ready", "node", controlNodeName)
 	return nil
-}
-
-func (m *manager) getNodeIP(ctx context.Context, nodeName string) (string, error) {
-	result, err := support.RunPodmanPrivileged(ctx, m.runner, "inspect", nodeName, "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
-	if err != nil {
-		return "", err
-	}
-
-	nodeIP := strings.TrimSpace(result.Stdout)
-	if nodeIP == "" {
-		return "", fmt.Errorf("could not determine IP for node %s", nodeName)
-	}
-
-	return nodeIP, nil
 }
 
 func (m *manager) extractBootstrapKubeconfig(ctx context.Context, cfg cluster.Config, controlNodeName string) error {

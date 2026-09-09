@@ -38,7 +38,17 @@ func docsCommand() *cli.Command {
 		Name:      "docs",
 		Usage:     "Print full command reference as markdown",
 		UsageText: "dfmicro docs > cli.md",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "examples",
+				Usage: "Print command examples",
+			},
+		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.Bool("examples") {
+				_, err := os.Stdout.WriteString(docs.Examples)
+				return err
+			}
 			_, err := os.Stdout.WriteString(docs.CLI)
 			return err
 		},

@@ -540,8 +540,13 @@ func (m *manager) waitReady(ctx context.Context) error {
 		}
 		if ready {
 			if err := m.checkNodesReady(ctx, containers[0]); err == nil {
-				m.logger.Info("all nodes ready")
-				return nil
+				if err := m.checkPrimaryCNI(ctx, containers[0]); err != nil {
+					m.logger.Info("waiting for primary CNI", "container", containers[0], "error", err)
+				} else {
+					m.logger.Info("primary CNI is ready", "container", containers[0])
+					m.logger.Info("all nodes ready")
+					return nil
+				}
 			}
 		}
 
@@ -566,6 +571,18 @@ func (m *manager) checkNodesReady(ctx context.Context, containerName string) err
 		}
 	}
 	return errors.New("nodes not ready yet")
+}
+
+func (m *manager) checkPrimaryCNI(ctx context.Context, containerName string) error {
+	const configPath = "/etc/cni/net.d/10-kindnet.conflist"
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "cat", configPath)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(result.Stdout) == "" {
+		return errors.New("primary CNI configuration is empty")
+	}
+	return nil
 }
 
 func (m *manager) PrintKubeconfig(ctx context.Context) error {

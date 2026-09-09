@@ -24,6 +24,7 @@
 - Custom network subnet via --network-subnet (default 172.20.0.0/24, avoids common VPN ranges)
 - Kubeconfig port rewrite: server URL updated to match --api-server-port after copy from container
 - devlog command (hidden) for this log, config, docs commands
+- embedded examples document via --examples
 - ops resources (experimental): CPU/mem requests limits and live usage per container, per-ns totals, node summary, filterable by ns and node
 - MicroShift power tuning on create, opt-out via --no-power-tuning
 - ExposeKubeAPI: generate cert with all host IPs and hostname as SANs, merge all kubeconfigs into single file with multiple contexts per client
