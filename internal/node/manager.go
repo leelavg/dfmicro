@@ -38,7 +38,14 @@ const (
 	powerTuningConfig = `node:
   powerTuning: true
 `
-	multusDropinConfig = `[crio.runtime]
+	multusDropinConfig = `[crio.network]
+cni_default_network = "multus-cni-network"
+plugin_dirs = [
+	"/run/cni/bin",
+	"/usr/libexec/cni",
+]
+
+[crio.runtime]
 cni_plugin_dir = [
 	"/usr/libexec/cni",
 	"/var/lib/microshift/cni",

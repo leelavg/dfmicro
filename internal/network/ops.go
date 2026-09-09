@@ -12,10 +12,17 @@ import (
 )
 
 type multusOps struct {
+	*networkOps
+
 	logger *slog.Logger
 	runner execx.Runner
 	nad    *nadManager
 	ipam   *ipamManager
+}
+
+type networkOps struct {
+	logger *slog.Logger
+	runner execx.Runner
 }
 
 type peerOps struct {
@@ -27,6 +34,62 @@ type networkInfo struct {
 	nodeIP      string
 	clusterCIDR string
 	serviceCIDR string
+}
+
+func (o *networkOps) connect(ctx context.Context, networkName, containerName string) error {
+	if support.ContainerConnectedToNetwork(ctx, o.runner, networkName, containerName) {
+		o.logger.Info("container already connected to network", "container", containerName, "network", networkName)
+		return nil
+	}
+
+	o.logger.Info("connecting container to network", "container", containerName, "network", networkName)
+	if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, containerName); err != nil {
+		return fmt.Errorf("connect container %s to network %s: %w", containerName, networkName, err)
+	}
+	return nil
+}
+
+func (o *networkOps) disconnect(ctx context.Context, networkName, containerName string) error {
+	if !support.ContainerConnectedToNetwork(ctx, o.runner, networkName, containerName) {
+		o.logger.Info("container not connected to network", "container", containerName, "network", networkName)
+		return nil
+	}
+
+	o.logger.Info("disconnecting container from network", "container", containerName, "network", networkName)
+	if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "disconnect", networkName, containerName); err != nil {
+		return fmt.Errorf("disconnect container %s from network %s: %w", containerName, networkName, err)
+	}
+	return nil
+}
+
+func (o *networkOps) connectClusters(ctx context.Context, clusterNames []string, networkName string) error {
+	for _, clusterName := range clusterNames {
+		containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
+		if err != nil {
+			return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
+		}
+		for _, containerName := range containers {
+			if err := o.connect(ctx, networkName, containerName); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (o *networkOps) disconnectClusters(ctx context.Context, clusterNames []string, networkName string) error {
+	for _, clusterName := range clusterNames {
+		containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
+		if err != nil {
+			return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
+		}
+		for _, containerName := range containers {
+			if err := o.disconnect(ctx, networkName, containerName); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clusterToGroups map[string][]string, networkName, namespace string) error {
@@ -58,13 +121,8 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				if !support.ContainerConnectedToNetwork(ctx, o.runner, networkName, c) {
-					o.logger.Info("connecting container to network", "container", c, "network", networkName)
-					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "connect", networkName, c); err != nil {
-						return fmt.Errorf("connect container %s to network %s: %w", c, networkName, err)
-					}
-				} else {
-					o.logger.Info("container already connected to network", "container", c, "network", networkName)
+				if err := o.networkOps.connect(ctx, networkName, c); err != nil {
+					return err
 				}
 
 				containerEth, err := support.GetContainerEth(ctx, o.runner, networkName, c)
@@ -147,13 +205,8 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				if support.ContainerConnectedToNetwork(ctx, o.runner, networkName, c) {
-					o.logger.Info("disconnecting container from network", "container", c, "network", networkName)
-					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "network", "disconnect", networkName, c); err != nil {
-						return fmt.Errorf("disconnect container %s from network %s: %w", c, networkName, err)
-					}
-				} else {
-					o.logger.Info("container not connected to network", "container", c, "network", networkName)
+				if err := o.networkOps.disconnect(ctx, networkName, c); err != nil {
+					return err
 				}
 			}
 			kcPath, err := cluster.Kubeconfig(clusterName)

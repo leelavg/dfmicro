@@ -186,7 +186,7 @@ Examples:
 				},
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					if support.IsMacOS {
-						return ctx, checkRootfulMacOS()
+						return ctx, checkRootfulMacOS(ctx, runner)
 					}
 					return ctx, nil
 				},

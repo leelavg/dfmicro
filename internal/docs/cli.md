@@ -254,6 +254,19 @@ Show bridge and IPAM configuration
 
 **--name**="": Network name
 
+### connect
+
+Connect clusters to a bridge network
+
+    Connect one or more clusters to a bridge network.
+
+    Example:
+      dfmicro network connect --cluster first --cluster second --to backbone
+
+**--cluster**="": Cluster name (repeatable)
+
+**--to**="": Network name to connect to
+
 ### create
 
 Create a bridge network for multi-cluster interconnect
@@ -298,6 +311,19 @@ Detach clusters from a network
 **--from**="": Network name to detach from
 
 **--namespace**="": Namespace of the NAD to delete (default: "default")
+
+### disconnect
+
+Disconnect clusters from a bridge network
+
+    Disconnect one or more clusters from a bridge network.
+
+    Example:
+      dfmicro network disconnect --cluster first --cluster second --from backbone
+
+**--cluster**="": Cluster name (repeatable)
+
+**--from**="": Network name to disconnect from
 
 ### peer
 

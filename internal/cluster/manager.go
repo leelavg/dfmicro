@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,17 +20,16 @@ import (
 	"dfmicro/internal/support"
 )
 
-func checkRootfulMacOS() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func checkRootfulMacOS(ctx context.Context, runner execx.Runner) error {
+	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
-	result, err := cmd.Output()
+	result, err := runner.Run(timeoutCtx, "podman", "machine", "inspect", "--format", "{{.Rootful}}")
 	if err != nil {
 		return fmt.Errorf("failed to inspect podman machine (is podman machine running?): %w", err)
 	}
 
-	if strings.TrimSpace(string(result)) != "true" {
+	if strings.TrimSpace(result.Stdout) != "true" {
 		return fmt.Errorf("podman machine must be running in rootful mode\nPlease recreate with: podman machine init --rootful")
 	}
 	return nil
@@ -541,7 +539,7 @@ func (m *manager) waitReady(ctx context.Context) error {
 		if ready {
 			if err := m.checkNodesReady(ctx, containers[0]); err == nil {
 				if err := m.checkPrimaryCNI(ctx, containers[0]); err != nil {
-					m.logger.Info("waiting for primary CNI", "container", containers[0], "error", err)
+					m.logger.Info("waiting for kindnet", "container", containers[0])
 				} else {
 					m.logger.Info("primary CNI is ready", "container", containers[0])
 					m.logger.Info("all nodes ready")
@@ -575,12 +573,9 @@ func (m *manager) checkNodesReady(ctx context.Context, containerName string) err
 
 func (m *manager) checkPrimaryCNI(ctx context.Context, containerName string) error {
 	const configPath = "/etc/cni/net.d/10-kindnet.conflist"
-	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "cat", configPath)
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath)
 	if err != nil {
 		return err
-	}
-	if strings.TrimSpace(result.Stdout) == "" {
-		return errors.New("primary CNI configuration is empty")
 	}
 	return nil
 }

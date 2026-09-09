@@ -23,12 +23,72 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			createCommand(logger, runner),
+			connectCommand(logger, runner),
+			disconnectCommand(logger, runner),
 			attachCommand(logger, runner),
 			detachCommand(logger, runner),
 			deleteCommand(logger, runner),
 			configCommand(logger, runner),
 			peerCommand(logger, runner),
 			unpeerCommand(logger, runner),
+		},
+	}
+}
+
+func connectCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+	return &cli.Command{
+		Name:  "connect",
+		Usage: "Connect clusters to a bridge network",
+		UsageText: `Connect one or more clusters to a bridge network.
+
+Example:
+  dfmicro network connect --cluster first --cluster second --to backbone`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:      "cluster",
+				Usage:     "Cluster name (repeatable)",
+				Required:  true,
+				Validator: validateClusterNames,
+			},
+			&cli.StringFlag{
+				Name:     "to",
+				Usage:    "Network name to connect to",
+				Required: true,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			networkName := cmd.String("to")
+			ops := &networkOps{logger: logger, runner: runner}
+			return ops.connectClusters(ctx, cmd.StringSlice("cluster"), networkName)
+		},
+	}
+}
+
+func disconnectCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+	return &cli.Command{
+		Name:  "disconnect",
+		Usage: "Disconnect clusters from a bridge network",
+		UsageText: `Disconnect one or more clusters from a bridge network.
+
+Example:
+  dfmicro network disconnect --cluster first --cluster second --from backbone`,
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:      "cluster",
+				Usage:     "Cluster name (repeatable)",
+				Required:  true,
+				Validator: validateClusterNames,
+			},
+			&cli.StringFlag{
+				Name:     "from",
+				Usage:    "Network name to disconnect from",
+				Required: true,
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			networkName := cmd.String("from")
+			ops := &networkOps{logger: logger, runner: runner}
+			return ops.disconnectClusters(ctx, cmd.StringSlice("cluster"), networkName)
 		},
 	}
 }
@@ -185,10 +245,11 @@ Example:
 			}
 
 			ops := &multusOps{
-				logger: logger,
-				runner: runner,
-				nad:    newNADManager(logger, runner, "kubectl"),
-				ipam:   ipam,
+				networkOps: &networkOps{logger: logger, runner: runner},
+				logger:     logger,
+				runner:     runner,
+				nad:        newNADManager(logger, runner, "kubectl"),
+				ipam:       ipam,
 			}
 
 			if err := ops.attachClusters(ctx, bridgeState, clusterToGroups, networkName, namespace); err != nil {
@@ -258,10 +319,11 @@ Example:
 			}
 
 			ops := &multusOps{
-				logger: logger,
-				runner: runner,
-				nad:    newNADManager(logger, runner, "kubectl"),
-				ipam:   ipam,
+				networkOps: &networkOps{logger: logger, runner: runner},
+				logger:     logger,
+				runner:     runner,
+				nad:        newNADManager(logger, runner, "kubectl"),
+				ipam:       ipam,
 			}
 
 			if err := ops.detachClusters(ctx, clusterToGroups, networkName, namespace); err != nil {
@@ -414,6 +476,21 @@ Example:
 
 func networkStateDir(baseDir string) string {
 	return filepath.Join(baseDir, ",networks")
+}
+
+func validateClusterNames(clusterNames []string) error {
+	seen := make(map[string]bool)
+	for _, name := range clusterNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return fmt.Errorf("invalid cluster name: empty name")
+		}
+		if seen[name] {
+			return fmt.Errorf("duplicate cluster name: %s", name)
+		}
+		seen[name] = true
+	}
+	return nil
 }
 
 func parseClusterGroup(spec string) (string, []string, error) {
