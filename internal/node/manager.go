@@ -133,6 +133,16 @@ func (m *manager) add(ctx context.Context, force bool) error {
 	if err := m.addWorkerNode(ctx, cfg, nodeName, controlNodeName, controlNodeIP); err != nil {
 		return fmt.Errorf("add worker node: %w", err)
 	}
+	if multiNode, err := cluster.MultiNodeEnabled(m.clusterName); err != nil {
+		return fmt.Errorf("read multi-node state: %w", err)
+	} else if multiNode {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
+			return fmt.Errorf("wait for worker node before labeling: %w", err)
+		}
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "label", "node", nodeName, "dfmicro.io/whereabouts=enabled", "--overwrite"); err != nil {
+			return fmt.Errorf("label worker node for whereabouts: %w", err)
+		}
+	}
 
 	// Open firewall ports for inter-node communication
 	if err := m.openKubeletPort(ctx, nodeName); err != nil {

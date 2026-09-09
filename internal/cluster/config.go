@@ -12,6 +12,11 @@ import (
 )
 
 const configFileName = "config.json"
+const multiNodeFileName = "multinode.json"
+
+type multiNodeState struct {
+	Networks []string `json:"networks,omitempty"`
+}
 
 type Config = config
 
@@ -112,6 +117,68 @@ func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
 		Cluster: cfg.ClusterCIDR,
 		Service: cfg.ServiceCIDR,
 	}, nil
+}
+
+func SetMultiNodeNetwork(name, network string, enabled bool) error {
+	cfg, err := ReadClusterConfig(name)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(cfg.StateDir, multiNodeFileName)
+	var state multiNodeState
+	if data, readErr := os.ReadFile(path); readErr == nil {
+		if err := json.Unmarshal(data, &state); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(readErr) {
+		return readErr
+	}
+
+	index := -1
+	for i, current := range state.Networks {
+		if current == network {
+			index = i
+			break
+		}
+	}
+	if enabled && index == -1 {
+		state.Networks = append(state.Networks, network)
+	}
+	if !enabled && index >= 0 {
+		state.Networks = append(state.Networks[:index], state.Networks[index+1:]...)
+	}
+	if len(state.Networks) == 0 {
+		err := os.Remove(path)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+func MultiNodeEnabled(name string) (bool, error) {
+	cfg, err := ReadClusterConfig(name)
+	if err != nil {
+		return false, err
+	}
+	data, err := os.ReadFile(filepath.Join(cfg.StateDir, multiNodeFileName))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var state multiNodeState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return false, err
+	}
+	return len(state.Networks) > 0, nil
 }
 
 func ReadClusterConfig(name string) (Config, error) {

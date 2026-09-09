@@ -14,7 +14,8 @@ spec:
       "master": "{{.Master}}",
       "mode": "bridge",
       "ipam": {
-        "type": "host-local",
+        "type": "{{.IPAMType}}"
+        {{- if eq .IPAMType "host-local"}},
         "ranges": [
           [
             {
@@ -24,6 +25,11 @@ spec:
             }
           ]
         ]
+        {{- else}},
+        "range": "{{.Subnet}}",
+        "range_start": "{{.RangeStart}}",
+        "range_end": "{{.RangeEnd}}"
+        {{- end}}
       }
     }
 `

@@ -32,6 +32,7 @@ type groupAlloc struct {
 type ipamManager struct {
 	NetworkName string       `json:"networkName"`
 	Subnet      string       `json:"subnet"`
+	MultiNode   bool         `json:"multiNode,omitempty"`
 	Groups      []groupAlloc `json:"groups"`
 }
 
@@ -73,6 +74,17 @@ func (a *ipamManager) getGroup(name string) (int, *groupAlloc, error) {
 		}
 	}
 	return -1, nil, fmt.Errorf("group not found: %s", name)
+}
+
+func (a *ipamManager) hasCluster(name string) bool {
+	for _, group := range a.Groups {
+		for _, cluster := range group.Clusters {
+			if cluster.Name == name {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup, clustersPerGroup int) (*groupAlloc, error) {

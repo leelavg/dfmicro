@@ -26,6 +26,7 @@ func main() {
 	}
 
 	md = strings.ReplaceAll(md, filepath.Base(os.Args[0]), "dfmicro")
+	md = strings.ReplaceAll(md, "\n    \n", "\n\n")
 	if err := os.WriteFile(out, []byte(md), 0o644); err != nil {
 		slog.Error("failed to write docs", "error", err)
 		os.Exit(1)

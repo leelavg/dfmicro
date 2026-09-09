@@ -17,6 +17,7 @@ type nadConfig struct {
 	rangeStart string
 	rangeEnd   string
 	master     string
+	ipamType   string
 }
 
 type nadManager struct {
@@ -62,6 +63,7 @@ func (m *nadManager) render(cfg nadConfig) (string, error) {
 		"RangeStart": cfg.rangeStart,
 		"RangeEnd":   cfg.rangeEnd,
 		"Master":     cfg.master,
+		"IPAMType":   cfg.ipamType,
 	}
 	return support.Render(nadTemplate, nadCfg)
 }

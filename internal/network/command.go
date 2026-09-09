@@ -219,11 +219,16 @@ Example:
 				Usage: "Namespace for NAD creation",
 				Value: rootconfig.Load().NADNamespace,
 			},
+			&cli.BoolFlag{
+				Name:  "multi-node",
+				Usage: "Use Whereabouts IPAM and enable it on all cluster nodes",
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			clusterGroups := cmd.StringSlice("cluster")
 			networkName := cmd.String("to")
 			namespace := cmd.String("namespace")
+			multiNode := cmd.Bool("multi-node")
 
 			clusterToGroups := make(map[string][]string)
 			for _, spec := range clusterGroups {
@@ -243,6 +248,10 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
+			if len(ipam.Groups) > 0 && ipam.MultiNode != multiNode {
+				return fmt.Errorf("network %s is already attached with multi-node=%t", networkName, ipam.MultiNode)
+			}
+			ipam.MultiNode = multiNode
 
 			ops := &multusOps{
 				networkOps: &networkOps{logger: logger, runner: runner},
@@ -255,7 +264,10 @@ Example:
 			if err := ops.attachClusters(ctx, bridgeState, clusterToGroups, networkName, namespace); err != nil {
 				return err
 			}
-			return ipam.save(networkStateDir(rootconfig.ConfigDir()))
+			if err := ipam.save(networkStateDir(rootconfig.ConfigDir())); err != nil {
+				return err
+			}
+			return bridgeState.save(networkStateDir(rootconfig.ConfigDir()))
 		},
 	}
 }
@@ -317,7 +329,6 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-
 			ops := &multusOps{
 				networkOps: &networkOps{logger: logger, runner: runner},
 				logger:     logger,
@@ -328,6 +339,9 @@ Example:
 
 			if err := ops.detachClusters(ctx, clusterToGroups, networkName, namespace); err != nil {
 				return err
+			}
+			if len(ipam.Groups) == 0 {
+				ipam.MultiNode = false
 			}
 			return ipam.save(networkStateDir(rootconfig.ConfigDir()))
 		},

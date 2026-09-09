@@ -40,7 +40,7 @@ Manage cluster addons
 Manage OpenShift Data Foundation on a MicroShift cluster
 
     Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
-    
+
     Note: --name and --kubeconfig apply to all subcommands and must come before the subcommand name.
 
 **--kubeconfig**="": Path to an existing kubeconfig file
@@ -64,7 +64,7 @@ Configure ODF to run on MicroShift in an opinionated single-node setup
 Install ODF and required shim resources
 
     Requires rbd, ceph, nbd kernel modules loaded on the host. Run 'dfmicro addon odf modules load' first.
-    
+
     Example:
       dfmicro addon odf install --catalog-image quay.io/example/catalog:v4.16 --channel stable-4.16 --version 4.16.0
 
@@ -93,7 +93,7 @@ Unload rbd, ceph, nbd kernel modules and remove auto-load config
 Uninstall ODF and all associated resources
 
     Prints the cleanup commands by default. Pass --attempt to execute them (best-effort).
-    
+
     Examples:
       dfmicro addon odf uninstall            # dry-run: print commands
       dfmicro addon odf uninstall --attempt  # execute cleanup
@@ -119,7 +119,7 @@ Print saved cluster config as JSON
 Create a cluster, wait until ready, and print connection info
 
     Mounts flags are immutable after creation. Delete and recreate to change them.
-    
+
     Examples:
       dfmicro cluster create
       dfmicro cluster create --name dev
@@ -183,7 +183,7 @@ Open an interactive shell inside the cluster container
 Print kubeconfig for a cluster
 
     Pipe to a file or merge into an existing kubeconfig:
-    
+
       dfmicro cluster kubeconfig > ~/.kube/config
       dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml
 
@@ -233,11 +233,13 @@ Manage multi-cluster networks
 Attach clusters to a network
 
     Attach one or more clusters to a bridge network.
-    
+
     Example:
       dfmicro network attach --cluster first:gp1 --cluster second:gp2 --cluster third:gp1/gp2 --to backbone
 
 **--cluster**="": Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'
+
+**--multi-node**: Use Whereabouts IPAM and enable it on all cluster nodes
 
 **--namespace**="": Namespace for NAD creation (default: "default")
 
@@ -248,7 +250,7 @@ Attach clusters to a network
 Show bridge and IPAM configuration
 
     Show bridge and IPAM state for a network.
-    
+
     Example:
       dfmicro network config --name backbone
 
@@ -272,7 +274,7 @@ Connect clusters to a bridge network
 Create a bridge network for multi-cluster interconnect
 
     Create a bridge network that clusters can attach to.
-    
+
     Example:
       dfmicro network create --name backbone --group-count 5 --subnet 172.30.0.0/16
 
@@ -291,7 +293,7 @@ Create a bridge network for multi-cluster interconnect
 Delete a bridge network
 
     Delete a bridge network.
-    
+
     Example:
       dfmicro network delete --name backbone
 
@@ -302,7 +304,7 @@ Delete a bridge network
 Detach clusters from a network
 
     Detach one or more clusters from a bridge network.
-    
+
     Example:
       dfmicro network detach --cluster first:gp1 --cluster second:gp2 --from backbone
 
@@ -330,7 +332,7 @@ Disconnect clusters from a bridge network
 Establish direct peering between clusters
 
     Establish direct peering between clusters.
-    
+
     Example:
       dfmicro network peer --cluster first --cluster second
 
@@ -341,7 +343,7 @@ Establish direct peering between clusters
 Remove direct peering between clusters
 
     Remove direct peering between clusters.
-    
+
     Example:
       dfmicro network unpeer --cluster first --cluster second
 
@@ -378,7 +380,7 @@ Operational utilities for running clusters
 Show CPU and memory requests, limits, and live usage per container (experimental)
 
     Experimental: output format and flags may change. Use --namespace to scope and improve performance.
-    
+
     Examples:
       dfmicro ops resources
       dfmicro ops resources --namespace openshift-operator-lifecycle-manager
@@ -399,9 +401,9 @@ Show storage paths for all dfmicro clusters
 Manage passwordless sudo configuration for dfmicro (Linux only)
 
     Writes /etc/sudoers.d/dfmicro with the commands used by dfmicro requiring elevated access.
-    
+
     No-op on macOS: rootful Podman machine runs as root so no sudoers entry is needed.
-    
+
     Warning: these rules allow any process running as your user to invoke the listed binaries without a password prompt. Intended for developer workstations, not shared hosts.
 
 #### create

@@ -46,6 +46,8 @@ make build        # fmt + vet + generate + compile
 
 Run `make generate` after changing any `Usage`, `UsageText`, or flag definitions. Ensure `Usage` and `UsageText` is brief as it forms the documentation of the CLI.
 
+Secondary network attachment uses host-local IPAM by default. `network attach --multi-node` selects Whereabouts and labels current and future cluster nodes.
+
 ## Etiquette
 
 - Never bring external dependencies and prefer using stdlib as bloating the binary is unacceptable, you can occasionally check the binary compiled by `make build-analyze` with `gsa`. Anecdote: ./internal/support/http.go is build gated because dfmicro binary doesn't use http.

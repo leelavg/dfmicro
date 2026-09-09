@@ -168,10 +168,19 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				rangeStart: clusterRange.RangeStart,
 				rangeEnd:   clusterRange.RangeEnd,
 				master:     fmt.Sprintf("%s.%d", clusterEth, group.VlanID),
+				ipamType:   map[bool]string{true: "whereabouts", false: "host-local"}[o.ipam.MultiNode],
 			}); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
 			}
 			o.logger.Info("created NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
+			if o.ipam.MultiNode {
+				if err := cluster.SetMultiNodeNetwork(clusterName, networkName, true); err != nil {
+					return fmt.Errorf("save multi-node state for cluster %s: %w", clusterName, err)
+				}
+				if err := o.labelClusterNodes(ctx, clusterName, true); err != nil {
+					return err
+				}
+			}
 		}
 
 	}
@@ -218,12 +227,39 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 			if err := o.nad.delete(ctx, nadName, namespace, kcPath); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
 			}
+			if o.ipam.MultiNode && !o.ipam.hasCluster(clusterName) {
+				if err := cluster.SetMultiNodeNetwork(clusterName, networkName, false); err != nil {
+					return fmt.Errorf("save multi-node state for cluster %s: %w", clusterName, err)
+				}
+				multiNode, err := cluster.MultiNodeEnabled(clusterName)
+				if err != nil {
+					return fmt.Errorf("read multi-node state for cluster %s: %w", clusterName, err)
+				}
+				if err := o.labelClusterNodes(ctx, clusterName, multiNode); err != nil {
+					return err
+				}
+			}
 			o.logger.Info("deleted NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}
 
 		if err := o.ipam.removeGroup(groupIdx); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (o *multusOps) labelClusterNodes(ctx context.Context, clusterName string, enabled bool) error {
+	kubeconfig, err := cluster.Kubeconfig(clusterName)
+	if err != nil {
+		return fmt.Errorf("get kubeconfig for cluster %s: %w", clusterName, err)
+	}
+	label := "dfmicro.io/whereabouts=enabled"
+	if !enabled {
+		label += "-"
+	}
+	if _, err := o.runner.Run(ctx, "kubectl", "label", "nodes", "--all", label, "--overwrite", "--kubeconfig", kubeconfig); err != nil {
+		return fmt.Errorf("label nodes for cluster %s: %w", clusterName, err)
 	}
 	return nil
 }
