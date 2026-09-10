@@ -42,6 +42,15 @@ network:
     - {{ .ServiceCIDR }}
 `
 
+const kindnetConfigTmpl = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kindnet-config
+  namespace: kube-kindnet
+data:
+  podSubnet: {{ .ClusterCIDR }}
+`
+
 const multusDropinConfig = `[crio.network]
 # Enable Multus as default CNI and add plugin directories
 cni_default_network = "multus-cni-network"

@@ -67,7 +67,7 @@ func newManager(clusterName string, logger *slog.Logger, runner execx.Runner) *m
 	}
 }
 
-func (m *manager) add(ctx context.Context, force bool) error {
+func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	cfg, err := cluster.ReadClusterConfig(m.clusterName)
 	if err != nil {
 		return fmt.Errorf("read cluster config: %w", err)
@@ -130,7 +130,7 @@ func (m *manager) add(ctx context.Context, force bool) error {
 		return fmt.Errorf("get control node IP: %w", err)
 	}
 
-	if err := m.addWorkerNode(ctx, cfg, nodeName, controlNodeName, controlNodeIP); err != nil {
+	if err := m.addWorkerNode(ctx, cfg, nodeName, controlNodeName, controlNodeIP, mounts); err != nil {
 		return fmt.Errorf("add worker node: %w", err)
 	}
 	if multiNode, err := cluster.MultiNodeEnabled(m.clusterName); err != nil {
@@ -397,7 +397,7 @@ func rewriteCNISubnet(data []byte, subnet string) ([]byte, error) {
 	return json.MarshalIndent(config, "", "\t")
 }
 
-func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeName, controlNodeName, controlNodeIP string) error {
+func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
 	multinodeConfigData := struct {
 		ControlNodeName string
 	}{
@@ -533,7 +533,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		)
 	}
 
-	for _, mount := range cfg.ExtraMounts {
+	for _, mount := range mounts {
 		args = append(args, "--volume", mount)
 	}
 

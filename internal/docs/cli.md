@@ -363,6 +363,8 @@ add worker node to existing cluster
 
 **--force**: skip control plane readiness checks
 
+**--mount**="": Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)
+
 ### remove, rm, delete
 
 remove worker node from cluster

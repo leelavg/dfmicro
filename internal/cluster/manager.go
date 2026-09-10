@@ -319,6 +319,18 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	args = append(args, "--network", networkName, "--dns-search=.")
 
+	kindnetConfigPath := filepath.Join(m.cfg.StateDir, "00-kindnet-config.yaml")
+	var kindnetConfigBuf bytes.Buffer
+	if err := template.Must(template.New("").Parse(kindnetConfigTmpl)).Execute(&kindnetConfigBuf, m.cfg); err != nil {
+		return err
+	}
+	if err := os.WriteFile(kindnetConfigPath, kindnetConfigBuf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	args = append(args,
+		"--volume", kindnetConfigPath+":/usr/lib/microshift/manifests.d/000-microshift-kindnet/00-kindnet-config.yaml:ro",
+	)
+
 	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
 		args = append(args,
 			"--volume", topoLVMKustomizationPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/kustomization.yaml:ro",

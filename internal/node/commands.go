@@ -30,10 +30,15 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 						Name:  "force",
 						Usage: "skip control plane readiness checks",
 					},
+					&cli.StringSliceFlag{
+						Name:     "mount",
+						Usage:    "Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)",
+						Category: "Storage:",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					clusterName := cmd.String("cluster")
-					return newManager(clusterName, logger, runner).add(ctx, cmd.Bool("force"))
+					return newManager(clusterName, logger, runner).add(ctx, cmd.Bool("force"), cmd.StringSlice("mount"))
 				},
 			},
 			{
