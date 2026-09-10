@@ -46,7 +46,7 @@ func (m *nadManager) create(ctx context.Context, cfg nadConfig) error {
 
 func (m *nadManager) delete(ctx context.Context, name, namespace, kubeconfig string) error {
 	m.logger.Info("deleting NetworkAttachmentDefinition", "name", name, "namespace", namespace)
-	args := []string{"delete", "net-attach-def", name, "-n", namespace}
+	args := []string{"delete", "net-attach-def", name, "-n", namespace, "--ignore-not-found"}
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig", kubeconfig)
 	}
