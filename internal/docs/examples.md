@@ -14,11 +14,11 @@ The examples below were verified with this build and configuration:
 
 ```console
 $ dfmicro -v
-dfmicro version dev (none, 2026-09-10T07:43:27Z)
+dfmicro version dev (none, 2026-09-10T13:05:22Z)
 $ dfmicro config
 {
   "name": "micro",
-  "image": "ghcr.io/leelavg/microshift:5.0.0_202609100749_gbec374559_5.0.0_okd_scos.ec.8",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202609101142_gbec374559_5.0.0_okd_scos.ec.8",
   "powerTuning": true,
   "apiServerPort": 6443,
   "clusterCIDR": "10.42.0.0/16",

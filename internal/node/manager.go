@@ -452,15 +452,15 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", nodeName, "ip", "route", "replace", apiIP+"/32", "via", controlNodeIP, "dev", "eth0"); err != nil {
 		return fmt.Errorf("route API server IP through control node: %w", err)
 	}
+	m.logger.Info("waiting for worker readiness", "node", nodeName)
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
+		return fmt.Errorf("wait for worker registration: %w", err)
+	}
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+nodeName); err != nil {
+		return fmt.Errorf("wait for worker readiness: %w", err)
+	}
+	m.logger.Info("worker is ready", "node", nodeName)
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
-		m.logger.Info("waiting for worker readiness", "node", nodeName)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
-			return fmt.Errorf("wait for worker registration: %w", err)
-		}
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+nodeName); err != nil {
-			return fmt.Errorf("wait for worker readiness: %w", err)
-		}
-		m.logger.Info("worker is ready", "node", nodeName)
 		m.logger.Info("waiting for service-ca", "node", nodeName)
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Available", "--timeout=120s", "-n", "openshift-service-ca", "deployment/service-ca"); err != nil {
 			return fmt.Errorf("wait for service-ca: %w", err)

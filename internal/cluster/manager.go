@@ -557,14 +557,17 @@ func (m *manager) waitReady(ctx context.Context) error {
 			}
 		}
 		if ready {
-			if err := m.checkNodesReady(ctx, containers[0]); err == nil {
-				if err := m.checkPrimaryCNI(ctx, containers[0]); err != nil {
-					m.logger.Info("waiting for kindnet", "container", containers[0])
-				} else {
-					m.logger.Info("primary CNI is ready", "container", containers[0])
-					m.logger.Info("all nodes ready")
-					return nil
-				}
+			if err := m.checkPrimaryCNI(ctx, containers[0]); err != nil {
+				m.logger.Info("waiting for kindnet CNI", "container", containers[0])
+			} else if err := m.checkMultusCNI(ctx, containers[0]); err != nil {
+				m.logger.Info("waiting for Multus CNI", "container", containers[0])
+			} else if err := m.checkNodesReady(ctx, containers[0]); err != nil {
+				m.logger.Info("waiting for Kubernetes nodes", "container", containers[0])
+			} else {
+				m.logger.Info("primary CNI is ready", "container", containers[0])
+				m.logger.Info("Multus CNI is ready", "container", containers[0])
+				m.logger.Info("all nodes ready")
+				return nil
 			}
 		}
 
@@ -598,6 +601,12 @@ func (m *manager) checkPrimaryCNI(ctx context.Context, containerName string) err
 		return err
 	}
 	return nil
+}
+
+func (m *manager) checkMultusCNI(ctx context.Context, containerName string) error {
+	const configPath = "/etc/cni/net.d/00-multus.conf"
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath)
+	return err
 }
 
 func (m *manager) PrintKubeconfig(ctx context.Context) error {
