@@ -254,9 +254,9 @@ func (o *multusOps) labelClusterNodes(ctx context.Context, clusterName string, e
 	if err != nil {
 		return fmt.Errorf("get kubeconfig for cluster %s: %w", clusterName, err)
 	}
-	label := "dfmicro.io/whereabouts=enabled"
-	if !enabled {
-		label += "-"
+	label := "dfmicro.io/whereabouts-"
+	if enabled {
+		label = "dfmicro.io/whereabouts=enabled"
 	}
 	if _, err := o.runner.Run(ctx, "kubectl", "label", "nodes", "--all", label, "--overwrite", "--kubeconfig", kubeconfig); err != nil {
 		return fmt.Errorf("label nodes for cluster %s: %w", clusterName, err)
@@ -267,7 +267,7 @@ func (o *multusOps) labelClusterNodes(ctx context.Context, clusterName string, e
 func (o *peerOps) run(
 	ctx context.Context,
 	dstNames []string,
-	commandBuilder func(networkByClusterName map[string]networkInfo, srcName string, dstNames []string) string,
+	commandBuilder func(networkByClusterName map[string]networkInfo, srcName, containerName string, dstNames []string) string,
 ) error {
 	networkByClusterName := make(map[string]networkInfo)
 	clusterContainers := make(map[string][]string)
@@ -315,7 +315,7 @@ func (o *peerOps) run(
 
 	for srcName, containers := range clusterContainers {
 		for _, container := range containers {
-			if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", container, "bash", "-c", commandBuilder(networkByClusterName, srcName, dstNames)); err != nil {
+			if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", container, "bash", "-c", commandBuilder(networkByClusterName, srcName, container, dstNames)); err != nil {
 				return fmt.Errorf("failed to configure on container %s: %w", container, err)
 			}
 		}
@@ -328,13 +328,19 @@ func (o *peerOps) peer(ctx context.Context, clusterNames []string) error {
 	if err := o.run(
 		ctx,
 		clusterNames,
-		func(networkByClusterName map[string]networkInfo, srcName string, dstNames []string) string {
+		func(networkByClusterName map[string]networkInfo, srcName, containerName string, dstNames []string) string {
 			var commands strings.Builder
+			commands.WriteString("set -e\n")
+			srcNetwork := networkByClusterName[srcName]
 			for dstName, dstNetwork := range networkByClusterName {
 				if srcName != dstName {
-					o.logger.Info("establishing peering", "from", srcName, "to", dstName, "nextHop", dstNetwork.nodeIP)
-					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.clusterCIDR, dstNetwork.nodeIP))
-					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.serviceCIDR, dstNetwork.nodeIP))
+					nextHop := srcNetwork.nodeIP
+					if containerName == srcName+"-1" {
+						nextHop = dstNetwork.nodeIP
+					}
+					o.logger.Info("establishing peering", "from", srcName, "to", dstName, "container", containerName, "nextHop", nextHop)
+					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.clusterCIDR, nextHop))
+					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.serviceCIDR, nextHop))
 					commands.WriteString(fmt.Sprintf("iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.clusterCIDR))
 					commands.WriteString(fmt.Sprintf("iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.serviceCIDR))
 					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.clusterCIDR))
@@ -355,13 +361,19 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 	if err := o.run(
 		ctx,
 		clusterNames,
-		func(networkByClusterName map[string]networkInfo, srcName string, dstNames []string) string {
+		func(networkByClusterName map[string]networkInfo, srcName, containerName string, dstNames []string) string {
 			var commands strings.Builder
+			commands.WriteString("set -e\n")
+			srcNetwork := networkByClusterName[srcName]
 			for dstName, dstNetwork := range networkByClusterName {
 				if srcName == dstName {
 					continue
 				}
-				o.logger.Info("removing peering", "from", srcName, "to", dstName)
+				nextHop := srcNetwork.nodeIP
+				if containerName == srcName+"-1" {
+					nextHop = dstNetwork.nodeIP
+				}
+				o.logger.Info("removing peering", "from", srcName, "to", dstName, "container", containerName, "nextHop", nextHop)
 				commands.WriteString(fmt.Sprintf("ip route del %s\n", dstNetwork.clusterCIDR))
 				commands.WriteString(fmt.Sprintf("ip route del %s\n", dstNetwork.serviceCIDR))
 				commands.WriteString(fmt.Sprintf("iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN\n", dstNetwork.clusterCIDR))

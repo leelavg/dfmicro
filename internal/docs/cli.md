@@ -136,7 +136,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
-**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202609100415_gbec374559_5.0.0_okd_scos.ec.8")
+**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202609100749_gbec374559_5.0.0_okd_scos.ec.8")
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 

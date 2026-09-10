@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/netip"
@@ -119,10 +118,6 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 
 	if err := m.extractKubeletCA(ctx, cfg, controlNodeName, nodeName); err != nil {
 		return fmt.Errorf("extract kubelet CA: %w", err)
-	}
-
-	if err := m.extractCNIConfig(ctx, cfg, controlNodeName, nodeName); err != nil {
-		return fmt.Errorf("extract CNI config: %w", err)
 	}
 
 	controlNodeIP, err := support.GetContainerIP(ctx, m.runner, cfg.BridgeName, controlNodeName)
@@ -296,107 +291,6 @@ func (m *manager) openKubeletPort(ctx context.Context, nodeName string) error {
 	return fmt.Errorf("open kubelet port after retries: %w", lastErr)
 }
 
-func (m *manager) extractCNIConfig(ctx context.Context, cfg cluster.Config, controlNodeName, nodeName string) error {
-	cniPath := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "cni", "10-kindnet.conflist")
-
-	if err := os.MkdirAll(filepath.Dir(cniPath), 0o755); err != nil {
-		return fmt.Errorf("create cni dir: %w", err)
-	}
-
-	sourcePath := "/etc/cni/net.d/10-kindnet.conflist"
-	var cniConfig string
-	var lastErr error
-	for range 30 {
-		result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", controlNodeName, "cat", sourcePath)
-		if err == nil {
-			cniConfig = result.Stdout
-			break
-		}
-		lastErr = err
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	if cniConfig == "" {
-		if lastErr == nil {
-			return fmt.Errorf("extract CNI config from control node: empty config")
-		}
-		return fmt.Errorf("extract CNI config from control node after retries: %w", lastErr)
-	}
-
-	workerCIDR, err := workerPodCIDR(cfg.ClusterCIDR, nodeName)
-	if err != nil {
-		return fmt.Errorf("calculate pod CIDR for %s: %w", nodeName, err)
-	}
-	cniData, err := rewriteCNISubnet([]byte(cniConfig), workerCIDR)
-	if err != nil {
-		return fmt.Errorf("rewrite CNI config for %s: %w", nodeName, err)
-	}
-
-	if err := os.WriteFile(cniPath, cniData, 0o644); err != nil {
-		return fmt.Errorf("write CNI config: %w", err)
-	}
-
-	return nil
-}
-
-func workerPodCIDR(clusterCIDR, nodeName string) (string, error) {
-	prefix, err := netip.ParsePrefix(clusterCIDR)
-	if err != nil {
-		return "", err
-	}
-	if prefix.Addr().Is6() || prefix.Bits() > 24 {
-		return "", fmt.Errorf("IPv4 cluster CIDR with prefix <= 24 required, got %s", clusterCIDR)
-	}
-
-	nodeNumber, err := strconv.Atoi(nodeName[strings.LastIndexByte(nodeName, '-')+1:])
-	if err != nil || nodeNumber < 2 {
-		return "", fmt.Errorf("invalid worker node name %q", nodeName)
-	}
-
-	base := prefix.Masked().Addr().As4()
-	baseValue := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
-	blockCount := uint32(1) << uint(24-prefix.Bits())
-	blockIndex := uint32(nodeNumber - 1)
-	if blockIndex >= blockCount {
-		return "", fmt.Errorf("node number %d is outside cluster CIDR %s", nodeNumber, clusterCIDR)
-	}
-	workerValue := baseValue + (blockIndex << 8)
-	workerAddr := netip.AddrFrom4([4]byte{byte(workerValue >> 24), byte(workerValue >> 16), byte(workerValue >> 8), byte(workerValue)})
-	return workerAddr.String() + "/24", nil
-}
-
-func rewriteCNISubnet(data []byte, subnet string) ([]byte, error) {
-	var config any
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
-
-	var rewrite func(any)
-	rewrite = func(value any) {
-		switch value := value.(type) {
-		case map[string]any:
-			for key, child := range value {
-				if key == "subnet" {
-					value[key] = subnet
-					continue
-				}
-				rewrite(child)
-			}
-		case []any:
-			for _, child := range value {
-				rewrite(child)
-			}
-		}
-	}
-	rewrite(config)
-
-	return json.MarshalIndent(config, "", "\t")
-}
-
 func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
 	multinodeConfigData := struct {
 		ControlNodeName string
@@ -423,9 +317,6 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	csrSignerTarget := "/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer"
 	caBundleFile := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "certs", "kubelet-ca.crt")
 	caBundleTarget := "/var/lib/microshift/certs/ca-bundle/kubelet-ca.crt"
-	cniSource := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "cni", "10-kindnet.conflist")
-	cniTarget := "/etc/cni/net.d/10-kindnet.conflist"
-
 	args := []string{
 		"podman", "run", "--privileged", "-d",
 		"--ulimit", "nofile=524288:524288",
@@ -493,7 +384,6 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		"--volume", bootstrapSource+":/var/lib/microshift/resources/kubeadmin/kubeconfig",
 		"--volume", csrSignerDir+":"+csrSignerTarget,
 		"--volume", caBundleFile+":"+caBundleTarget+":ro",
-		"--volume", cniSource+":"+cniTarget+":ro",
 	)
 
 	if cfg.PowerTuning {
@@ -548,6 +438,12 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	m.logger.Info("starting worker node", "name", nodeName, "image", cfg.Image)
 	if _, err := support.RunPodmanPrivileged(ctx, m.runner, args[1:]...); err != nil {
 		return err
+	}
+	if err := cluster.WaitForDBus(ctx, m.runner, nodeName); err != nil {
+		return fmt.Errorf("wait for worker dbus: %w", err)
+	}
+	if err := cluster.TrustClusterCIDRs(ctx, m.runner, nodeName, cfg.ClusterCIDR, cfg.ServiceCIDR); err != nil {
+		return fmt.Errorf("trust cluster CIDRs: %w", err)
 	}
 	apiIP, err := apiServerIP(cfg.ServiceCIDR)
 	if err != nil {

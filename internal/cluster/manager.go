@@ -253,8 +253,12 @@ func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, e
 }
 
 func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) error {
-	for _, cidr := range []string{m.cfg.ClusterCIDR, m.cfg.ServiceCIDR} {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
+	return TrustClusterCIDRs(ctx, m.runner, containerName, m.cfg.ClusterCIDR, m.cfg.ServiceCIDR)
+}
+
+func TrustClusterCIDRs(ctx context.Context, runner execx.Runner, containerName string, cidrs ...string) error {
+	for _, cidr := range cidrs {
+		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
 			return fmt.Errorf("trust CIDR %s: %w", cidr, err)
 		}
 	}
@@ -512,8 +516,12 @@ func getClients() ([]string, error) {
 }
 
 func (m *manager) waitForDBus(ctx context.Context, name string) error {
+	return WaitForDBus(ctx, m.runner, name)
+}
+
+func WaitForDBus(ctx context.Context, runner execx.Runner, name string) error {
 	for range 60 {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
+		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
 			return nil
 		}
 		select {
