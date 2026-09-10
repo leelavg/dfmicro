@@ -8,14 +8,42 @@ Run `dfmicro` as a normal user after creating its sudoers rules. The examples as
 dfmicro ops sudoers create
 ```
 
+Inspect the CLI build and embedded defaults.
+
+The examples below were verified with this build and configuration:
+
+```console
+$ dfmicro -v
+dfmicro version dev (none, 2026-09-10T05:34:13Z)
+$ dfmicro config
+{
+  "name": "micro",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202609100415_gbec374559_5.0.0_okd_scos.ec.8",
+  "powerTuning": true,
+  "apiServerPort": 6443,
+  "clusterCIDR": "10.42.0.0/16",
+  "serviceCIDR": "10.43.0.0/16",
+  "exposeKubeAPI": true,
+  "lvmVolSize": "10G",
+  "overprovisionRatio": 20,
+  "shareHostContainers": true,
+  "enableThinpool": true,
+  "enableTopoLVM": true,
+  "useEtcd": false,
+  "bridgeName": "micro",
+  "bridgeSubnet": "172.20.0.0/24",
+  "groupCount": 5,
+  "clustersPerGroup": 5,
+  "reservePerGroup": 5,
+  "nadNamespace": "default"
+}
+```
+
 ## Create and inspect a cluster
 
 ```console
-export IMAGE=microshift:multinode-test
-
 dfmicro cluster create \
   --name demo \
-  --image "$IMAGE" \
   --no-topolvm \
   --pull-secret ~/pull.json \
   --idms ~/idms.yaml
@@ -66,7 +94,6 @@ kubectl get nodes -o wide
 ```console
 dfmicro cluster create \
   --name etcd-demo \
-  --image "$IMAGE" \
   --etcd \
   --no-topolvm \
   --pull-secret ~/pull.json \
@@ -84,7 +111,6 @@ Use distinct pod and service CIDRs when testing peer operations.
 ```console
 dfmicro cluster create \
   --name net-a \
-  --image "$IMAGE" \
   --no-topolvm \
   --api-server-port 6443 \
   --cluster-cidr 10.42.0.0/16 \
@@ -93,7 +119,6 @@ dfmicro cluster create \
   --idms ~/idms.yaml
 dfmicro cluster create \
   --name net-b \
-  --image "$IMAGE" \
   --no-topolvm \
   --api-server-port 6444 \
   --cluster-cidr 10.52.0.0/16 \

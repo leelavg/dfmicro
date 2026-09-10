@@ -7,6 +7,8 @@ MAKEFLAGS += --no-builtin-rules
 
 BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
+BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
 
 .PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch revive
 
@@ -37,12 +39,12 @@ install: build
 
 build-release: fmt vet generate
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w" -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w $(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-analyze: fmt vet generate
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-cross:
 	mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -tags '!fetch' -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro

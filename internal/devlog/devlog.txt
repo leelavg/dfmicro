@@ -8,7 +8,6 @@
 - Hub and spoke: multi-cluster topology with a hub managing spoke MicroShift clusters
 - Infrastructure configuration: node labeling, machine config, kernel module management
 - ODF Disaster Recovery: Regional-DR and Metro-DR using Ramen/ACM on MicroShift
-- Support multi-node clusters, could require changes to Microshift itself
 
 ## Done
 
@@ -33,4 +32,7 @@
 - VM access: cluster running in a VM should be reachable from the local machine without manual kubeconfig or cert fixups
 - Overlayfs deadlock: fix kubeconfig copy race condition that triggers machine restart on rapid file access (antivirus was the issue)
 - Multus configuration: secondary network attachment for storage traffic isolation in various groups via VLANs
+- Multi-node clusters: worker onboarding, readiness gating, and node slot reuse
+- Whereabouts IPAM: cluster-wide secondary network allocation across worker nodes
+- Build metadata and examples: UTC version timestamp and tested MicroShift image defaults
 - cluster peering for non-overlapping service and cluster ip ranges
