@@ -342,9 +342,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		args = append(args,
-			"--volume", filepath.Join(cfg.StateDir, "kustomization.yaml")+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/kustomization.yaml:ro",
-			"--volume", cluster.TopoLVMManifestPath(cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/04-dfmicro-topolvm.yaml:ro",
-			"--volume", filepath.Join(cfg.StateDir, "dfmicro-topolvm-patch.yaml")+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/dfmicro-topolvm-patch.yaml:ro",
+			"--volume", cluster.TopoLVMManifestDir(cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
 		)
 	}
 

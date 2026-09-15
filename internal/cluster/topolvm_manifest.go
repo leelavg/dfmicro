@@ -1,31 +1,84 @@
 package cluster
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func TopoLVMManifestPath(cfg Config) string {
-	return filepath.Join(cfg.StateDir, "04-dfmicro-topolvm.yaml")
-}
+//go:embed topolvm-assets/*
+var topolvmAssets embed.FS
 
-func topoLVMKustomizationPath(cfg Config) string {
-	return filepath.Join(cfg.StateDir, "kustomization.yaml")
-}
-
-func topoLVMKustomizationPatchPath(cfg Config) string {
-	return filepath.Join(cfg.StateDir, "dfmicro-topolvm-patch.yaml")
+func TopoLVMManifestDir(cfg Config) string {
+	return filepath.Join(cfg.StateDir, "topolvm")
 }
 
 func WriteTopoLVMManifest(cfg Config, nodes []string) error {
-	var resources strings.Builder
+	dir := TopoLVMManifestDir(cfg)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	for _, name := range []string{
+		"01-namespace.yaml",
+		"02-topolvm.yaml",
+		"topolvm_mutatingwebhook_patch.yaml",
+		"topolvm_service_patch.yaml",
+	} {
+		data, err := fs.ReadFile(topolvmAssets, "topolvm-assets/"+name)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+			return err
+		}
+	}
+
+	var lvmd strings.Builder
+	fmt.Fprintf(&lvmd, `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: topolvm-lvmd-0
+  namespace: topolvm-system
+data:
+  lvmd.yaml: |
+    device-classes:
+      - name: ssd
+        volume-group: %s
+        default: true
+        type: thin
+        spare-gb: 0
+        thin-pool:
+          name: thin
+          overprovision-ratio: %.1f
+`, cfg.VGName, cfg.OverprovisionRatio)
+	if err := os.WriteFile(filepath.Join(dir, "03-lvmd.yaml"), []byte(lvmd.String()), 0o644); err != nil {
+		return err
+	}
+	controlPatch := fmt.Sprintf(`apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: topolvm-lvmd-0
+  namespace: topolvm-system
+spec:
+  template:
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: %s
+`, nodes[0])
+	if err := os.WriteFile(filepath.Join(dir, "dfmicro-topolvm-control-patch.yaml"), []byte(controlPatch), 0o644); err != nil {
+		return err
+	}
+
+	var workers strings.Builder
 	for index, node := range nodes[1:] {
 		if index > 0 {
-			resources.WriteString("---\n")
+			workers.WriteString("---\n")
 		}
-		fmt.Fprintf(&resources, `apiVersion: v1
+		fmt.Fprintf(&workers, `apiVersion: v1
 kind: ConfigMap
 metadata:
   name: topolvm-lvmd-%d
@@ -98,38 +151,21 @@ spec:
           type: DirectoryOrCreate
 `, index+1, node, cfg.OverprovisionRatio, index+1, index+1, index+1, index+1, node, index+1)
 	}
-
-	if err := os.WriteFile(TopoLVMManifestPath(cfg), []byte(resources.String()), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "04-dfmicro-topolvm.yaml"), []byte(workers.String()), 0o644); err != nil {
 		return err
 	}
 
-	controlNode := nodes[0]
-	patch := fmt.Sprintf(`apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: topolvm-lvmd-0
-  namespace: topolvm-system
-spec:
-  template:
-    spec:
-      nodeSelector:
-        kubernetes.io/hostname: %s
-`, controlNode)
-	if err := os.WriteFile(topoLVMKustomizationPatchPath(cfg), []byte(patch), 0o644); err != nil {
-		return err
-	}
-
-	resourcesList := "  - 01-namespace.yaml\n  - 02-topolvm.yaml\n  - 03-lvmd.yaml\n"
+	resources := "  - 01-namespace.yaml\n  - 02-topolvm.yaml\n  - 03-lvmd.yaml\n"
 	if len(nodes) > 1 {
-		resourcesList += "  - 04-dfmicro-topolvm.yaml\n"
+		resources += "  - 04-dfmicro-topolvm.yaml\n"
 	}
 	kustomization := fmt.Sprintf(`apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 %spatches:
-  - path: dfmicro-topolvm-patch.yaml
+  - path: dfmicro-topolvm-control-patch.yaml
   - path: topolvm_mutatingwebhook_patch.yaml
   - path: topolvm_service_patch.yaml
-`, resourcesList)
-	return os.WriteFile(topoLVMKustomizationPath(cfg), []byte(kustomization), 0o644)
+`, resources)
+	return os.WriteFile(filepath.Join(dir, "kustomization.yaml"), []byte(kustomization), 0o644)
 }

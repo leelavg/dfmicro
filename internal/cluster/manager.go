@@ -337,23 +337,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
 		args = append(args,
-			"--volume", topoLVMKustomizationPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/kustomization.yaml:ro",
-			"--volume", TopoLVMManifestPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/04-dfmicro-topolvm.yaml:ro",
-			"--volume", topoLVMKustomizationPatchPath(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/dfmicro-topolvm-patch.yaml:ro",
-		)
-	}
-
-	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
-		lvmdConfigPath := filepath.Join(m.cfg.StateDir, "lvmd.yaml")
-		var lvmdBuf bytes.Buffer
-		if err := template.Must(template.New("").Parse(lvmdConfigTmpl)).Execute(&lvmdBuf, m.cfg); err != nil {
-			return err
-		}
-		if err := os.WriteFile(lvmdConfigPath, lvmdBuf.Bytes(), 0o644); err != nil {
-			return err
-		}
-		args = append(args,
-			"--volume", lvmdConfigPath+":/usr/lib/microshift/manifests.d/001-microshift-topolvm/03-lvmd.yaml:ro",
+			"--volume", TopoLVMManifestDir(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
 		)
 	}
 
