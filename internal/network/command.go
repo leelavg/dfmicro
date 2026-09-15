@@ -221,14 +221,13 @@ Example:
 			},
 			&cli.BoolFlag{
 				Name:  "multi-node",
-				Usage: "Use Whereabouts IPAM and enable it on all cluster nodes",
+				Usage: "Enable multi-node secondary networking",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			clusterGroups := cmd.StringSlice("cluster")
 			networkName := cmd.String("to")
 			namespace := cmd.String("namespace")
-			multiNode := cmd.Bool("multi-node")
 
 			clusterToGroups := make(map[string][]string)
 			for _, spec := range clusterGroups {
@@ -248,8 +247,9 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-			if len(ipam.Groups) > 0 && ipam.MultiNode != multiNode {
-				return fmt.Errorf("network %s is already attached with multi-node=%t", networkName, ipam.MultiNode)
+			multiNode := ipam.MultiNode
+			if cmd.IsSet("multi-node") {
+				multiNode = cmd.Bool("multi-node")
 			}
 			ipam.MultiNode = multiNode
 
@@ -339,9 +339,6 @@ Example:
 
 			if err := ops.detachClusters(ctx, clusterToGroups, networkName, namespace); err != nil {
 				return err
-			}
-			if len(ipam.Groups) == 0 {
-				ipam.MultiNode = false
 			}
 			return ipam.save(networkStateDir(rootconfig.ConfigDir()))
 		},

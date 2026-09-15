@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
 
@@ -22,9 +23,9 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				Usage: "add worker node to existing cluster",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:     "cluster",
-						Usage:    "cluster name",
-						Required: true,
+						Name:  "cluster",
+						Usage: "cluster name",
+						Value: rootconfig.Load().Name,
 					},
 					&cli.BoolFlag{
 						Name:  "force",
@@ -52,9 +53,9 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 						Required: true,
 					},
 					&cli.StringFlag{
-						Name:     "cluster",
-						Usage:    "cluster name",
-						Required: true,
+						Name:  "cluster",
+						Usage: "cluster name",
+						Value: rootconfig.Load().Name,
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {

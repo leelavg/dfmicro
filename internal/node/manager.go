@@ -34,20 +34,11 @@ const (
     - {{.}}{{end}}
 {{- end}}
 `
-	powerTuningConfig = `node:
-  powerTuning: true
-`
 	multusDropinConfig = `[crio.network]
 cni_default_network = "multus-cni-network"
 plugin_dirs = [
 	"/run/cni/bin",
 	"/usr/libexec/cni",
-]
-
-[crio.runtime]
-cni_plugin_dir = [
-	"/usr/libexec/cni",
-	"/var/lib/microshift/cni",
 ]
 `
 )
@@ -385,14 +376,6 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		"--volume", csrSignerDir+":"+csrSignerTarget,
 		"--volume", caBundleFile+":"+caBundleTarget+":ro",
 	)
-
-	if cfg.PowerTuning {
-		powerTuningPath := filepath.Join(cfg.StateDir, "power-tuning.yaml")
-		if err := os.WriteFile(powerTuningPath, []byte(powerTuningConfig), 0o644); err != nil {
-			return err
-		}
-		args = append(args, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
-	}
 
 	if cfg.PullSecret != "" {
 		args = append(args, "--volume", cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")

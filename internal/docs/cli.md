@@ -239,7 +239,7 @@ Attach clusters to a network
 
 **--cluster**="": Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'
 
-**--multi-node**: Use Whereabouts IPAM and enable it on all cluster nodes
+**--multi-node**: Enable multi-node secondary networking
 
 **--namespace**="": Namespace for NAD creation (default: "default")
 
@@ -359,7 +359,7 @@ Manage cluster nodes
 
 add worker node to existing cluster
 
-**--cluster**="": cluster name
+**--cluster**="": cluster name (default: "micro")
 
 **--force**: skip control plane readiness checks
 
@@ -369,7 +369,7 @@ add worker node to existing cluster
 
 remove worker node from cluster
 
-**--cluster**="": cluster name
+**--cluster**="": cluster name (default: "micro")
 
 **--name**="": worker node name
 

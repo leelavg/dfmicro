@@ -9,7 +9,7 @@ builds:
     env:
       - CGO_ENABLED=0
     ldflags:
-      - -s -w -X dfmicro/internal/buildinfo.Version={{.Version}} -X dfmicro/internal/buildinfo.Commit={{.ShortCommit}}
+      - -s -w -X dfmicro/internal/buildinfo.Version={{.Version}} -X dfmicro/internal/buildinfo.Commit={{.ShortCommit}} -X dfmicro/internal/buildinfo.BuildTime={{.Date}}
     goos:
       - linux
       - darwin
