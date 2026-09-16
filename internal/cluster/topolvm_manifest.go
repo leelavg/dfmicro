@@ -25,8 +25,6 @@ func WriteTopoLVMManifest(cfg Config, nodes []string) error {
 	for _, name := range []string{
 		"01-namespace.yaml",
 		"02-topolvm.yaml",
-		"topolvm_mutatingwebhook_patch.yaml",
-		"topolvm_service_patch.yaml",
 	} {
 		data, err := fs.ReadFile(topolvmAssets, "topolvm-assets/"+name)
 		if err != nil {
@@ -58,6 +56,11 @@ data:
 	if err := os.WriteFile(filepath.Join(dir, "03-lvmd.yaml"), []byte(lvmd.String()), 0o644); err != nil {
 		return err
 	}
+	imageData, err := fs.ReadFile(topolvmAssets, "topolvm-assets/topolvm-image")
+	if err != nil {
+		return err
+	}
+	topolvmImage := strings.TrimSpace(string(imageData))
 	controlPatch := fmt.Sprintf(`apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -126,7 +129,7 @@ spec:
       hostPID: true
       containers:
       - name: lvmd
-        image: ghcr.io/topolvm/topolvm-with-sidecar:0.36.2
+        image: %s
         command: ["/lvmd"]
         securityContext:
           privileged: true
@@ -149,7 +152,7 @@ spec:
         hostPath:
           path: /run/topolvm
           type: DirectoryOrCreate
-`, index+1, node, cfg.OverprovisionRatio, index+1, index+1, index+1, index+1, node, index+1)
+`, index+1, node, cfg.OverprovisionRatio, index+1, index+1, index+1, index+1, node, topolvmImage, index+1)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "04-dfmicro-topolvm.yaml"), []byte(workers.String()), 0o644); err != nil {
 		return err
@@ -164,8 +167,6 @@ kind: Kustomization
 resources:
 %spatches:
   - path: dfmicro-topolvm-control-patch.yaml
-  - path: topolvm_mutatingwebhook_patch.yaml
-  - path: topolvm_service_patch.yaml
 `, resources)
 	return os.WriteFile(filepath.Join(dir, "kustomization.yaml"), []byte(kustomization), 0o644)
 }

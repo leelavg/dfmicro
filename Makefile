@@ -9,8 +9,9 @@ BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
+TOPOLVM_VERSION ?= 17.2.0
 
-.PHONY: vet fmt generate build build-cross build-release build-analyze build-fetch revive
+.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze build-fetch revive
 
 vet:
 	go vet -tags fetch ./...
@@ -21,8 +22,11 @@ revive:
 fmt:
 	go fmt ./...
 
-generate:
+generate: generate-topolvm
 	go generate ./internal/docs
+
+generate-topolvm:
+	TOPOLVM_VERSION=$(TOPOLVM_VERSION) ./hack/generate-topolvm.sh
 
 fix:
 	go fix -tags fetch ./...
