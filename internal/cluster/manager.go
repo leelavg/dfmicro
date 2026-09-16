@@ -543,8 +543,6 @@ func (m *manager) waitReady(ctx context.Context) error {
 		if ready {
 			if err := m.checkCNI(ctx, containers[0]); err != nil {
 				m.logger.Info("waiting for CNI/network", "container", containers[0])
-			} else if err := m.checkNodesReady(ctx, containers[0]); err != nil {
-				m.logger.Info("waiting for Kubernetes nodes", "container", containers[0])
 			} else {
 				m.logger.Info("CNI/network is ready", "container", containers[0])
 				m.logger.Info("all nodes ready")
@@ -560,19 +558,6 @@ func (m *manager) waitReady(ctx context.Context) error {
 	}
 
 	return errors.New("cluster did not become ready within 10 minutes")
-}
-
-func (m *manager) checkNodesReady(ctx context.Context, containerName string) error {
-	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "oc", "get", "nodes", "--no-headers")
-	if err != nil {
-		return err
-	}
-	for line := range strings.SplitSeq(result.Stdout, "\n") {
-		if strings.TrimSpace(line) != "" && strings.Contains(line, "Ready") {
-			return nil
-		}
-	}
-	return errors.New("nodes not ready yet")
 }
 
 func (m *manager) checkCNI(ctx context.Context, containerName string) error {
