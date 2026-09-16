@@ -541,15 +541,12 @@ func (m *manager) waitReady(ctx context.Context) error {
 			}
 		}
 		if ready {
-			if err := m.checkPrimaryCNI(ctx, containers[0]); err != nil {
-				m.logger.Info("waiting for kindnet CNI", "container", containers[0])
-			} else if err := m.checkMultusCNI(ctx, containers[0]); err != nil {
-				m.logger.Info("waiting for Multus CNI", "container", containers[0])
+			if err := m.checkCNI(ctx, containers[0]); err != nil {
+				m.logger.Info("waiting for CNI/network", "container", containers[0])
 			} else if err := m.checkNodesReady(ctx, containers[0]); err != nil {
 				m.logger.Info("waiting for Kubernetes nodes", "container", containers[0])
 			} else {
-				m.logger.Info("primary CNI is ready", "container", containers[0])
-				m.logger.Info("Multus CNI is ready", "container", containers[0])
+				m.logger.Info("CNI/network is ready", "container", containers[0])
 				m.logger.Info("all nodes ready")
 				return nil
 			}
@@ -578,19 +575,16 @@ func (m *manager) checkNodesReady(ctx context.Context, containerName string) err
 	return errors.New("nodes not ready yet")
 }
 
-func (m *manager) checkPrimaryCNI(ctx context.Context, containerName string) error {
-	const configPath = "/etc/cni/net.d/10-kindnet.conflist"
-	_, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath)
-	if err != nil {
-		return err
+func (m *manager) checkCNI(ctx context.Context, containerName string) error {
+	for _, configPath := range []string{
+		"/etc/cni/net.d/10-kindnet.conflist",
+		"/etc/cni/net.d/00-multus.conf",
+	} {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath); err != nil {
+			return err
+		}
 	}
 	return nil
-}
-
-func (m *manager) checkMultusCNI(ctx context.Context, containerName string) error {
-	const configPath = "/etc/cni/net.d/00-multus.conf"
-	_, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath)
-	return err
 }
 
 func (m *manager) PrintKubeconfig(ctx context.Context) error {
