@@ -92,7 +92,7 @@ func deriveConfig(defaults rootconfig.Config, name string) config {
 		LVMDisk:               filepath.Join(stateDir, name+".image"),
 		ExtraConfig:           filepath.Join(stateDir, "custom_config.yaml"),
 		DefaultKubeconfigPath: filepath.Join(stateDir, "kubeconfig"),
-		VGName:                name,
+		VGName:                name + "-1",
 	}
 }
 

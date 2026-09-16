@@ -164,10 +164,7 @@ func (m *manager) waitForControlPlane(ctx context.Context, cfg cluster.Config, c
 		{namespace: "openshift-dns", kind: "daemonset", name: "dns-default"},
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
-		resources = append(resources,
-			resource{namespace: "topolvm-system", kind: "secret", name: "topolvm-mutatingwebhook"},
-			resource{namespace: "topolvm-system", kind: "deployment", name: "topolvm-controller"},
-		)
+		resources = append(resources, resource{namespace: "topolvm-system", kind: "deployment", name: "topolvm-controller"})
 	}
 	for _, resource := range resources {
 		var args []string
@@ -448,9 +445,6 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		}
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "apply", "-k", "/usr/lib/microshift/manifests.d/001-microshift-topolvm"); err != nil {
 			return fmt.Errorf("apply topolvm manifest: %w", err)
-		}
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "-n", "topolvm-system", "secret/topolvm-mutatingwebhook"); err != nil {
-			return fmt.Errorf("wait for topolvm webhook secret: %w", err)
 		}
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Available", "--timeout=120s", "-n", "topolvm-system", "deployment/topolvm-controller"); err != nil {
 			return fmt.Errorf("wait for topolvm controller: %w", err)
