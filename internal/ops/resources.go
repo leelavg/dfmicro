@@ -102,6 +102,7 @@ type nsReport struct {
 
 type nodeReport struct {
 	name        string
+	role        string
 	capacity    map[string]string
 	allocatable map[string]string
 	namespaces  []*nsReport
@@ -128,7 +129,8 @@ type criStatsOutput struct {
 type nodeListOutput struct {
 	Items []struct {
 		Metadata struct {
-			Name string `json:"name"`
+			Name   string            `json:"name"`
+			Labels map[string]string `json:"labels"`
 		} `json:"metadata"`
 		Status struct {
 			Allocatable map[string]string `json:"allocatable"`
@@ -270,6 +272,7 @@ func (r *resources) build(ctx context.Context, targetCtr string) ([]nodeReport, 
 		}
 		reports = append(reports, nodeReport{
 			name:        n.Metadata.Name,
+			role:        nodeRole(n.Metadata.Labels),
 			capacity:    n.Status.Capacity,
 			allocatable: n.Status.Allocatable,
 		})
@@ -353,8 +356,9 @@ func (r *resources) print(ctx context.Context) error {
 	nsSummary := map[string]*nsTotals{}
 
 	for _, node := range reports {
-		fmt.Printf("\nnode: %s   cpu: %s/%s cores   mem: %s/%s   (allocatable/capacity)\n",
+		fmt.Printf("\nnode: %s (%s)   cpu: %s/%s cores   mem: %s/%s   (allocatable/capacity)\n",
 			node.name,
+			node.role,
 			r.fmtVal(node.allocatable["cpu"]),
 			r.fmtVal(node.capacity["cpu"]),
 			r.fmtMemRaw(node.allocatable["memory"]),
@@ -485,6 +489,16 @@ func (r *resources) print(ctx context.Context) error {
 		r.fmtBytes(totalMemUseB), r.pctDiff(totalMemUseB, totalMemReqB),
 	)
 	return w.Flush()
+}
+
+func nodeRole(labels map[string]string) string {
+	if _, ok := labels["node-role.kubernetes.io/control-plane"]; ok {
+		return "control"
+	}
+	if _, ok := labels["node-role.kubernetes.io/master"]; ok {
+		return "control"
+	}
+	return "worker"
 }
 
 type formatter struct{}

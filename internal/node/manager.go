@@ -265,7 +265,7 @@ func (m *manager) extractKubeletCA(ctx context.Context, cfg cluster.Config, cont
 func (m *manager) openKubeletPort(ctx context.Context, nodeName string) error {
 	var lastErr error
 	for range 30 {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", nodeName, "firewall-cmd", "--zone=public", "--add-port=10250/tcp"); err == nil {
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", nodeName, "firewall-cmd", "--zone=trusted", "--add-port=10250/tcp"); err == nil {
 			return nil
 		} else {
 			lastErr = err
@@ -423,6 +423,12 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	if err := cluster.TrustClusterCIDRs(ctx, m.runner, nodeName, cfg.ClusterCIDR, cfg.ServiceCIDR); err != nil {
 		return fmt.Errorf("trust cluster CIDRs: %w", err)
 	}
+	if err := cluster.TrustClusterCIDRs(ctx, m.runner, controlNodeName, cfg.BridgeSubnet); err != nil {
+		return fmt.Errorf("trust node network on control node: %w", err)
+	}
+	if err := cluster.TrustClusterCIDRs(ctx, m.runner, nodeName, cfg.BridgeSubnet); err != nil {
+		return fmt.Errorf("trust node network on worker: %w", err)
+	}
 	apiIP, err := apiServerIP(cfg.ServiceCIDR)
 	if err != nil {
 		return fmt.Errorf("calculate API server IP: %w", err)
@@ -437,6 +443,11 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+nodeName); err != nil {
 		return fmt.Errorf("wait for worker readiness: %w", err)
 	}
+	m.logger.Info("waiting for worker CNI/network", "node", nodeName)
+	if err := cluster.WaitForCNI(ctx, m.runner, nodeName); err != nil {
+		return fmt.Errorf("wait for worker CNI/network: %w", err)
+	}
+	m.logger.Info("worker CNI/network is ready", "node", nodeName)
 	m.logger.Info("worker is ready", "node", nodeName)
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		m.logger.Info("waiting for service-ca", "node", nodeName)

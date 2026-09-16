@@ -49,9 +49,11 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		return fmt.Errorf("StorageCluster CRD not found, is the odf operator installed?: %w", err)
 	}
 
-	o.logger.Info("patching ocs-operator subscription with SINGLE_NODE")
-	if err := o.patchOCSSubscription(ctx); err != nil {
-		return err
+	if !cfg.multiNode {
+		o.logger.Info("patching ocs-operator subscription with SINGLE_NODE")
+		if err := o.patchOCSSubscription(ctx); err != nil {
+			return err
+		}
 	}
 
 	o.logger.Info("labeling nodes")
@@ -92,14 +94,6 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		return err
 	}
 	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(rbd)); err != nil {
-		return err
-	}
-
-	topolvm, err := odfFS.ReadFile("resources/01-topolvm-immediate-sc.yaml")
-	if err != nil {
-		return err
-	}
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(topolvm)); err != nil {
 		return err
 	}
 

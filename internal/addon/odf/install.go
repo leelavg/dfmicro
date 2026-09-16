@@ -15,17 +15,22 @@ type installConfig struct {
 	channel      string
 	subNames     []string
 	version      string
+	shims        bool
 }
 
 type configureConfig struct {
 	clientOnly    bool
 	includeCephFS bool
+	multiNode     bool
 }
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	o.logger.Info("applying shim CRDs")
 	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/crd"); err != nil {
 		return err
+	}
+	if cfg.shims {
+		return nil
 	}
 
 	o.logger.Info("applying ClusterVersion")

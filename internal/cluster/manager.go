@@ -126,6 +126,11 @@ func (m *manager) start(ctx context.Context) error {
 	if err := m.waitReady(ctx); err != nil {
 		return err
 	}
+	for _, container := range containers {
+		if err := m.trustClusterCIDRs(ctx, container); err != nil {
+			return err
+		}
+	}
 	if err := m.copyKubeconfig(ctx, containers[0]); err != nil {
 		return err
 	}
@@ -253,20 +258,26 @@ func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, e
 }
 
 func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) error {
-	return TrustClusterCIDRs(ctx, m.runner, containerName, m.cfg.ClusterCIDR, m.cfg.ServiceCIDR)
+	return TrustClusterCIDRs(ctx, m.runner, containerName, m.cfg.ClusterCIDR, m.cfg.ServiceCIDR, m.cfg.BridgeSubnet)
 }
 
 func TrustClusterCIDRs(ctx context.Context, runner execx.Runner, containerName string, cidrs ...string) error {
+	sourceArgs := []string{"exec", containerName, "firewall-cmd", "--zone=trusted"}
 	for _, cidr := range cidrs {
-		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-source="+cidr); err != nil {
-			return fmt.Errorf("trust CIDR %s: %w", cidr, err)
-		}
+		sourceArgs = append(sourceArgs, "--add-source="+cidr)
+	}
+	if _, err := support.RunPodmanPrivileged(ctx, runner, sourceArgs...); err != nil {
+		return fmt.Errorf("trust cluster sources: %w", err)
+	}
+	interfaceArgs := []string{"exec", containerName, "firewall-cmd", "--zone=trusted", "--add-interface=eth0"}
+	if _, err := support.RunPodmanPrivileged(ctx, runner, interfaceArgs...); err != nil {
+		return fmt.Errorf("trust cluster interface: %w", err)
 	}
 	return nil
 }
 
 func (m *manager) openKubeletPort(ctx context.Context, containerName string) error {
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=public", "--add-port=10250/tcp"); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-port=10250/tcp"); err != nil {
 		return fmt.Errorf("open kubelet port: %w", err)
 	}
 	return nil
@@ -561,11 +572,30 @@ func (m *manager) waitReady(ctx context.Context) error {
 }
 
 func (m *manager) checkCNI(ctx context.Context, containerName string) error {
+	return checkCNI(ctx, m.runner, containerName)
+}
+
+func WaitForCNI(ctx context.Context, runner execx.Runner, containerName string) error {
+	deadline := time.Now().Add(10 * time.Minute)
+	for time.Now().Before(deadline) {
+		if err := checkCNI(ctx, runner, containerName); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+	return errors.New("CNI/network did not become ready within 10 minutes")
+}
+
+func checkCNI(ctx context.Context, runner execx.Runner, containerName string) error {
 	for _, configPath := range []string{
 		"/etc/cni/net.d/10-kindnet.conflist",
 		"/etc/cni/net.d/00-multus.conf",
 	} {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "test", "-s", configPath); err != nil {
+		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", containerName, "test", "-s", configPath); err != nil {
 			return err
 		}
 	}

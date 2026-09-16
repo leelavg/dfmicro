@@ -51,13 +51,15 @@ Manage OpenShift Data Foundation on a MicroShift cluster
 
 #### configure
 
-Configure ODF to run on MicroShift in an opinionated single-node setup
+Configure ODF to run on MicroShift
 
 >Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.
 
 **--client**: Client-only mode
 
 **--include-cephfs**: Run CephFS and CSI Driver
+
+**--multi-node**: Configure ODF for a multi-node cluster
 
 #### install
 
@@ -71,6 +73,8 @@ Install ODF and required shim resources
 **--catalog-image**="": Catalog source image
 
 **--channel**="": Subscription channel (e.g. stable-4.16)
+
+**--shims**: Apply only the shim CRDs
 
 **--sub-name**="": Subscription name (repeatable) (default: "odf-operator")
 
@@ -136,7 +140,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
-**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202609160737_gfbd7b4e65_5.0.0_okd_scos.ec.8")
+**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202609161348_g4582bf673_5.0.0_okd_scos.ec.8")
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 

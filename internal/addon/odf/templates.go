@@ -88,6 +88,8 @@ spec:
   monitoring:
     reconcileStrategy: ignore
   managedResources:
+    cephCluster:
+      mgrCount: 1
     cephObjectStores:
       reconcileStrategy: ignore
     cephObjectStoreUsers:
@@ -100,7 +102,7 @@ spec:
     reconcileStrategy: ignore
   monPVCTemplate:
     spec:
-      storageClassName: topolvm-provisioner-immediate
+      storageClassName: topolvm-provisioner
       accessModes:
         - ReadWriteOnce
       resources:
@@ -165,7 +167,7 @@ spec:
       name: ocs-deviceset
       dataPVCTemplate:
         spec:
-          storageClassName: topolvm-provisioner-immediate
+          storageClassName: topolvm-provisioner
           accessModes:
             - ReadWriteOnce
           resources:

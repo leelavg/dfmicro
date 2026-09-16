@@ -66,15 +66,17 @@ Note: --name and --kubeconfig apply to all subcommands and must come before the 
 Example:
   dfmicro addon odf install --catalog-image quay.io/example/catalog:v4.16 --channel stable-4.16 --version 4.16.0`,
 				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:     "catalog-image",
-						Usage:    "Catalog source image",
-						Required: true,
+					&cli.BoolFlag{
+						Name:  "shims",
+						Usage: "Apply only the shim CRDs",
 					},
 					&cli.StringFlag{
-						Name:     "channel",
-						Usage:    "Subscription channel (e.g. stable-4.16)",
-						Required: true,
+						Name:  "catalog-image",
+						Usage: "Catalog source image",
+					},
+					&cli.StringFlag{
+						Name:  "channel",
+						Usage: "Subscription channel (e.g. stable-4.16)",
 					},
 					&cli.StringSliceFlag{
 						Name:  "sub-name",
@@ -82,10 +84,12 @@ Example:
 						Value: []string{"odf-operator"},
 					},
 					&cli.StringFlag{
-						Name:     "version",
-						Usage:    "OCP version in X.Y.Z format (e.g. 4.16.0)",
-						Required: true,
+						Name:  "version",
+						Usage: "OCP version in X.Y.Z format (e.g. 4.16.0)",
 						Validator: func(v string) error {
+							if v == "" {
+								return nil
+							}
 							if !reVersion.MatchString(v) {
 								return fmt.Errorf("version %q must be in X.Y.Z format", v)
 							}
@@ -93,18 +97,35 @@ Example:
 						},
 					},
 				},
+				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					if cmd.Bool("shims") {
+						for _, name := range []string{"catalog-image", "channel", "version"} {
+							if cmd.IsSet(name) {
+								return ctx, fmt.Errorf("--shims cannot be combined with --%s", name)
+							}
+						}
+						return ctx, nil
+					}
+					for _, name := range []string{"catalog-image", "channel", "version"} {
+						if cmd.String(name) == "" {
+							return ctx, fmt.Errorf("--%s is required unless --shims is set", name)
+						}
+					}
+					return ctx, nil
+				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
 					return o.install(ctx, installConfig{
 						catalogImage: cmd.String("catalog-image"),
 						channel:      cmd.String("channel"),
 						subNames:     cmd.StringSlice("sub-name"),
 						version:      cmd.String("version"),
+						shims:        cmd.Bool("shims"),
 					})
 				}),
 			},
 			{
 				Name:      "configure",
-				Usage:     "Configure ODF to run on MicroShift in an opinionated single-node setup",
+				Usage:     "Configure ODF to run on MicroShift",
 				UsageText: `Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.`,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -115,11 +136,16 @@ Example:
 						Name:  "include-cephfs",
 						Usage: "Run CephFS and CSI Driver",
 					},
+					&cli.BoolFlag{
+						Name:  "multi-node",
+						Usage: "Configure ODF for a multi-node cluster",
+					},
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
 					return o.configure(ctx, configureConfig{
 						clientOnly:    cmd.Bool("client"),
 						includeCephFS: cmd.Bool("include-cephfs"),
+						multiNode:     cmd.Bool("multi-node"),
 					})
 				}),
 			},

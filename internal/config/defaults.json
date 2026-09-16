@@ -1,6 +1,6 @@
 {
   "name": "micro",
-  "image": "ghcr.io/leelavg/microshift:5.0.0_202609160737_gfbd7b4e65_5.0.0_okd_scos.ec.8",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202609161348_g4582bf673_5.0.0_okd_scos.ec.8",
   "powerTuning": true,
 
   "apiServerPort": 6443,
