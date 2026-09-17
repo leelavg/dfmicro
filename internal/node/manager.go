@@ -149,7 +149,6 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	nodesCfg.Nodes = append(nodesCfg.Nodes, NodeConfig{
 		NodeConfig: rootconfig.NodeConfig{
 			NodeName:   nodeName,
-			StateDir:   nodeStateDir,
 			LVMDisk:    filepath.Join(nodeStateDir, nodeName+".image"),
 			VGName:     nodeName,
 			PullSecret: cfg.PullSecret,

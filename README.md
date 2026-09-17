@@ -1,7 +1,7 @@
 # dfmicro
 
-Run single-node [MicroShift](https://github.com/openshift/microshift) clusters inside rootful Podman containers.
-Each cluster gets its own network, loop-device backed LVM storage, and a kubeconfig.
+Run [MicroShift](https://github.com/openshift/microshift) clusters inside rootful Podman containers.
+Each cluster gets its own network, loop-device backed LVM storage, and a kubeconfig. Workers can be added when multi-node operation is needed.
 
 Verified on Linux (Fedora / RHEL). Best-effort support on macOS via rootful Podman machine.
 
@@ -37,7 +37,7 @@ kubectl get nodes
 See [internal/docs/cli.md](internal/docs/cli.md) for the full command reference,
 or run `dfmicro docs` to print it.
 
-For development setup and design notes, see [dev.md](dev.md). For what is planned and what is done, see the [devlog](internal/devlog/DEVLOG.txt).
+For development setup and design notes, see [dev.md](dev.md). For what is planned and what is done, see the [devlog](internal/devlog/devlog.txt).
 
 ## FAQ
 
@@ -46,7 +46,7 @@ For development setup and design notes, see [dev.md](dev.md). For what is planne
 <br>
 IPs and Domain names mentioned are for default values, edit as per your cluster settings.
 
-Routes like `metrics.apps.example.com` need DNS resolution to the cluster node IP. Find your cluster's node IP:
+Routes use a cluster-specific base domain, such as `metrics.apps.demo.dfmicro.io`, and need DNS resolution to the cluster node IP. Find your cluster's node IP:
 
 ```bash
 kubectl get nodes -o wide | grep 172.20
@@ -56,37 +56,37 @@ Choose your setup method (replace `172.20.0.11` with your actual node IP):
 
 **Linux with NetworkManager + dnsmasq:**
 ```bash
-echo 'address=/apps.example.com/172.20.0.11' | sudo tee /etc/NetworkManager/dnsmasq.d/dfmicro.conf
+echo 'address=/apps.demo.dfmicro.io/172.20.0.11' | sudo tee /etc/NetworkManager/dnsmasq.d/dfmicro.conf
 
 sudo nmcli general reload dns-full
-curl -k https://metrics.apps.example.com/metrics
+curl -k https://metrics.apps.demo.dfmicro.io/metrics
 ```
 
 **Linux with standalone dnsmasq:**
 ```bash
-echo 'address=/apps.example.com/172.20.0.11' | sudo tee /etc/dnsmasq.d/dfmicro.conf
+echo 'address=/apps.demo.dfmicro.io/172.20.0.11' | sudo tee /etc/dnsmasq.d/dfmicro.conf
 
 sudo systemctl reload dnsmasq
-curl -k https://metrics.apps.example.com/metrics
+curl -k https://metrics.apps.demo.dfmicro.io/metrics
 ```
 
 **Linux with systemd-resolved:**
 ```bash
 echo 'DNS=172.20.0.11' | sudo tee /etc/systemd/resolved.conf.d/dfmicro.conf
-echo 'Domains=~apps.example.com' | sudo tee -a /etc/systemd/resolved.conf.d/dfmicro.conf
+echo 'Domains=~apps.demo.dfmicro.io' | sudo tee -a /etc/systemd/resolved.conf.d/dfmicro.conf
 sudo systemctl restart systemd-resolved
-curl -k https://metrics.apps.example.com/metrics
+curl -k https://metrics.apps.demo.dfmicro.io/metrics
 ```
 
 **Linux / macOS:**
 ```bash
-echo '172.20.0.11 metrics.apps.example.com' | sudo tee -a /etc/hosts
-curl -k https://metrics.apps.example.com/metrics
+echo '172.20.0.11 metrics.apps.demo.dfmicro.io' | sudo tee -a /etc/hosts
+curl -k https://metrics.apps.demo.dfmicro.io/metrics
 ```
 
 Or use `curl --resolve` (no `/etc/hosts` edit):
 ```bash
-curl -k --resolve metrics.apps.example.com:443:172.20.0.11 https://metrics.apps.example.com/metrics
+curl -k --resolve metrics.apps.demo.dfmicro.io:443:172.20.0.11 https://metrics.apps.demo.dfmicro.io/metrics
 ```
 
 **Cleanup:**
@@ -99,7 +99,7 @@ sudo nmcli general reload dns-full || sudo systemctl reload dnsmasq
 <details>
 <summary>Why dnsmasq instead of in-cluster DNS?</summary>
 <br>
-Podman's aardvark-dns only resolves container names, not in-cluster routes. It has no upstream config to forward to CoreDNS. The router on node IP `172.20.0.11` handles SNI dispatch, so dnsmasq just needs to answer `*.apps.example.com` with that IP.
+Podman's aardvark-dns only resolves container names, not in-cluster routes. It has no upstream config to forward to CoreDNS. The router on node IP `172.20.0.11` handles SNI dispatch, so dnsmasq just needs to answer `*.apps.demo.dfmicro.io` with that IP.
 </details>
 
 <details>

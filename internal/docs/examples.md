@@ -50,6 +50,7 @@ dfmicro cluster create \
 
 dfmicro cluster list
 dfmicro cluster config --name demo
+dfmicro node config --cluster demo
 dfmicro cluster kubeconfig --name demo >/tmp/demo-kubeconfig
 export KUBECONFIG=/tmp/demo-kubeconfig
 

@@ -36,3 +36,4 @@
 - Whereabouts IPAM: cluster-wide secondary network allocation across worker nodes
 - Build metadata and examples: UTC version timestamp and tested MicroShift image defaults
 - cluster peering for non-overlapping service and cluster ip ranges
+- cluster-specific route base domains under `<cluster>.dfmicro.io`

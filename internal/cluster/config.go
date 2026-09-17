@@ -83,7 +83,6 @@ func deriveConfig(defaults rootconfig.ClusterDefaults, name string) config {
 		ControlConfig: rootconfig.ControlConfig{
 			NodeConfig: rootconfig.NodeConfig{
 				NodeName: controlNodeName,
-				StateDir: controlNodeDir,
 				LVMDisk:  filepath.Join(controlNodeDir, controlNodeName+".image"),
 				VGName:   controlNodeName,
 			},

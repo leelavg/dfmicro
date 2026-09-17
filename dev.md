@@ -38,6 +38,10 @@ An addon is a package under `internal/addon/<name>/` that exposes a `*cli.Comman
 
 All cluster operations (kubectl, crictl, oc) go through `podman exec` into the running cluster container. This sidesteps the need to route the API server through the host network or manage certificates for host-side client-go connections. The tradeoff is one process spawn per call and no streaming. Replacing this with the Podman socket API and client-go is tracked in the devlog.
 
+**Configuration layout**
+
+`internal/config` owns shared configuration types and compiled defaults. Cluster configuration stores cluster-wide settings and the control-node settings. Worker settings are stored separately in `nodes.json`. Per-node state paths are derived from the configured directory, cluster name, and node name rather than stored as node configuration.
+
 ## Release
 
 Releases are cut by pushing a version tag. GoReleaser builds cross-platform binaries, signs checksums with cosign, and publishes to GitHub Releases.

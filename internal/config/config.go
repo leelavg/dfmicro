@@ -43,7 +43,6 @@ type NetworkDefaults struct {
 
 type NodeConfig struct {
 	NodeName   string   `json:"nodeName"`
-	StateDir   string   `json:"stateDir,omitempty"`
 	LVMDisk    string   `json:"lvmDisk,omitempty"`
 	VGName     string   `json:"vgName,omitempty"`
 	PullSecret string   `json:"pullSecret,omitempty"`

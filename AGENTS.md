@@ -1,6 +1,6 @@
 # Agent Guidelines
 
-dfmicro runs single-node MicroShift clusters in rootful Podman containers. CLI built on urfave/cli v3.
+dfmicro runs MicroShift clusters in rootful Podman containers. Clusters can have a control node and workers. CLI built on urfave/cli v3.
 
 ## Packages
 
@@ -29,7 +29,7 @@ Some examples:
 - `execx`: all process execution. Never shell out directly, always use `execx.Runner`.
 - `support`: shared utilities only. No domain logic.
 - `cluster`, `network`, `addon`, `lore` (still unused): domain packages, each owns its full subdomain.
-- `internal/config`: defaults via `sync.OnceValue`. Never hardcode values in the flag defaults and source them from here.
+- `internal/config`: shared configuration types and defaults via `sync.OnceValue`. Never hardcode values in the flag defaults and source them from here.
 
 ## Conventions
 
@@ -48,6 +48,8 @@ Run `make generate` after changing any `Usage`, `UsageText`, or flag definitions
 
 Secondary network attachment uses host-local IPAM by default. `network attach --multi-node` selects Whereabouts and labels current and future cluster nodes.
 
+Cluster settings are stored in the cluster directory. Control-node settings are part of the cluster config, worker settings are stored in `nodes.json`, and node state directories are derived from the cluster and node names.
+
 ## Etiquette
 
 - Never bring external dependencies and prefer using stdlib as bloating the binary is unacceptable, you can occasionally check the binary compiled by `make build-analyze` with `gsa`. Anecdote: ./internal/support/http.go is build gated because dfmicro binary doesn't use http.
@@ -55,4 +57,4 @@ Secondary network attachment uses host-local IPAM by default. `network attach --
 
 ## References
 
-Longer form references are at ./README.md and ./dev.md, reading them is not mandatory. A changelog is maintaned at ./internal/devlog/DEVLOG.txt with single line items.
+Longer form references are at ./README.md and ./dev.md, reading them is not mandatory. A changelog is maintained at ./internal/devlog/devlog.txt with single line items.
