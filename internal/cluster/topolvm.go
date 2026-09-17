@@ -110,11 +110,11 @@ func createTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg, si
 
 func deleteTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg string) error {
 	encodedVG := strings.ReplaceAll(vg, "-", "--")
-	for range 10 {
-		result, err := support.RunPrivileged(ctx, runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name")
-		if err != nil {
-			break
-		}
+	result, err := support.RunPrivileged(ctx, runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name")
+	if err != nil && !isMissingLVMResource(err) {
+		return fmt.Errorf("list device mappings for %s: %w", vg, err)
+	}
+	if err == nil {
 		var devices []string
 		for name := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
 			fields := strings.Fields(name)
@@ -122,16 +122,15 @@ func deleteTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg str
 				continue
 			}
 			name = fields[0]
-			if name == "" || !strings.HasPrefix(name, encodedVG+"-") {
-				continue
+			if strings.HasPrefix(name, encodedVG+"-") {
+				devices = append(devices, name)
 			}
-			devices = append(devices, name)
 		}
-		if len(devices) == 0 {
-			break
-		}
-		for i := len(devices) - 1; i >= 0; i-- {
-			_, _ = support.RunPrivileged(ctx, runner, "dmsetup", "remove", "--force", "--retry", devices[i])
+		if len(devices) > 0 {
+			args := append([]string{"remove", "--force", "--deferred"}, devices...)
+			if _, err := support.RunPrivileged(ctx, runner, "dmsetup", args...); err != nil {
+				return fmt.Errorf("remove device mappings for %s: %w", vg, err)
+			}
 		}
 	}
 
@@ -146,20 +145,26 @@ func deleteTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg str
 		}
 	}
 
-	result, err := support.RunPrivileged(ctx, runner, "losetup", "--associated", disk, "--output", "NAME", "--noheadings")
+	result, err = support.RunPrivileged(ctx, runner, "losetup", "--associated", disk, "--output", "NAME", "--noheadings")
 	if err == nil {
 		for device := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
 			device = strings.TrimSpace(device)
 			if device != "" {
-				_, _ = support.RunPrivileged(ctx, runner, "losetup", "--detach", device)
+				if _, err := support.RunPrivileged(ctx, runner, "losetup", "--detach", device); err != nil {
+					return fmt.Errorf("detach loop device %s: %w", device, err)
+				}
 			}
 		}
 	}
 
-	return os.RemoveAll(filepath.Dir(disk))
+	if err := os.RemoveAll(filepath.Dir(disk)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func isMissingLVMResource(err error) bool {
 	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "not found") || strings.Contains(text, "does not exist")
+	return strings.Contains(text, "not found") ||
+		strings.Contains(text, "does not exist")
 }

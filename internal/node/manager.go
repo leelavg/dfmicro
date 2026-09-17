@@ -482,6 +482,15 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Available", "--timeout=120s", "-n", "topolvm-system", "deployment/topolvm-controller"); err != nil {
 			return fmt.Errorf("wait for topolvm controller: %w", err)
 		}
+		if index, ok := nodeIndex(nodeName); ok {
+			lvmd := fmt.Sprintf("daemonset/topolvm-lvmd-%d", index-1)
+			if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "rollout", "status", "-n", "topolvm-system", lvmd, "--timeout=120s"); err != nil {
+				return fmt.Errorf("wait for worker lvmd: %w", err)
+			}
+		}
+		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "rollout", "status", "-n", "topolvm-system", "daemonset/topolvm-node", "--timeout=120s"); err != nil {
+			return fmt.Errorf("wait for topolvm node: %w", err)
+		}
 	}
 
 	return nil
