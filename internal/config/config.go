@@ -13,7 +13,7 @@ import (
 //go:embed defaults.json
 var embeddedConfig []byte
 
-type Config struct {
+type ClusterDefaults struct {
 	Name        string `json:"name"`
 	Image       string `json:"image"`
 	PowerTuning bool   `json:"powerTuning"`
@@ -32,11 +32,38 @@ type Config struct {
 
 	BridgeName   string `json:"bridgeName"`
 	BridgeSubnet string `json:"bridgeSubnet"`
+}
 
+type NetworkDefaults struct {
 	GroupCount       int    `json:"groupCount"`
 	ClustersPerGroup int    `json:"clustersPerGroup"`
 	ReservePerGroup  int    `json:"reservePerGroup"`
 	NADNamespace     string `json:"nadNamespace"`
+}
+
+type NodeConfig struct {
+	NodeName   string   `json:"nodeName"`
+	StateDir   string   `json:"stateDir,omitempty"`
+	LVMDisk    string   `json:"lvmDisk,omitempty"`
+	VGName     string   `json:"vgName,omitempty"`
+	PullSecret string   `json:"pullSecret,omitempty"`
+	IDMSFiles  []string `json:"idmsFiles,omitempty"`
+	Mounts     []string `json:"mounts,omitempty"`
+}
+
+type ControlConfig struct {
+	NodeConfig
+	Kubeconfig string `json:"kubeconfig,omitempty"`
+}
+
+type WorkerConfig struct {
+	NodeConfig
+	ControlNodeName string `json:"controlNodeName"`
+}
+
+type Defaults struct {
+	ClusterDefaults
+	NetworkDefaults
 }
 
 type NetworkCIDRs struct {
@@ -44,8 +71,8 @@ type NetworkCIDRs struct {
 	Service string
 }
 
-var Load = sync.OnceValue(func() Config {
-	var cfg Config
+var Load = sync.OnceValue(func() Defaults {
+	var cfg Defaults
 	support.MustOK(json.Unmarshal(embeddedConfig, &cfg))
 	return cfg
 })

@@ -13,39 +13,18 @@ import (
 
 const configFileName = "config.json"
 
-var clusterConfigPrintHiddenFields = []string{
-	"stateDir",
-	"lvmDisk",
-	"extraConfig",
-	"defaultKubeconfig",
-	"vgName",
-	"pullSecret",
-	"idmsFiles",
-	"extraMounts",
-	"groupCount",
-	"clustersPerGroup",
-	"reservePerGroup",
-	"nadNamespace",
-}
-
 type Config = config
 
 type config struct {
-	rootconfig.Config
-	Name                  string   `json:"name,omitempty"`
-	StateDir              string   `json:"stateDir,omitempty"`
-	LVMDisk               string   `json:"lvmDisk,omitempty"`
-	ExtraConfig           string   `json:"extraConfig,omitempty"`
-	DefaultKubeconfigPath string   `json:"defaultKubeconfig,omitempty"`
-	VGName                string   `json:"vgName,omitempty"`
-	PullSecret            string   `json:"pullSecret,omitempty"`
-	IDMSFiles             []string `json:"idmsFiles,omitempty"`
-	ExtraMounts           []string `json:"extraMounts,omitempty"`
+	rootconfig.ClusterDefaults
+	rootconfig.ControlConfig
+	StateDir    string `json:"stateDir,omitempty"`
+	ExtraConfig string `json:"extraConfig,omitempty"`
 }
 
 func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	name := cmd.String("name")
-	cfg := deriveConfig(defaultRootConfig, name)
+	cfg := deriveConfig(defaultRootConfig.ClusterDefaults, name)
 
 	cfg.Image = cmd.String("image")
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
@@ -68,7 +47,7 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 		}
 		cfg.IDMSFiles = append(cfg.IDMSFiles, abs)
 	}
-	cfg.ExtraMounts = cmd.StringSlice("mount")
+	cfg.Mounts = cmd.StringSlice("mount")
 
 	if cmd.IsSet("no-expose-kubeapi") {
 		cfg.ExposeKubeAPI = !cmd.Bool("no-expose-kubeapi")
@@ -92,20 +71,27 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	return cfg, nil
 }
 
-func deriveConfig(defaults rootconfig.Config, name string) config {
+func deriveConfig(defaults rootconfig.ClusterDefaults, name string) config {
 	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
 	controlNodeName := name + "-1"
 	controlNodeDir := filepath.Join(stateDir, controlNodeName)
 
-	return config{
-		Config:                defaults,
-		Name:                  name,
-		StateDir:              stateDir,
-		LVMDisk:               filepath.Join(controlNodeDir, controlNodeName+".image"),
-		ExtraConfig:           filepath.Join(stateDir, "custom_config.yaml"),
-		DefaultKubeconfigPath: filepath.Join(controlNodeDir, "kubeconfig"),
-		VGName:                controlNodeName,
+	cfg := config{
+		ClusterDefaults: defaults,
+		StateDir:        stateDir,
+		ExtraConfig:     filepath.Join(stateDir, "custom_config.yaml"),
+		ControlConfig: rootconfig.ControlConfig{
+			NodeConfig: rootconfig.NodeConfig{
+				NodeName: controlNodeName,
+				StateDir: controlNodeDir,
+				LVMDisk:  filepath.Join(controlNodeDir, controlNodeName+".image"),
+				VGName:   controlNodeName,
+			},
+			Kubeconfig: filepath.Join(controlNodeDir, "kubeconfig"),
+		},
 	}
+	cfg.Name = name
+	return cfg
 }
 
 func clusterConfigPath(name string) string {
@@ -117,7 +103,7 @@ func Kubeconfig(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return cfg.DefaultKubeconfigPath, nil
+	return cfg.Kubeconfig, nil
 }
 
 func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
@@ -162,29 +148,13 @@ func writeClusterConfig(cfg config) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func (cfg config) marshalForPrint() ([]byte, error) {
-	data, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(data, &fields); err != nil {
-		return nil, err
-	}
-	for _, field := range clusterConfigPrintHiddenFields {
-		delete(fields, field)
-	}
-	return json.MarshalIndent(fields, "", "  ")
-}
-
 func printClusterConfig(name string) error {
 	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return err
 	}
 
-	data, err := cfg.marshalForPrint()
+	data, err := json.MarshalIndent(cfg.ClusterDefaults, "", "  ")
 	if err != nil {
 		return err
 	}

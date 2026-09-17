@@ -12,14 +12,17 @@ import (
 
 const nodesConfigFileName = "nodes.json"
 
-type NodeConfig struct {
-	Name            string   `json:"name"`
-	ControlNodeName string   `json:"controlNodeName"`
-	Mounts          []string `json:"mounts,omitempty"`
-}
+type NodeConfig = rootconfig.WorkerConfig
 
 type NodesConfig struct {
 	Nodes []NodeConfig `json:"nodes"`
+}
+
+type nodeOutput struct {
+	Role string `json:"role"`
+	rootconfig.NodeConfig
+	ControlNodeName string `json:"controlNodeName,omitempty"`
+	Kubeconfig      string `json:"kubeconfig,omitempty"`
 }
 
 func nodesConfigPath(clusterName string) string {
@@ -65,42 +68,19 @@ func printNodesConfig(clusterName string) error {
 		return err
 	}
 
-	type nodeOutput struct {
-		Name            string   `json:"name"`
-		Role            string   `json:"role"`
-		ControlNodeName string   `json:"controlNodeName,omitempty"`
-		StateDir        string   `json:"stateDir"`
-		LVMDisk         string   `json:"lvmDisk,omitempty"`
-		VGName          string   `json:"vgName,omitempty"`
-		PullSecret      string   `json:"pullSecret,omitempty"`
-		IDMSFiles       []string `json:"idmsFiles,omitempty"`
-		Mounts          []string `json:"mounts,omitempty"`
-	}
-	controlNodeName := clusterCfg.Name + "-1"
 	nodes := []nodeOutput{{
-		Name:       controlNodeName,
 		Role:       "control",
-		StateDir:   filepath.Join(clusterCfg.StateDir, controlNodeName),
-		LVMDisk:    clusterCfg.LVMDisk,
-		VGName:     clusterCfg.VGName,
-		PullSecret: clusterCfg.PullSecret,
-		IDMSFiles:  clusterCfg.IDMSFiles,
-		Mounts:     clusterCfg.ExtraMounts,
+		NodeConfig: clusterCfg.NodeConfig,
+		Kubeconfig: clusterCfg.Kubeconfig,
 	}}
 	for _, node := range nodesCfg.Nodes {
 		nodes = append(nodes, nodeOutput{
-			Name:            node.Name,
 			Role:            "worker",
+			NodeConfig:      node.NodeConfig,
 			ControlNodeName: node.ControlNodeName,
-			StateDir:        filepath.Join(clusterCfg.StateDir, node.Name),
-			LVMDisk:         filepath.Join(clusterCfg.StateDir, node.Name, node.Name+".image"),
-			VGName:          node.Name,
-			PullSecret:      clusterCfg.PullSecret,
-			IDMSFiles:       clusterCfg.IDMSFiles,
-			Mounts:          node.Mounts,
 		})
 	}
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].NodeName < nodes[j].NodeName })
 	output := struct {
 		Nodes []nodeOutput `json:"nodes"`
 	}{Nodes: nodes}

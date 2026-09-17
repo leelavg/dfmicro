@@ -102,7 +102,7 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	m.logger.Info("cluster created", "name", m.cfg.Name, "container", containerName, "kubeconfig", m.cfg.DefaultKubeconfigPath)
+	m.logger.Info("cluster created", "name", m.cfg.Name, "container", containerName, "kubeconfig", m.cfg.Kubeconfig)
 	return nil
 }
 
@@ -135,7 +135,7 @@ func (m *manager) start(ctx context.Context) error {
 		return err
 	}
 
-	m.logger.Info("cluster started", "name", m.cfg.Name, "kubeconfig", m.cfg.DefaultKubeconfigPath)
+	m.logger.Info("cluster started", "name", m.cfg.Name, "kubeconfig", m.cfg.Kubeconfig)
 	return nil
 }
 
@@ -381,10 +381,12 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		Clients     []string
 		ClusterCIDR string
 		ServiceCIDR string
+		BaseDomain  string
 	}{
 		Clients:     clients,
 		ClusterCIDR: m.cfg.ClusterCIDR,
 		ServiceCIDR: m.cfg.ServiceCIDR,
+		BaseDomain:  m.cfg.Name + ".dfmicro.io",
 	}
 
 	var networkBuf bytes.Buffer
@@ -447,7 +449,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		)
 	}
 
-	for _, mount := range m.cfg.ExtraMounts {
+	for _, mount := range m.cfg.Mounts {
 		args = append(args, "--volume", mount)
 	}
 
@@ -608,13 +610,13 @@ func checkCNI(ctx context.Context, runner execx.Runner, containerName string) er
 }
 
 func (m *manager) PrintKubeconfig(ctx context.Context) error {
-	data, err := os.ReadFile(m.cfg.DefaultKubeconfigPath)
+	data, err := os.ReadFile(m.cfg.Kubeconfig)
 	if err == nil {
 		_, err = os.Stdout.Write(data)
 		return err
 	}
 
-	m.logger.Info("kubeconfig not found in StateDir, trying container", "path", m.cfg.DefaultKubeconfigPath)
+	m.logger.Info("kubeconfig not found in StateDir, trying container", "path", m.cfg.Kubeconfig)
 	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
 		return err
@@ -635,7 +637,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 	sourcePath := "/var/lib/microshift/resources/kubeadmin/kubeconfig"
 	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", containerName, "cat", sourcePath)
 	if err == nil {
-		writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.DefaultKubeconfigPath)
+		writeKubeconfig(m.cfg.APIServerPort, result.Stdout, m.cfg.Kubeconfig)
 	}
 
 	if m.cfg.ExposeKubeAPI {
@@ -652,7 +654,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 				}
 			}
 			if len(kubeconfigs) > 0 {
-				support.MergeKubeconfigs(m.cfg.Name, m.cfg.APIServerPort, kubeconfigs, clients, m.cfg.DefaultKubeconfigPath)
+				support.MergeKubeconfigs(m.cfg.Name, m.cfg.APIServerPort, kubeconfigs, clients, m.cfg.Kubeconfig)
 			}
 		}
 	} else {

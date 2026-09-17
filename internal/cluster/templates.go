@@ -10,7 +10,9 @@ ingress:
     threadCount: 2
 `
 
-const networkConfigTmpl = `{{- if .Clients }}
+const networkConfigTmpl = `dns:
+  baseDomain: {{ .BaseDomain }}
+{{ if .Clients }}
 apiServer:
   subjectAltNames:
 {{- range .Clients }}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"dfmicro/internal/cluster"
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/network"
 	"dfmicro/internal/support"
@@ -24,7 +25,9 @@ const (
   enabled: true
   controlNodeName: "{{.ControlNodeName}}"
 `
-	networkConfigTmpl = `network:
+	networkConfigTmpl = `dns:
+  baseDomain: {{.BaseDomain}}
+network:
   clusterNetwork:
   - {{.ClusterCIDR}}
   serviceNetwork:
@@ -81,10 +84,10 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	workerIndexes := make([]int, 0, len(nodesCfg.Nodes))
 	for _, node := range nodesCfg.Nodes {
 		prefix := m.clusterName + "-"
-		if !strings.HasPrefix(node.Name, prefix) {
+		if !strings.HasPrefix(node.NodeName, prefix) {
 			continue
 		}
-		number, err := strconv.Atoi(strings.TrimPrefix(node.Name, prefix))
+		number, err := strconv.Atoi(strings.TrimPrefix(node.NodeName, prefix))
 		if err == nil && number >= 2 {
 			workerIndexes = append(workerIndexes, number-2)
 		}
@@ -103,7 +106,7 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 		}
 		nodeNames := []string{controlNodeName}
 		for _, node := range nodesCfg.Nodes {
-			nodeNames = append(nodeNames, node.Name)
+			nodeNames = append(nodeNames, node.NodeName)
 		}
 		nodeNames = append(nodeNames, nodeName)
 		if err := cluster.WriteTopoLVMManifest(cfg, nodeNames); err != nil {
@@ -144,9 +147,16 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	}
 
 	nodesCfg.Nodes = append(nodesCfg.Nodes, NodeConfig{
-		Name:            nodeName,
+		NodeConfig: rootconfig.NodeConfig{
+			NodeName:   nodeName,
+			StateDir:   nodeStateDir,
+			LVMDisk:    filepath.Join(nodeStateDir, nodeName+".image"),
+			VGName:     nodeName,
+			PullSecret: cfg.PullSecret,
+			IDMSFiles:  append([]string(nil), cfg.IDMSFiles...),
+			Mounts:     append([]string(nil), mounts...),
+		},
 		ControlNodeName: controlNodeName,
-		Mounts:          append([]string(nil), mounts...),
 	})
 
 	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
@@ -357,10 +367,12 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		Clients     []string
 		ClusterCIDR string
 		ServiceCIDR string
+		BaseDomain  string
 	}{
 		Clients:     nil,
 		ClusterCIDR: cfg.ClusterCIDR,
 		ServiceCIDR: cfg.ServiceCIDR,
+		BaseDomain:  cfg.Name + ".dfmicro.io",
 	}
 
 	var networkBuf bytes.Buffer
@@ -508,7 +520,7 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	}
 	found := false
 	for _, node := range nodesCfg.Nodes {
-		if node.Name == nodeName {
+		if node.NodeName == nodeName {
 			found = true
 			break
 		}
@@ -537,7 +549,7 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	}
 
 	for i, node := range nodesCfg.Nodes {
-		if node.Name == nodeName {
+		if node.NodeName == nodeName {
 			nodesCfg.Nodes = append(nodesCfg.Nodes[:i], nodesCfg.Nodes[i+1:]...)
 			break
 		}
@@ -553,7 +565,7 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		nodeNames := []string{controlNodeName}
 		for _, node := range nodesCfg.Nodes {
-			nodeNames = append(nodeNames, node.Name)
+			nodeNames = append(nodeNames, node.NodeName)
 		}
 		if err := cluster.WriteTopoLVMManifest(cfg, nodeNames); err != nil {
 			return fmt.Errorf("write topolvm manifest: %w", err)
