@@ -243,8 +243,6 @@ Attach clusters to a network
 
 **--cluster**="": Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'
 
-**--multi-node**: Enable multi-node secondary networking
-
 **--namespace**="": Namespace for NAD creation (default: "default")
 
 **--to**="": Network name to attach to
@@ -368,6 +366,12 @@ add worker node to existing cluster
 **--force**: skip control plane readiness checks
 
 **--mount**="": Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)
+
+### config
+
+Print cluster node configuration
+
+**--cluster**="": cluster name (default: "micro")
 
 ### remove, rm, delete
 

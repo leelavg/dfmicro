@@ -30,10 +30,10 @@ type groupAlloc struct {
 }
 
 type ipamManager struct {
-	NetworkName string       `json:"networkName"`
-	Subnet      string       `json:"subnet"`
-	MultiNode   bool         `json:"multiNode,omitempty"`
-	Groups      []groupAlloc `json:"groups"`
+	NetworkName string            `json:"networkName"`
+	Subnet      string            `json:"subnet"`
+	IPAMTypes   map[string]string `json:"ipamTypes,omitempty"`
+	Groups      []groupAlloc      `json:"groups"`
 }
 
 func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
@@ -42,6 +42,7 @@ func newIPAMManager(stateDir, networkName string) (*ipamManager, error) {
 	if os.IsNotExist(err) {
 		return &ipamManager{
 			NetworkName: networkName,
+			IPAMTypes:   make(map[string]string),
 			Groups:      []groupAlloc{},
 		}, nil
 	}
@@ -85,6 +86,21 @@ func (a *ipamManager) hasCluster(name string) bool {
 		}
 	}
 	return false
+}
+
+func (a *ipamManager) hasClusterWithIPAMType(name, ipamType string) bool {
+	return a.IPAMTypes[name] == ipamType
+}
+
+func (a *ipamManager) setClusterIPAMType(name, ipamType string) {
+	if a.IPAMTypes == nil {
+		a.IPAMTypes = make(map[string]string)
+	}
+	a.IPAMTypes[name] = ipamType
+}
+
+func (a *ipamManager) removeClusterIPAMType(name string) {
+	delete(a.IPAMTypes, name)
 }
 
 func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup, clustersPerGroup int) (*groupAlloc, error) {

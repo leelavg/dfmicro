@@ -19,6 +19,20 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Action:    support.UnknownSubcommand,
 		Commands: []*cli.Command{
 			{
+				Name:  "config",
+				Usage: "Print cluster node configuration",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "cluster",
+						Usage: "cluster name",
+						Value: rootconfig.Load().Name,
+					},
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return printNodesConfig(cmd.String("cluster"))
+				},
+			},
+			{
 				Name:  "add",
 				Usage: "add worker node to existing cluster",
 				Flags: []cli.Flag{

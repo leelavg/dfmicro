@@ -315,6 +315,11 @@ func (m *manager) containerExists(ctx context.Context, name string) (bool, error
 }
 
 func (m *manager) addNode(ctx context.Context, name, networkName string) error {
+	nodeStateDir := filepath.Join(m.cfg.StateDir, name)
+	if err := os.MkdirAll(nodeStateDir, 0o755); err != nil {
+		return err
+	}
+
 	args := []string{
 		"podman", "run", "--privileged", "-d",
 		"--ulimit", "nofile=524288:524288",
@@ -334,7 +339,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	args = append(args, "--network", networkName, "--dns-search=.")
 
-	kindnetConfigPath := filepath.Join(m.cfg.StateDir, "00-kindnet-config.yaml")
+	kindnetConfigPath := filepath.Join(nodeStateDir, "00-kindnet-config.yaml")
 	var kindnetConfigBuf bytes.Buffer
 	if err := template.Must(template.New("").Parse(kindnetConfigTmpl)).Execute(&kindnetConfigBuf, m.cfg); err != nil {
 		return err
@@ -353,7 +358,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	}
 
 	if !m.cfg.EnableTopoLVM {
-		emptyTopoLVMDir := filepath.Join(m.cfg.StateDir, "empty-topolvm")
+		emptyTopoLVMDir := filepath.Join(nodeStateDir, "empty-topolvm")
 		if err := os.MkdirAll(emptyTopoLVMDir, 0o755); err != nil {
 			return err
 		}
@@ -388,14 +393,14 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		return err
 	}
 
-	networkPath := filepath.Join(m.cfg.StateDir, "15-networking.yaml")
+	networkPath := filepath.Join(nodeStateDir, "15-networking.yaml")
 	if err := os.WriteFile(networkPath, networkBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
 	args = append(args, "--volume", networkPath+":/etc/microshift/config.d/15-networking.yaml:ro")
 
 	if m.cfg.PowerTuning {
-		powerTuningPath := filepath.Join(m.cfg.StateDir, "power-tuning.yaml")
+		powerTuningPath := filepath.Join(nodeStateDir, "power-tuning.yaml")
 		if err := os.WriteFile(powerTuningPath, []byte(powerTuningConfig), 0o644); err != nil {
 			return err
 		}
@@ -403,7 +408,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	}
 
 	if m.cfg.UseEtcd {
-		etcdFlagPath := filepath.Join(m.cfg.StateDir, ".use-etcd")
+		etcdFlagPath := filepath.Join(nodeStateDir, ".use-etcd")
 		if err := os.WriteFile(etcdFlagPath, []byte(""), 0o644); err != nil {
 			return err
 		}
@@ -417,7 +422,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		args = append(args, "--volume", m.cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")
 	}
 
-	crioDropinPath := filepath.Join(m.cfg.StateDir, "20-multus-cni-plugins.conf")
+	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
 	if err := os.WriteFile(crioDropinPath, []byte(multusDropinConfig), 0o644); err != nil {
 		return err
 	}
@@ -428,11 +433,11 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		if err != nil {
 			return err
 		}
-		mirrorsPath := filepath.Join(m.cfg.StateDir, "99-mirrors.conf")
+		mirrorsPath := filepath.Join(nodeStateDir, "99-mirrors.conf")
 		if err := os.WriteFile(mirrorsPath, []byte(result.RegistriesConf), 0o644); err != nil {
 			return err
 		}
-		policyPath := filepath.Join(m.cfg.StateDir, "policy.json")
+		policyPath := filepath.Join(nodeStateDir, "policy.json")
 		if err := os.WriteFile(policyPath, []byte(result.PolicyJSON), 0o644); err != nil {
 			return err
 		}

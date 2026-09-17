@@ -15,6 +15,7 @@ import (
 
 	"dfmicro/internal/cluster"
 	"dfmicro/internal/execx"
+	"dfmicro/internal/network"
 	"dfmicro/internal/support"
 )
 
@@ -74,6 +75,9 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 			return err
 		}
 	}
+	if err := network.ValidateWorkerAdd(m.clusterName); err != nil {
+		return err
+	}
 	workerIndexes := make([]int, 0, len(nodesCfg.Nodes))
 	for _, node := range nodesCfg.Nodes {
 		prefix := m.clusterName + "-"
@@ -87,9 +91,13 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	}
 	nextNodeNum := support.FirstAvailableIndex(workerIndexes, func(index int) int { return index }) + 2
 	nodeName := fmt.Sprintf("%s-%d", m.clusterName, nextNodeNum)
+	nodeStateDir := filepath.Join(cfg.StateDir, nodeName)
+	if err := os.MkdirAll(nodeStateDir, 0o755); err != nil {
+		return fmt.Errorf("create node state directory: %w", err)
+	}
 
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
-		nodeDisk := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, nodeName+".image")
+		nodeDisk := filepath.Join(nodeStateDir, nodeName+".image")
 		if err := cluster.CreateNodeTopoLVMBackend(ctx, m.runner, nodeDisk, nodeName, cfg.LVMVolSize); err != nil {
 			return fmt.Errorf("create node storage: %w", err)
 		}
@@ -119,7 +127,7 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	if err := m.addWorkerNode(ctx, cfg, nodeName, controlNodeName, controlNodeIP, mounts); err != nil {
 		return fmt.Errorf("add worker node: %w", err)
 	}
-	if multiNode, err := cluster.MultiNodeEnabled(m.clusterName); err != nil {
+	if multiNode, err := network.UsesWhereabouts(m.clusterName); err != nil {
 		return fmt.Errorf("read multi-node state: %w", err)
 	} else if multiNode {
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
@@ -138,6 +146,7 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	nodesCfg.Nodes = append(nodesCfg.Nodes, NodeConfig{
 		Name:            nodeName,
 		ControlNodeName: controlNodeName,
+		Mounts:          append([]string(nil), mounts...),
 	})
 
 	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
@@ -212,7 +221,7 @@ func (m *manager) extractBootstrapKubeconfig(ctx context.Context, cfg cluster.Co
 }
 
 func (m *manager) extractKubeletCA(ctx context.Context, cfg cluster.Config, controlNodeName, nodeName string) error {
-	workerCertsDir := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "certs")
+	workerCertsDir := filepath.Join(cfg.StateDir, nodeName, "certs")
 	csrSignerDir := filepath.Join(workerCertsDir, "kubelet-csr-signer-signer", "csr-signer")
 	caBundlePath := filepath.Join(workerCertsDir, "kubelet-ca.crt")
 
@@ -280,6 +289,7 @@ func (m *manager) openKubeletPort(ctx context.Context, nodeName string) error {
 }
 
 func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
+	nodeStateDir := filepath.Join(cfg.StateDir, nodeName)
 	multinodeConfigData := struct {
 		ControlNodeName string
 	}{
@@ -292,7 +302,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		return err
 	}
 
-	multinodePath := filepath.Join(cfg.StateDir, "20-multinode.yaml")
+	multinodePath := filepath.Join(nodeStateDir, "20-multinode.yaml")
 	if err := os.WriteFile(multinodePath, multinodeBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
@@ -301,9 +311,9 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	bootstrapTarget := "/var/lib/microshift/bootstrap/kubeconfig"
 
 	// Mount control plane's kubelet CA (not serving cert) so worker generates own cert signed by same CA
-	csrSignerDir := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "certs", "kubelet-csr-signer-signer", "csr-signer")
+	csrSignerDir := filepath.Join(nodeStateDir, "certs", "kubelet-csr-signer-signer", "csr-signer")
 	csrSignerTarget := "/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer"
-	caBundleFile := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, "certs", "kubelet-ca.crt")
+	caBundleFile := filepath.Join(nodeStateDir, "certs", "kubelet-ca.crt")
 	caBundleTarget := "/var/lib/microshift/certs/ca-bundle/kubelet-ca.crt"
 	args := []string{
 		"podman", "run", "--privileged", "-d",
@@ -329,7 +339,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 	)
 
 	if !cfg.EnableTopoLVM {
-		emptyTopoLVMDir := filepath.Join(cfg.StateDir, "empty-topolvm")
+		emptyTopoLVMDir := filepath.Join(nodeStateDir, "empty-topolvm")
 		if err := os.MkdirAll(emptyTopoLVMDir, 0o755); err != nil {
 			return err
 		}
@@ -359,7 +369,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		return err
 	}
 
-	networkPath := filepath.Join(cfg.StateDir, nodeName+"-15-networking.yaml")
+	networkPath := filepath.Join(nodeStateDir, "15-networking.yaml")
 	if err := os.WriteFile(networkPath, networkBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
@@ -376,7 +386,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		args = append(args, "--volume", cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")
 	}
 
-	crioDropinPath := filepath.Join(cfg.StateDir, "20-multus-cni-plugins.conf")
+	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
 	if err := os.WriteFile(crioDropinPath, []byte(multusDropinConfig), 0o644); err != nil {
 		return err
 	}
@@ -387,11 +397,11 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeNam
 		if err != nil {
 			return err
 		}
-		mirrorsPath := filepath.Join(cfg.StateDir, "99-mirrors.conf")
+		mirrorsPath := filepath.Join(nodeStateDir, "99-mirrors.conf")
 		if err := os.WriteFile(mirrorsPath, []byte(result.RegistriesConf), 0o644); err != nil {
 			return err
 		}
-		policyPath := filepath.Join(cfg.StateDir, "policy.json")
+		policyPath := filepath.Join(nodeStateDir, "policy.json")
 		if err := os.WriteFile(policyPath, []byte(result.PolicyJSON), 0o644); err != nil {
 			return err
 		}
@@ -533,11 +543,11 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 		}
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
-		nodeDisk := filepath.Join(filepath.Dir(cfg.StateDir), nodeName, nodeName+".image")
+		nodeDisk := filepath.Join(cfg.StateDir, nodeName, nodeName+".image")
 		if err := cluster.DeleteNodeTopoLVMBackend(ctx, m.runner, nodeDisk, nodeName); err != nil {
 			return fmt.Errorf("delete node storage: %w", err)
 		}
-	} else if err := os.RemoveAll(filepath.Join(filepath.Dir(cfg.StateDir), nodeName)); err != nil {
+	} else if err := os.RemoveAll(filepath.Join(cfg.StateDir, nodeName)); err != nil {
 		return fmt.Errorf("remove node state: %w", err)
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {

@@ -35,6 +35,14 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	}
 }
 
+func ValidateWorkerAdd(clusterName string) error {
+	return validateWorkerAdd(clusterName)
+}
+
+func UsesWhereabouts(clusterName string) (bool, error) {
+	return usesWhereabouts(clusterName)
+}
+
 func connectCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "connect",
@@ -219,10 +227,6 @@ Example:
 				Usage: "Namespace for NAD creation",
 				Value: rootconfig.Load().NADNamespace,
 			},
-			&cli.BoolFlag{
-				Name:  "multi-node",
-				Usage: "Enable multi-node secondary networking",
-			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			clusterGroups := cmd.StringSlice("cluster")
@@ -247,12 +251,6 @@ Example:
 			if err != nil {
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
-			multiNode := ipam.MultiNode
-			if cmd.IsSet("multi-node") {
-				multiNode = cmd.Bool("multi-node")
-			}
-			ipam.MultiNode = multiNode
-
 			ops := &multusOps{
 				networkOps: &networkOps{logger: logger, runner: runner},
 				logger:     logger,
@@ -340,7 +338,19 @@ Example:
 			if err := ops.detachClusters(ctx, clusterToGroups, networkName, namespace); err != nil {
 				return err
 			}
-			return ipam.save(networkStateDir(rootconfig.ConfigDir()))
+			if err := ipam.save(networkStateDir(rootconfig.ConfigDir())); err != nil {
+				return err
+			}
+			for clusterName := range clusterToGroups {
+				multiNode, err := usesWhereabouts(clusterName)
+				if err != nil {
+					return fmt.Errorf("read network mode for cluster %s: %w", clusterName, err)
+				}
+				if err := ops.labelClusterNodes(ctx, clusterName, multiNode); err != nil {
+					return err
+				}
+			}
+			return nil
 		},
 	}
 }

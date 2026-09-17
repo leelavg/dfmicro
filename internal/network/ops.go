@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 
 	"dfmicro/internal/cluster"
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
 )
@@ -34,6 +36,46 @@ type networkInfo struct {
 	nodeIP      string
 	clusterCIDR string
 	serviceCIDR string
+}
+
+func validateWorkerAdd(clusterName string) error {
+	_, hostLocal, err := clusterIPAMModes(clusterName)
+	if err != nil {
+		return fmt.Errorf("inspect network state: %w", err)
+	}
+	if hostLocal {
+		return fmt.Errorf("cannot add a worker to cluster %s with a host-local network attachment; detach and reattach the network after recreating it", clusterName)
+	}
+	return nil
+}
+
+func usesWhereabouts(clusterName string) (bool, error) {
+	whereabouts, _, err := clusterIPAMModes(clusterName)
+	return whereabouts, err
+}
+
+func clusterIPAMModes(clusterName string) (whereabouts, hostLocal bool, err error) {
+	entries, err := os.ReadDir(networkStateDir(rootconfig.ConfigDir()))
+	if os.IsNotExist(err) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasPrefix(name, "ipam-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		networkName := strings.TrimSuffix(strings.TrimPrefix(name, "ipam-"), ".json")
+		ipam, err := newIPAMManager(networkStateDir(rootconfig.ConfigDir()), networkName)
+		if err != nil {
+			return false, false, err
+		}
+		whereabouts = whereabouts || ipam.hasClusterWithIPAMType(clusterName, "whereabouts")
+		hostLocal = hostLocal || ipam.hasClusterWithIPAMType(clusterName, "host-local")
+	}
+	return whereabouts, hostLocal, nil
 }
 
 func (o *networkOps) connect(ctx context.Context, networkName, containerName string) error {
@@ -120,6 +162,12 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 			if err != nil {
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
+			multiNode := len(containers) > 1
+			ipamType := "host-local"
+			if multiNode {
+				ipamType = "whereabouts"
+			}
+			o.ipam.setClusterIPAMType(clusterName, ipamType)
 			for _, c := range containers {
 				if err := o.networkOps.connect(ctx, networkName, c); err != nil {
 					return err
@@ -168,15 +216,12 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 				rangeStart: clusterRange.RangeStart,
 				rangeEnd:   clusterRange.RangeEnd,
 				master:     fmt.Sprintf("%s.%d", clusterEth, group.VlanID),
-				ipamType:   map[bool]string{true: "whereabouts", false: "host-local"}[o.ipam.MultiNode],
+				ipamType:   ipamType,
 			}); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
 			}
 			o.logger.Info("created NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
-			if o.ipam.MultiNode {
-				if err := cluster.SetMultiNodeNetwork(clusterName, networkName, true); err != nil {
-					return fmt.Errorf("save multi-node state for cluster %s: %w", clusterName, err)
-				}
+			if multiNode {
 				if err := o.labelClusterNodes(ctx, clusterName, true); err != nil {
 					return err
 				}
@@ -227,17 +272,8 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 			if err := o.nad.delete(ctx, nadName, namespace, kcPath); err != nil {
 				return fmt.Errorf("failed to create NAD %s for cluster %s: %w", nadName, clusterName, err)
 			}
-			if o.ipam.MultiNode && !o.ipam.hasCluster(clusterName) {
-				if err := cluster.SetMultiNodeNetwork(clusterName, networkName, false); err != nil {
-					return fmt.Errorf("save multi-node state for cluster %s: %w", clusterName, err)
-				}
-				multiNode, err := cluster.MultiNodeEnabled(clusterName)
-				if err != nil {
-					return fmt.Errorf("read multi-node state for cluster %s: %w", clusterName, err)
-				}
-				if err := o.labelClusterNodes(ctx, clusterName, multiNode); err != nil {
-					return err
-				}
+			if !o.ipam.hasCluster(clusterName) {
+				o.ipam.removeClusterIPAMType(clusterName)
 			}
 			o.logger.Info("deleted NAD for cluster in group", "cluster", clusterName, "group", groupName, "nad", nadName, "vlan", group.VlanID)
 		}

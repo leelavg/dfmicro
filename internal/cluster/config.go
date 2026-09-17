@@ -12,10 +12,20 @@ import (
 )
 
 const configFileName = "config.json"
-const multiNodeFileName = "multinode.json"
 
-type multiNodeState struct {
-	Networks []string `json:"networks,omitempty"`
+var clusterConfigPrintHiddenFields = []string{
+	"stateDir",
+	"lvmDisk",
+	"extraConfig",
+	"defaultKubeconfig",
+	"vgName",
+	"pullSecret",
+	"idmsFiles",
+	"extraMounts",
+	"groupCount",
+	"clustersPerGroup",
+	"reservePerGroup",
+	"nadNamespace",
 }
 
 type Config = config
@@ -84,15 +94,17 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 
 func deriveConfig(defaults rootconfig.Config, name string) config {
 	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
+	controlNodeName := name + "-1"
+	controlNodeDir := filepath.Join(stateDir, controlNodeName)
 
 	return config{
 		Config:                defaults,
 		Name:                  name,
 		StateDir:              stateDir,
-		LVMDisk:               filepath.Join(stateDir, name+".image"),
+		LVMDisk:               filepath.Join(controlNodeDir, controlNodeName+".image"),
 		ExtraConfig:           filepath.Join(stateDir, "custom_config.yaml"),
-		DefaultKubeconfigPath: filepath.Join(stateDir, "kubeconfig"),
-		VGName:                name + "-1",
+		DefaultKubeconfigPath: filepath.Join(controlNodeDir, "kubeconfig"),
+		VGName:                controlNodeName,
 	}
 }
 
@@ -117,68 +129,6 @@ func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
 		Cluster: cfg.ClusterCIDR,
 		Service: cfg.ServiceCIDR,
 	}, nil
-}
-
-func SetMultiNodeNetwork(name, network string, enabled bool) error {
-	cfg, err := ReadClusterConfig(name)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(cfg.StateDir, multiNodeFileName)
-	var state multiNodeState
-	if data, readErr := os.ReadFile(path); readErr == nil {
-		if err := json.Unmarshal(data, &state); err != nil {
-			return err
-		}
-	} else if !os.IsNotExist(readErr) {
-		return readErr
-	}
-
-	index := -1
-	for i, current := range state.Networks {
-		if current == network {
-			index = i
-			break
-		}
-	}
-	if enabled && index == -1 {
-		state.Networks = append(state.Networks, network)
-	}
-	if !enabled && index >= 0 {
-		state.Networks = append(state.Networks[:index], state.Networks[index+1:]...)
-	}
-	if len(state.Networks) == 0 {
-		err := os.Remove(path)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(data, '\n'), 0o644)
-}
-
-func MultiNodeEnabled(name string) (bool, error) {
-	cfg, err := ReadClusterConfig(name)
-	if err != nil {
-		return false, err
-	}
-	data, err := os.ReadFile(filepath.Join(cfg.StateDir, multiNodeFileName))
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	var state multiNodeState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return false, err
-	}
-	return len(state.Networks) > 0, nil
 }
 
 func ReadClusterConfig(name string) (Config, error) {
@@ -212,13 +162,29 @@ func writeClusterConfig(cfg config) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
+func (cfg config) marshalForPrint() ([]byte, error) {
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for _, field := range clusterConfigPrintHiddenFields {
+		delete(fields, field)
+	}
+	return json.MarshalIndent(fields, "", "  ")
+}
+
 func printClusterConfig(name string) error {
 	cfg, err := ReadClusterConfig(name)
 	if err != nil {
 		return err
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	data, err := cfg.marshalForPrint()
 	if err != nil {
 		return err
 	}

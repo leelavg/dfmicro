@@ -22,7 +22,7 @@ func (m *manager) deleteTopoLVMBackend(ctx context.Context) error {
 }
 
 func (m *manager) deleteTopoLVMNodeBackends(ctx context.Context) error {
-	entries, err := os.ReadDir(filepath.Dir(m.cfg.StateDir))
+	entries, err := os.ReadDir(m.cfg.StateDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -35,11 +35,12 @@ func (m *manager) deleteTopoLVMNodeBackends(ctx context.Context) error {
 		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) {
 			continue
 		}
-		if _, err := strconv.Atoi(strings.TrimPrefix(entry.Name(), prefix)); err != nil {
+		index, err := strconv.Atoi(strings.TrimPrefix(entry.Name(), prefix))
+		if err != nil || index < 2 {
 			continue
 		}
 		node := entry.Name()
-		disk := filepath.Join(filepath.Dir(m.cfg.StateDir), node, node+".image")
+		disk := filepath.Join(m.cfg.StateDir, node, node+".image")
 		if err := deleteTopoLVMBackend(ctx, m.runner, disk, node); err != nil {
 			return err
 		}
@@ -61,7 +62,17 @@ func createTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg, si
 		imageExists = true
 		result, err := support.RunPrivileged(ctx, runner, "vgs", "--noheadings", "-o", "vg_name", vg)
 		if err == nil && strings.TrimSpace(result.Stdout) == vg {
-			return nil
+			result, err := support.RunPrivileged(ctx, runner, "lvs", "--noheadings", "-o", "lv_name", vg)
+			if err == nil {
+				for lv := range strings.FieldsSeq(result.Stdout) {
+					if lv == "thin" {
+						return nil
+					}
+				}
+			}
+			if err := deleteTopoLVMBackend(ctx, runner, disk, vg); err != nil {
+				return fmt.Errorf("remove incomplete volume group %s: %w", vg, err)
+			}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -85,10 +96,16 @@ func createTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg, si
 		return errors.New("losetup did not return a device name")
 	}
 	if _, err := support.RunPrivileged(ctx, runner, "vgcreate", "-f", "-y", vg, device); err != nil {
+		_, _ = support.RunPrivileged(ctx, runner, "losetup", "--detach", device)
 		return err
 	}
-	_, err = support.RunPrivileged(ctx, runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
-	return err
+	if _, err := support.RunPrivileged(ctx, runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg); err != nil {
+		if cleanupErr := deleteTopoLVMBackend(ctx, runner, disk, vg); cleanupErr != nil {
+			return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
+		}
+		return err
+	}
+	return nil
 }
 
 func deleteTopoLVMBackend(ctx context.Context, runner execx.Runner, disk, vg string) error {

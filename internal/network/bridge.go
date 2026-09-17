@@ -97,6 +97,11 @@ func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error
 	if err := os.Remove(bridgeStatePath); err != nil && !os.IsNotExist(err) {
 		m.logger.Warn("failed to delete bridge state file", "path", bridgeStatePath, "error", err)
 	}
+	if entries, err := os.ReadDir(stateDir); err == nil && len(entries) == 0 {
+		if err := os.Remove(stateDir); err != nil && !os.IsNotExist(err) {
+			m.logger.Warn("failed to delete empty network state directory", "path", stateDir, "error", err)
+		}
+	}
 
 	exists, err := m.exists(ctx, name)
 	if err != nil {
