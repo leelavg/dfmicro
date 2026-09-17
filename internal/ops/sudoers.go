@@ -46,6 +46,9 @@ func createSudoers(ctx context.Context, logger *slog.Logger, runner execx.Runner
 	sudoersPath := fmt.Sprintf("/etc/sudoers.d/%s", binaryName)
 
 	logger.Info("creating sudoers configuration", "path", sudoersPath, "user", username)
+	if err := execx.RunSudoInteractive(ctx, runner, "-v"); err != nil {
+		return fmt.Errorf("sudo authentication failed: %w", err)
+	}
 
 	tmpFile := "/tmp/" + binaryName + "-sudoers"
 	if err := os.WriteFile(tmpFile, []byte(content), 0440); err != nil {
