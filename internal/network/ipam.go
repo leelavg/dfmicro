@@ -179,7 +179,7 @@ func (g *groupAlloc) removeCluster(clusterName string) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("cluster %q not found in group %q", clusterName, g.Name)
+	return nil
 }
 
 func addToIP(ip net.IP, offset int) net.IP {

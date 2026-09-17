@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/netip"
@@ -517,34 +518,31 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	if err != nil {
 		return fmt.Errorf("read nodes config: %w", err)
 	}
-	found := false
-	for _, node := range nodesCfg.Nodes {
-		if node.NodeName == nodeName {
-			found = true
-			break
-		}
+	if !strings.HasPrefix(nodeName, m.clusterName+"-") {
+		return fmt.Errorf("node %q does not belong to cluster %q", nodeName, m.clusterName)
 	}
-	if !found {
-		return fmt.Errorf("worker node %q not found in cluster %q", nodeName, m.clusterName)
+	if _, ok := nodeIndex(nodeName); !ok {
+		return fmt.Errorf("node %q is not a worker node", nodeName)
 	}
 
+	var cleanupErrs []error
 	controlNodeName := m.clusterName + "-1"
 	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "delete", "node", nodeName, "--ignore-not-found", "--wait=false"); err != nil {
-		m.logger.Warn("failed to delete Kubernetes node", "name", nodeName, "error", err)
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("delete Kubernetes node: %w", err))
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		if index, ok := nodeIndex(nodeName); ok {
 			if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "-n", "topolvm-system", "delete", "daemonset", fmt.Sprintf("topolvm-lvmd-%d", index-1), "configmap", fmt.Sprintf("topolvm-lvmd-%d", index-1), "--ignore-not-found"); err != nil {
-				m.logger.Warn("failed to delete TopoLVM node resources", "name", nodeName, "error", err)
+				cleanupErrs = append(cleanupErrs, fmt.Errorf("delete TopoLVM node resources: %w", err))
 			}
 		}
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "3", nodeName); err != nil {
-		m.logger.Warn("failed to stop node container", "name", nodeName, "error", err)
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--ignore", "--time", "3", nodeName); err != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("stop node container: %w", err))
 	}
 
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "rm", "-f", "--volumes", nodeName); err != nil {
-		return fmt.Errorf("failed to remove node container: %w", err)
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "rm", "--ignore", "-f", "--volumes", nodeName); err != nil {
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("remove node container: %w", err))
 	}
 
 	for i, node := range nodesCfg.Nodes {
@@ -556,10 +554,10 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		nodeDisk := filepath.Join(cfg.StateDir, nodeName, nodeName+".image")
 		if err := cluster.DeleteNodeTopoLVMBackend(ctx, m.runner, nodeDisk, nodeName); err != nil {
-			return fmt.Errorf("delete node storage: %w", err)
+			cleanupErrs = append(cleanupErrs, fmt.Errorf("delete node storage: %w", err))
 		}
 	} else if err := os.RemoveAll(filepath.Join(cfg.StateDir, nodeName)); err != nil {
-		return fmt.Errorf("remove node state: %w", err)
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("remove node state: %w", err))
 	}
 	if cfg.EnableTopoLVM && cfg.EnableThinpool {
 		nodeNames := []string{controlNodeName}
@@ -567,19 +565,19 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 			nodeNames = append(nodeNames, node.NodeName)
 		}
 		if err := cluster.WriteTopoLVMManifest(cfg, nodeNames); err != nil {
-			return fmt.Errorf("write topolvm manifest: %w", err)
+			cleanupErrs = append(cleanupErrs, fmt.Errorf("write topolvm manifest: %w", err))
 		}
 		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "apply", "-k", "/usr/lib/microshift/manifests.d/001-microshift-topolvm"); err != nil {
-			m.logger.Warn("failed to apply TopoLVM manifest", "error", err)
+			cleanupErrs = append(cleanupErrs, fmt.Errorf("apply TopoLVM manifest: %w", err))
 		}
 	}
 
 	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
-		return fmt.Errorf("write nodes config: %w", err)
+		cleanupErrs = append(cleanupErrs, fmt.Errorf("write nodes config: %w", err))
 	}
 
 	m.logger.Info("worker node deleted", "cluster", m.clusterName, "node", nodeName)
-	return nil
+	return errors.Join(cleanupErrs...)
 }
 
 func nodeIndex(name string) (int, bool) {
