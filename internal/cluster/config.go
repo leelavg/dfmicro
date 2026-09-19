@@ -13,16 +13,13 @@ import (
 
 const configFileName = "config.json"
 
-type Config = config
-
-type config struct {
+type Config struct {
 	rootconfig.ClusterDefaults
 	rootconfig.ControlConfig
-	StateDir    string `json:"stateDir,omitempty"`
-	ExtraConfig string `json:"extraConfig,omitempty"`
+	StateDir string `json:"stateDir,omitempty"`
 }
 
-func newConfigFromCommand(cmd *cli.Command) (config, error) {
+func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	name := cmd.String("name")
 	cfg := deriveConfig(defaultRootConfig.ClusterDefaults, name)
 
@@ -36,14 +33,14 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	if s := cmd.String("pull-secret"); s != "" {
 		abs, err := filepath.Abs(s)
 		if err != nil {
-			return config{}, fmt.Errorf("pull-secret: %w", err)
+			return Config{}, fmt.Errorf("pull-secret: %w", err)
 		}
 		cfg.PullSecret = abs
 	}
 	for _, f := range cmd.StringSlice("idms") {
 		abs, err := filepath.Abs(f)
 		if err != nil {
-			return config{}, fmt.Errorf("idms %s: %w", f, err)
+			return Config{}, fmt.Errorf("idms %s: %w", f, err)
 		}
 		cfg.IDMSFiles = append(cfg.IDMSFiles, abs)
 	}
@@ -71,17 +68,17 @@ func newConfigFromCommand(cmd *cli.Command) (config, error) {
 	return cfg, nil
 }
 
-func deriveConfig(defaults rootconfig.ClusterDefaults, name string) config {
+func deriveConfig(defaults rootconfig.ClusterDefaults, name string) Config {
 	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
-	controlNodeName := name + "-1"
+	controlNodeName := rootconfig.NodeName(name, 0)
 	controlNodeDir := filepath.Join(stateDir, controlNodeName)
 
-	cfg := config{
+	cfg := Config{
 		ClusterDefaults: defaults,
 		StateDir:        stateDir,
-		ExtraConfig:     filepath.Join(stateDir, "custom_config.yaml"),
 		ControlConfig: rootconfig.ControlConfig{
 			NodeConfig: rootconfig.NodeConfig{
+				Index:    0,
 				NodeName: controlNodeName,
 				LVMDisk:  filepath.Join(controlNodeDir, controlNodeName+".image"),
 				VGName:   controlNodeName,
@@ -121,17 +118,17 @@ func ReadClusterConfig(name string) (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return config{}, err
+		return Config{}, err
 	}
 
-	var cfg config
+	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return config{}, err
+		return Config{}, err
 	}
 	return cfg, nil
 }
 
-func writeClusterConfig(cfg config) error {
+func writeClusterConfig(cfg Config) error {
 	path := clusterConfigPath(cfg.Name)
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

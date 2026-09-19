@@ -3,12 +3,17 @@ package config
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"dfmicro/internal/support"
 )
+
+func NodeName(cluster string, index int) string {
+	return fmt.Sprintf("%s-%d", cluster, index)
+}
 
 //go:embed defaults.json
 var embeddedConfig []byte
@@ -42,6 +47,7 @@ type NetworkDefaults struct {
 }
 
 type NodeConfig struct {
+	Index      int      `json:"index"`
 	NodeName   string   `json:"nodeName"`
 	LVMDisk    string   `json:"lvmDisk,omitempty"`
 	VGName     string   `json:"vgName,omitempty"`
@@ -58,6 +64,16 @@ type ControlConfig struct {
 type WorkerConfig struct {
 	NodeConfig
 	ControlNodeName string `json:"controlNodeName"`
+}
+
+type NodeRecord struct {
+	NodeConfig
+	Kubeconfig      string `json:"kubeconfig,omitempty"`
+	ControlNodeName string `json:"controlNodeName,omitempty"`
+}
+
+type NodesConfig struct {
+	Nodes []NodeRecord `json:"nodes"`
 }
 
 type Defaults struct {

@@ -3,4 +3,4 @@ kind: Kustomization
 resources:
   - 01-namespace.yaml
   - 02-topolvm.yaml
-  - 03-lvmd.yaml
+  - 03-dynamic.yaml

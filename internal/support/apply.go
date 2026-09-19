@@ -33,12 +33,19 @@ func ApplyYAML(ctx context.Context, runner execx.Runner, kubectl, kubeconfig, ya
 	if _, err := f.WriteString(yaml); err != nil {
 		return err
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		return err
+	}
 	args := []string{"apply", "--server-side", "-f", f.Name()}
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig", kubeconfig)
 	}
 	_, err = runner.Run(ctx, kubectl, args...)
+	return err
+}
+
+func ApplyKustomization(ctx context.Context, runner execx.Runner, container, path string) error {
+	_, err := RunPodmanPrivileged(ctx, runner, "exec", container, "kubectl", "apply", "-k", path)
 	return err
 }
 

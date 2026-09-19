@@ -43,12 +43,12 @@ type podmanContainer struct {
 }
 
 type manager struct {
-	cfg    config
+	cfg    Config
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func newManager(cfg config, logger *slog.Logger, runner execx.Runner) *manager {
+func newManager(cfg Config, logger *slog.Logger, runner execx.Runner) *manager {
 	return &manager{
 		cfg:    cfg,
 		logger: logger,
@@ -57,13 +57,11 @@ func newManager(cfg config, logger *slog.Logger, runner execx.Runner) *manager {
 }
 
 func (m *manager) create(ctx context.Context) error {
-	containerName := m.cfg.Name + "-1"
+	containerName := m.cfg.NodeName
 
-	exists, err := m.containerExists(ctx, containerName)
-	if err != nil {
+	if exists, err := support.ContainerExists(ctx, m.runner, containerName); err != nil {
 		return err
-	}
-	if exists {
+	} else if exists {
 		return fmt.Errorf("container %q already exists", containerName)
 	}
 
@@ -72,13 +70,16 @@ func (m *manager) create(ctx context.Context) error {
 	}
 
 	if m.cfg.EnableTopoLVM {
-		if err := m.createTopoLVMBackend(ctx); err != nil {
+		topolvm := support.NewTopoLVM(m.runner, m.cfg.StateDir, support.TopoLVMConfig{
+			VolumeSize:         m.cfg.LVMVolSize,
+			OverprovisionRatio: m.cfg.OverprovisionRatio,
+			Thinpool:           m.cfg.EnableThinpool,
+		})
+		if err := topolvm.CreateBackend(ctx, containerName); err != nil {
 			return err
 		}
-		if m.cfg.EnableThinpool {
-			if err := WriteTopoLVMManifest(m.cfg, []string{containerName}); err != nil {
-				return err
-			}
+		if err := topolvm.Render(ctx, m.cfg.Name, containerName); err != nil {
+			return err
 		}
 	}
 
@@ -101,6 +102,12 @@ func (m *manager) create(ctx context.Context) error {
 	if err := writeClusterConfig(m.cfg); err != nil {
 		return err
 	}
+	if err := rootconfig.WriteNodesConfig(m.cfg.Name, rootconfig.NodesConfig{Nodes: []rootconfig.NodeRecord{{
+		NodeConfig: m.cfg.NodeConfig,
+		Kubeconfig: m.cfg.Kubeconfig,
+	}}}); err != nil {
+		return err
+	}
 
 	m.logger.Info("cluster created", "name", m.cfg.Name, "container", containerName, "kubeconfig", m.cfg.Kubeconfig)
 	return nil
@@ -116,9 +123,10 @@ func (m *manager) start(ctx context.Context) error {
 	}
 
 	m.logger.Info("starting cluster", "name", m.cfg.Name, "containers", len(containers))
+	node := support.NewNode(m.logger, m.runner)
 	for _, container := range containers {
 		m.logger.Info("starting container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "start", container); err != nil {
+		if err := node.Start(ctx, container); err != nil {
 			m.logger.Warn("failed to start container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -150,9 +158,10 @@ func (m *manager) stop(ctx context.Context) error {
 	}
 
 	m.logger.Info("stopping cluster", "name", m.cfg.Name, "containers", len(containers))
+	node := support.NewNode(m.logger, m.runner)
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "3", container); err != nil {
+		if err := node.Stop(ctx, container); err != nil {
 			m.logger.Warn("failed to stop container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -165,14 +174,15 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		return err
 	}
 
+	node := support.NewNode(m.logger, m.runner)
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "stop", "--time", "3", container); err != nil {
+		if err := node.Stop(ctx, container); err != nil {
 			m.logger.Warn("failed to stop container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 
 		m.logger.Info("removing container", "name", m.cfg.Name, "container", container)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "rm", "-f", "--volumes", container); err != nil {
+		if err := node.Remove(ctx, container); err != nil {
 			m.logger.Warn("failed to remove container during delete", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
@@ -182,18 +192,26 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		return nil
 	}
 
-	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
-		if err := m.deleteTopoLVMNodeBackends(ctx); err != nil {
-			return err
-		}
-	}
 	if m.cfg.EnableTopoLVM {
-		if err := m.deleteTopoLVMBackend(ctx); err != nil {
+		topolvm := support.NewTopoLVM(m.runner, m.cfg.StateDir, support.TopoLVMConfig{
+			VolumeSize:         m.cfg.LVMVolSize,
+			OverprovisionRatio: m.cfg.OverprovisionRatio,
+			Thinpool:           m.cfg.EnableThinpool,
+		})
+		if err := topolvm.DeleteBackends(ctx, containers...); err != nil {
+			return err
+		}
+		if err := topolvm.RemoveManifest(); err != nil {
 			return err
 		}
 	}
-	if err := m.removeStateDirs(); err != nil {
-		m.logger.Warn("failed to remove cluster state directories", "cluster", m.cfg.Name, "error", err)
+	for _, container := range containers {
+		if err := node.RemoveState(m.cfg.StateDir, container); err != nil {
+			return err
+		}
+	}
+	if err := m.removeStateFiles(); err != nil {
+		m.logger.Warn("failed to remove cluster state files", "cluster", m.cfg.Name, "error", err)
 	}
 
 	remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
@@ -214,9 +232,8 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 	return nil
 }
 
-func (m *manager) removeStateDirs() error {
-	configDir := rootconfig.ConfigDir()
-	entries, err := os.ReadDir(configDir)
+func (m *manager) removeStateFiles() error {
+	entries, err := os.ReadDir(m.cfg.StateDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
@@ -224,67 +241,26 @@ func (m *manager) removeStateDirs() error {
 		return err
 	}
 
-	prefix := m.cfg.Name + "-"
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
-		if name != m.cfg.Name {
-			if !strings.HasPrefix(name, prefix) {
-				continue
-			}
-			if _, err := strconv.Atoi(strings.TrimPrefix(name, prefix)); err != nil {
-				continue
-			}
-		}
-		if err := os.RemoveAll(filepath.Join(configDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove %s: %w", name, err)
+		if err := os.Remove(filepath.Join(m.cfg.StateDir, entry.Name())); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", entry.Name(), err)
 		}
 	}
-	return nil
-}
-
-func (m *manager) podmanNetworkExists(ctx context.Context, name string) (bool, error) {
-	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "exists", name)
-	if err == nil {
-		return true, nil
-	}
-	var cmdErr *execx.CommandError
-	if errors.As(err, &cmdErr) {
-		return false, nil
-	}
-	return false, err
+	return os.Remove(m.cfg.StateDir)
 }
 
 func (m *manager) trustClusterCIDRs(ctx context.Context, containerName string) error {
-	return TrustClusterCIDRs(ctx, m.runner, containerName, m.cfg.ClusterCIDR, m.cfg.ServiceCIDR, m.cfg.BridgeSubnet)
-}
-
-func TrustClusterCIDRs(ctx context.Context, runner execx.Runner, containerName string, cidrs ...string) error {
-	sourceArgs := []string{"exec", containerName, "firewall-cmd", "--zone=trusted"}
-	for _, cidr := range cidrs {
-		sourceArgs = append(sourceArgs, "--add-source="+cidr)
-	}
-	if _, err := support.RunPodmanPrivileged(ctx, runner, sourceArgs...); err != nil {
-		return fmt.Errorf("trust cluster sources: %w", err)
-	}
-	interfaceArgs := []string{"exec", containerName, "firewall-cmd", "--zone=trusted", "--add-interface=eth0"}
-	if _, err := support.RunPodmanPrivileged(ctx, runner, interfaceArgs...); err != nil {
-		return fmt.Errorf("trust cluster interface: %w", err)
-	}
-	return nil
-}
-
-func (m *manager) openKubeletPort(ctx context.Context, containerName string) error {
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", containerName, "firewall-cmd", "--zone=trusted", "--add-port=10250/tcp"); err != nil {
-		return fmt.Errorf("open kubelet port: %w", err)
-	}
-	return nil
+	return support.TrustContainerNetwork(ctx, m.runner, containerName,
+		[]string{m.cfg.ClusterCIDR, m.cfg.ServiceCIDR, m.cfg.BridgeSubnet},
+		[]string{"eth0"},
+	)
 }
 
 func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
-	exists, err := m.podmanNetworkExists(ctx, name)
+	exists, err := support.NetworkExists(ctx, m.runner, name)
 	if err != nil {
 		return err
 	}
@@ -302,42 +278,13 @@ func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) 
 	return err
 }
 
-func (m *manager) containerExists(ctx context.Context, name string) (bool, error) {
-	_, err := support.RunPodmanPrivileged(ctx, m.runner, "container", "exists", name)
-	if err == nil {
-		return true, nil
-	}
-	var cmdErr *execx.CommandError
-	if errors.As(err, &cmdErr) {
-		return false, nil
-	}
-	return false, err
-}
-
 func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	nodeStateDir := filepath.Join(m.cfg.StateDir, name)
 	if err := os.MkdirAll(nodeStateDir, 0o755); err != nil {
 		return err
 	}
 
-	args := []string{
-		"podman", "run", "--privileged", "-d",
-		"--ulimit", "nofile=524288:524288",
-		"--tty",
-		"--volume", "/dev:/dev",
-	}
-
-	if m.cfg.ShareHostContainers {
-		args = append(args, "--volume", "/var/lib/containers:/var/lib/containers")
-	}
-
-	for _, device := range []string{"input", "snd", "dri"} {
-		if info, err := os.Stat(filepath.Join("/dev", device)); err == nil && info.IsDir() {
-			args = append(args, "--tmpfs", filepath.Join("/dev", device))
-		}
-	}
-
-	args = append(args, "--network", networkName, "--dns-search=.")
+	var extraArgs []string
 
 	kindnetConfigPath := filepath.Join(nodeStateDir, "00-kindnet-config.yaml")
 	var kindnetConfigBuf bytes.Buffer
@@ -347,23 +294,18 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	if err := os.WriteFile(kindnetConfigPath, kindnetConfigBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
-	args = append(args,
+	extraArgs = append(extraArgs,
 		"--volume", kindnetConfigPath+":/usr/lib/microshift/manifests.d/000-microshift-kindnet/00-kindnet-config.yaml:ro",
 	)
 
-	if m.cfg.EnableTopoLVM && m.cfg.EnableThinpool {
-		args = append(args,
-			"--volume", TopoLVMManifestDir(m.cfg)+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
-		)
-	}
-
-	if !m.cfg.EnableTopoLVM {
-		emptyTopoLVMDir := filepath.Join(nodeStateDir, "empty-topolvm")
-		if err := os.MkdirAll(emptyTopoLVMDir, 0o755); err != nil {
-			return err
-		}
-		args = append(args,
-			"--volume", emptyTopoLVMDir+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
+	if m.cfg.EnableTopoLVM {
+		topolvm := support.NewTopoLVM(m.runner, m.cfg.StateDir, support.TopoLVMConfig{
+			VolumeSize:         m.cfg.LVMVolSize,
+			OverprovisionRatio: m.cfg.OverprovisionRatio,
+			Thinpool:           m.cfg.EnableThinpool,
+		})
+		extraArgs = append(extraArgs,
+			"--volume", topolvm.ManifestDir()+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
 		)
 	}
 
@@ -374,7 +316,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		if err != nil {
 			return err
 		}
-		args = append(args, "-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort))
+		extraArgs = append(extraArgs, "-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort))
 	}
 
 	networkData := struct {
@@ -399,14 +341,14 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	if err := os.WriteFile(networkPath, networkBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
-	args = append(args, "--volume", networkPath+":/etc/microshift/config.d/15-networking.yaml:ro")
+	extraArgs = append(extraArgs, "--volume", networkPath+":/etc/microshift/config.d/15-networking.yaml:ro")
 
 	if m.cfg.PowerTuning {
 		powerTuningPath := filepath.Join(nodeStateDir, "power-tuning.yaml")
 		if err := os.WriteFile(powerTuningPath, []byte(powerTuningConfig), 0o644); err != nil {
 			return err
 		}
-		args = append(args, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
+		extraArgs = append(extraArgs, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
 	}
 
 	if m.cfg.UseEtcd {
@@ -414,59 +356,30 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		if err := os.WriteFile(etcdFlagPath, []byte(""), 0o644); err != nil {
 			return err
 		}
-		args = append(args,
+		extraArgs = append(extraArgs,
 			"--volume", etcdFlagPath+":/var/lib/microshift/.use-etcd:ro",
 			"--tmpfs", "/var/lib/etcd:size=1G",
 		)
-	}
-
-	if m.cfg.PullSecret != "" {
-		args = append(args, "--volume", m.cfg.PullSecret+":/etc/crio/openshift-pull-secret:ro")
 	}
 
 	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
 	if err := os.WriteFile(crioDropinPath, []byte(multusDropinConfig), 0o644); err != nil {
 		return err
 	}
-	args = append(args, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
+	extraArgs = append(extraArgs, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
 
-	if len(m.cfg.IDMSFiles) > 0 {
-		result, err := support.ConvertIDMSFiles(m.cfg.IDMSFiles)
-		if err != nil {
-			return err
-		}
-		mirrorsPath := filepath.Join(nodeStateDir, "99-mirrors.conf")
-		if err := os.WriteFile(mirrorsPath, []byte(result.RegistriesConf), 0o644); err != nil {
-			return err
-		}
-		policyPath := filepath.Join(nodeStateDir, "policy.json")
-		if err := os.WriteFile(policyPath, []byte(result.PolicyJSON), 0o644); err != nil {
-			return err
-		}
-		args = append(args,
-			"--volume", mirrorsPath+":/etc/containers/registries.conf.d/99-mirrors.conf:ro",
-			"--volume", policyPath+":/etc/containers/policy.json:ro",
-		)
-	}
-
-	for _, mount := range m.cfg.Mounts {
-		args = append(args, "--volume", mount)
-	}
-
-	args = append(args,
-		"--label", "part-of="+m.cfg.Name,
-		"--label", "created-by=dfmicro",
-		"--name", name,
-		"--hostname", name,
-		m.cfg.Image,
-	)
-
-	m.logger.Info("starting container (downloading base image if not cached, ~2GB, may take time)", "name", name, "image", m.cfg.Image)
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, args[1:]...); err != nil {
-		return err
-	}
-
-	return m.waitForDBus(ctx, name)
+	return support.NewNode(m.logger, m.runner).Create(ctx, support.NodeSpec{
+		Name:                name,
+		Image:               m.cfg.Image,
+		Network:             networkName,
+		StateDir:            nodeStateDir,
+		ClusterName:         m.cfg.Name,
+		ShareHostContainers: m.cfg.ShareHostContainers,
+		PullSecret:          m.cfg.PullSecret,
+		IDMSFiles:           m.cfg.IDMSFiles,
+		Mounts:              m.cfg.Mounts,
+		ExtraArgs:           extraArgs,
+	})
 }
 
 func getClients() ([]string, error) {
@@ -517,24 +430,6 @@ func getClients() ([]string, error) {
 	return clients, nil
 }
 
-func (m *manager) waitForDBus(ctx context.Context, name string) error {
-	return WaitForDBus(ctx, m.runner, name)
-}
-
-func WaitForDBus(ctx context.Context, runner execx.Runner, name string) error {
-	for range 60 {
-		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	return errors.New("the container did not activate the dbus service within 60 seconds")
-}
-
 func (m *manager) waitReady(ctx context.Context) error {
 	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
 	if err != nil {
@@ -559,7 +454,7 @@ func (m *manager) waitReady(ctx context.Context) error {
 			}
 		}
 		if ready {
-			if err := m.checkCNI(ctx, containers[0]); err != nil {
+			if err := support.CheckCNI(ctx, m.runner, containers[0]); err != nil {
 				m.logger.Info("waiting for CNI/network", "container", containers[0])
 			} else {
 				m.logger.Info("CNI/network is ready", "container", containers[0])
@@ -576,37 +471,6 @@ func (m *manager) waitReady(ctx context.Context) error {
 	}
 
 	return errors.New("cluster did not become ready within 10 minutes")
-}
-
-func (m *manager) checkCNI(ctx context.Context, containerName string) error {
-	return checkCNI(ctx, m.runner, containerName)
-}
-
-func WaitForCNI(ctx context.Context, runner execx.Runner, containerName string) error {
-	deadline := time.Now().Add(10 * time.Minute)
-	for time.Now().Before(deadline) {
-		if err := checkCNI(ctx, runner, containerName); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(5 * time.Second):
-		}
-	}
-	return errors.New("CNI/network did not become ready within 10 minutes")
-}
-
-func checkCNI(ctx context.Context, runner execx.Runner, containerName string) error {
-	for _, configPath := range []string{
-		"/etc/cni/net.d/10-kindnet.conflist",
-		"/etc/cni/net.d/00-multus.conf",
-	} {
-		if _, err := support.RunPodmanPrivileged(ctx, runner, "exec", containerName, "test", "-s", configPath); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (m *manager) PrintKubeconfig(ctx context.Context) error {

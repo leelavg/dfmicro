@@ -66,7 +66,7 @@ Example:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			networkName := cmd.String("to")
-			ops := &networkOps{logger: logger, runner: runner}
+			ops := &connectOps{logger: logger, runner: runner}
 			return ops.connectClusters(ctx, cmd.StringSlice("cluster"), networkName)
 		},
 	}
@@ -95,7 +95,7 @@ Example:
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			networkName := cmd.String("from")
-			ops := &networkOps{logger: logger, runner: runner}
+			ops := &connectOps{logger: logger, runner: runner}
 			return ops.disconnectClusters(ctx, cmd.StringSlice("cluster"), networkName)
 		},
 	}
@@ -252,7 +252,7 @@ Example:
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
 			ops := &multusOps{
-				networkOps: &networkOps{logger: logger, runner: runner},
+				connectOps: &connectOps{logger: logger, runner: runner},
 				logger:     logger,
 				runner:     runner,
 				nad:        newNADManager(logger, runner, "kubectl"),
@@ -262,10 +262,7 @@ Example:
 			if err := ops.attachClusters(ctx, bridgeState, clusterToGroups, networkName, namespace); err != nil {
 				return err
 			}
-			if err := ipam.save(networkStateDir(rootconfig.ConfigDir())); err != nil {
-				return err
-			}
-			return bridgeState.save(networkStateDir(rootconfig.ConfigDir()))
+			return ipam.save(networkStateDir(rootconfig.ConfigDir()))
 		},
 	}
 }
@@ -328,7 +325,7 @@ Example:
 				return fmt.Errorf("failed to load IPAM state for network %s: %w", networkName, err)
 			}
 			ops := &multusOps{
-				networkOps: &networkOps{logger: logger, runner: runner},
+				connectOps: &connectOps{logger: logger, runner: runner},
 				logger:     logger,
 				runner:     runner,
 				nad:        newNADManager(logger, runner, "kubectl"),

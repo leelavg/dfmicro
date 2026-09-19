@@ -113,9 +113,13 @@ sub finish {
 	for my $level (sort keys %level_elapsed) {
 		print "# $level elapsed: ", format_duration($level_elapsed{$level}), "\n";
 	}
+	print_log_paths();
+	exit($failed ? 1 : 0);
+}
+
+sub print_log_paths {
 	print "# logs: $work_dir/tests.log\n";
 	print "# cmds: $work_dir/cmds.log\n";
-	exit($failed ? 1 : 0);
 }
 
 sub format_duration {
@@ -435,7 +439,7 @@ run_ok('cluster list', 'cluster ls');
 run_ok('node config', "node config --cluster $micro");
 # The control node is protected, and storage reporting must still work.
 section('control-node safety and storage reporting');
-run_fail('control node cannot be removed', "node rm --cluster $micro --name $micro-1");
+run_fail('control node cannot be removed', "node rm --cluster $micro --name $micro-0");
 run_ok('storage command', 'ops storage');
 
 }
@@ -448,7 +452,7 @@ run_ok('add worker', "node add --cluster $first");
 run_ok('worker node config', "node config --cluster $first");
 $first_kubeconfig = kubeconfig($first);
 kubectl_ok('list worker cluster resources', $first_kubeconfig, 'get all -A');
-run_with_input('worker cluster exec', "oc get all -A\nexit\n", "cluster exec --name $first --container $first-2");
+run_with_input('worker cluster exec', "oc get all -A\nexit\n", "cluster exec --name $first --container $first-1");
 run_ok('show storage resources', "ops resources --name $first");
 
 # A workload must provision, mount, write, and read persistent data.
@@ -470,7 +474,7 @@ spec:
         app: dfmicro-storage-test
     spec:
       nodeSelector:
-        kubernetes.io/hostname: first-1
+        kubernetes.io/hostname: first-0
       containers:
       - name: writer
         image: docker.io/nicolaka/netshoot:v0.16
@@ -507,16 +511,16 @@ run_ok('connect clusters with comma syntax', "network connect --cluster $first,$
 run_fail('network attach rejects duplicate cluster flags', "network attach --cluster $first --cluster $first --to $network");
 run_fail('network attach rejects an unknown cluster', "network attach --cluster missing --to $network");
 run_ok('attach default and gp1 groups', "network attach --cluster $first,$micro:gp1 --to $network");
-run_netshoot('first-default-a', $first_kubeconfig, "$first-1", "default/$network-default");
-run_netshoot('micro-gp1-a', $micro_kubeconfig, "$micro-1", "default/$network-gp1");
+run_netshoot('first-default-a', $first_kubeconfig, "$first-0", "default/$network-default");
+run_netshoot('micro-gp1-a', $micro_kubeconfig, "$micro-0", "default/$network-gp1");
 my $first_default_ip = network_ip($first_kubeconfig, 'first-default-a', "$network-default");
 my $micro_gp1_ip = network_ip($micro_kubeconfig, 'micro-gp1-a', "$network-gp1");
 check(defined $first_default_ip && defined $micro_gp1_ip, 'read initial secondary network addresses');
 fping('different groups do not reach each other', $first_kubeconfig, 'first-default-a', $micro_gp1_ip, 0) if defined $micro_gp1_ip;
 
 run_ok('attach same group with repeated flags', "network attach --cluster $first:gp1 --cluster $micro:gp1 --to $network");
-run_netshoot('first-gp1-b', $first_kubeconfig, "$first-1", "default/$network-gp1");
-run_netshoot('micro-gp1-b', $micro_kubeconfig, "$micro-1", "default/$network-gp1");
+run_netshoot('first-gp1-b', $first_kubeconfig, "$first-0", "default/$network-gp1");
+run_netshoot('micro-gp1-b', $micro_kubeconfig, "$micro-0", "default/$network-gp1");
 my $first_gp1_ip = network_ip($first_kubeconfig, 'first-gp1-b', "$network-gp1");
 my $micro_gp1_same_ip = network_ip($micro_kubeconfig, 'micro-gp1-b', "$network-gp1");
 check(defined $first_gp1_ip && defined $micro_gp1_same_ip, 'read shared secondary network addresses');
@@ -530,10 +534,10 @@ for my $pod (qw(first-default-a micro-gp1-a first-gp1-b micro-gp1-b)) {
 run_ok('detach before worker add', "network detach --cluster $first:default/gp1,$micro:default/gp1 --from $network");
 run_ok('add worker after detach', "node add --cluster $micro");
 run_ok('reattach after worker add', "network attach --cluster $first:default/gp1,$micro:default/gp1 --to $network");
-run_netshoot('first-default-b', $first_kubeconfig, "$first-2", "default/$network-default");
-run_netshoot('micro-default-b', $micro_kubeconfig, "$micro-2", "default/$network-default");
-run_netshoot('first-default-c', $first_kubeconfig, "$first-1", "default/$network-default");
-run_netshoot('micro-default-c', $micro_kubeconfig, "$micro-1", "default/$network-default");
+run_netshoot('first-default-b', $first_kubeconfig, "$first-1", "default/$network-default");
+run_netshoot('micro-default-b', $micro_kubeconfig, "$micro-1", "default/$network-default");
+run_netshoot('first-default-c', $first_kubeconfig, "$first-0", "default/$network-default");
+run_netshoot('micro-default-c', $micro_kubeconfig, "$micro-0", "default/$network-default");
 my $first_default_b_ip = network_ip($first_kubeconfig, 'first-default-b', "$network-default");
 my $micro_default_b_ip = network_ip($micro_kubeconfig, 'micro-default-b', "$network-default");
 my $first_default_c_ip = network_ip($first_kubeconfig, 'first-default-c', "$network-default");
@@ -545,8 +549,8 @@ fping('same cluster reaches between micro nodes', $micro_kubeconfig, 'micro-defa
 
 # Plain cluster traffic must fail before peering and work after peering.
 section('plain pod routing before and after peering');
-run_netshoot('plain-first', $first_kubeconfig, "$first-1", '');
-run_netshoot('plain-micro', $micro_kubeconfig, "$micro-1", '');
+run_netshoot('plain-first', $first_kubeconfig, "$first-0", '');
+run_netshoot('plain-micro', $micro_kubeconfig, "$micro-0", '');
 my $plain_first_ip = pod_ip($first_kubeconfig, 'plain-first');
 my $plain_micro_ip = pod_ip($micro_kubeconfig, 'plain-micro');
 check(defined $plain_first_ip && defined $plain_micro_ip, 'read plain pod addresses');
@@ -561,9 +565,9 @@ section('peer refresh after worker replacement');
 for my $pod (qw(micro-default-b micro-default-c plain-micro)) {
 	kubectl_ok("delete netshoot $pod before worker replacement", $micro_kubeconfig, "delete pod $pod --ignore-not-found --grace-period=2 --wait=false");
 }
-run_ok('remove worker after peer', "node rm --cluster $micro --name $micro-2");
+run_ok('remove worker after peer', "node rm --cluster $micro --name $micro-1");
 run_ok('add worker after peer', "node add --cluster $micro");
-run_netshoot('plain-micro-new', $micro_kubeconfig, "$micro-2", '');
+run_netshoot('plain-micro-new', $micro_kubeconfig, "$micro-1", '');
 my $plain_micro_new_ip = pod_ip($micro_kubeconfig, 'plain-micro-new');
 check(defined $plain_micro_new_ip, 'read replacement worker pod address');
 fping('new worker is not reached by old peer rules', $first_kubeconfig, 'plain-first', $plain_micro_new_ip, 0) if defined $plain_micro_new_ip;
@@ -596,6 +600,7 @@ sub main {
 	unless ($list_only) {
 		mkdir $work_dir unless -d $work_dir;
 		unlink "$work_dir/cmds.log", "$work_dir/tests.log";
+		print_log_paths();
 	}
 	exit 1 unless clean_slate();
 	$started = 1;

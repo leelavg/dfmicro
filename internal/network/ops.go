@@ -14,7 +14,7 @@ import (
 )
 
 type multusOps struct {
-	*networkOps
+	*connectOps
 
 	logger *slog.Logger
 	runner execx.Runner
@@ -22,7 +22,7 @@ type multusOps struct {
 	ipam   *ipamManager
 }
 
-type networkOps struct {
+type connectOps struct {
 	logger *slog.Logger
 	runner execx.Runner
 }
@@ -78,7 +78,7 @@ func clusterIPAMModes(clusterName string) (whereabouts, hostLocal bool, err erro
 	return whereabouts, hostLocal, nil
 }
 
-func (o *networkOps) connect(ctx context.Context, networkName, containerName string) error {
+func (o *connectOps) connect(ctx context.Context, networkName, containerName string) error {
 	if support.ContainerConnectedToNetwork(ctx, o.runner, networkName, containerName) {
 		o.logger.Info("container already connected to network", "container", containerName, "network", networkName)
 		return nil
@@ -91,7 +91,7 @@ func (o *networkOps) connect(ctx context.Context, networkName, containerName str
 	return nil
 }
 
-func (o *networkOps) disconnect(ctx context.Context, networkName, containerName string) error {
+func (o *connectOps) disconnect(ctx context.Context, networkName, containerName string) error {
 	if !support.ContainerConnectedToNetwork(ctx, o.runner, networkName, containerName) {
 		o.logger.Info("container not connected to network", "container", containerName, "network", networkName)
 		return nil
@@ -104,7 +104,7 @@ func (o *networkOps) disconnect(ctx context.Context, networkName, containerName 
 	return nil
 }
 
-func (o *networkOps) connectClusters(ctx context.Context, clusterNames []string, networkName string) error {
+func (o *connectOps) connectClusters(ctx context.Context, clusterNames []string, networkName string) error {
 	for _, clusterName := range clusterNames {
 		containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
 		if err != nil {
@@ -119,7 +119,7 @@ func (o *networkOps) connectClusters(ctx context.Context, clusterNames []string,
 	return nil
 }
 
-func (o *networkOps) disconnectClusters(ctx context.Context, clusterNames []string, networkName string) error {
+func (o *connectOps) disconnectClusters(ctx context.Context, clusterNames []string, networkName string) error {
 	for _, clusterName := range clusterNames {
 		containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
 		if err != nil {
@@ -169,7 +169,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 			}
 			o.ipam.setClusterIPAMType(clusterName, ipamType)
 			for _, c := range containers {
-				if err := o.networkOps.connect(ctx, networkName, c); err != nil {
+				if err := o.connectOps.connect(ctx, networkName, c); err != nil {
 					return err
 				}
 
@@ -261,7 +261,7 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				if err := o.networkOps.disconnect(ctx, networkName, c); err != nil {
+				if err := o.connectOps.disconnect(ctx, networkName, c); err != nil {
 					return err
 				}
 			}
@@ -323,7 +323,7 @@ func (o *peerOps) run(
 		}
 		clusterContainers[name] = containers
 
-		gatewayNode := name + "-1"
+		gatewayNode := rootconfig.NodeName(name, 0)
 		cfg, err := cluster.ReadClusterConfig(name)
 		if err != nil {
 			return fmt.Errorf("failed to read config for cluster %s: %w", name, err)
@@ -379,17 +379,17 @@ func (o *peerOps) peer(ctx context.Context, clusterNames []string) error {
 			for dstName, dstNetwork := range networkByClusterName {
 				if srcName != dstName {
 					nextHop := srcNetwork.nodeIP
-					if containerName == srcName+"-1" {
+					if containerName == rootconfig.NodeName(srcName, 0) {
 						nextHop = dstNetwork.nodeIP
 					}
 					o.logger.Info("establishing peering", "from", srcName, "to", dstName, "container", containerName, "nextHop", nextHop)
-					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.clusterCIDR, nextHop))
-					commands.WriteString(fmt.Sprintf("ip route replace %s via %s\n", dstNetwork.serviceCIDR, nextHop))
-					commands.WriteString(fmt.Sprintf("iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 || iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR))
-					commands.WriteString(fmt.Sprintf("iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 || iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR))
-					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR))
-					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR))
-					commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s/32\n", dstNetwork.nodeIP, dstNetwork.nodeIP))
+					fmt.Fprintf(&commands, "ip route replace %s via %s\n", dstNetwork.clusterCIDR, nextHop)
+					fmt.Fprintf(&commands, "ip route replace %s via %s\n", dstNetwork.serviceCIDR, nextHop)
+					fmt.Fprintf(&commands, "iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 || iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
+					fmt.Fprintf(&commands, "iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 || iptables -t nat -I KIND-MASQ-AGENT 1 -d %s -j RETURN\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
+					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
+					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
+					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s/32\n", dstNetwork.nodeIP, dstNetwork.nodeIP)
 				}
 			}
 			return commands.String()
@@ -414,17 +414,17 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 					continue
 				}
 				nextHop := srcNetwork.nodeIP
-				if containerName == srcName+"-1" {
+				if containerName == rootconfig.NodeName(srcName, 0) {
 					nextHop = dstNetwork.nodeIP
 				}
 				o.logger.Info("removing peering", "from", srcName, "to", dstName, "container", containerName, "nextHop", nextHop)
-				commands.WriteString(fmt.Sprintf("ip route del %s 2>/dev/null || true\n", dstNetwork.clusterCIDR))
-				commands.WriteString(fmt.Sprintf("ip route del %s 2>/dev/null || true\n", dstNetwork.serviceCIDR))
-				commands.WriteString(fmt.Sprintf("iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 && iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN || true\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR))
-				commands.WriteString(fmt.Sprintf("iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 && iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN || true\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR))
-				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR))
-				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR))
-				commands.WriteString(fmt.Sprintf("firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s/32 || true\n", dstNetwork.nodeIP, dstNetwork.nodeIP))
+				fmt.Fprintf(&commands, "ip route del %s 2>/dev/null || true\n", dstNetwork.clusterCIDR)
+				fmt.Fprintf(&commands, "ip route del %s 2>/dev/null || true\n", dstNetwork.serviceCIDR)
+				fmt.Fprintf(&commands, "iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 && iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN || true\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
+				fmt.Fprintf(&commands, "iptables -t nat -C KIND-MASQ-AGENT -d %s -j RETURN >/dev/null 2>&1 && iptables -t nat -D KIND-MASQ-AGENT -d %s -j RETURN || true\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
+				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
+				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
+				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s/32 || true\n", dstNetwork.nodeIP, dstNetwork.nodeIP)
 			}
 			return commands.String()
 		},

@@ -13,3 +13,6 @@ confidence = 0.8
 
 [rule.exported]
   disabled = true
+
+[rule.unreachable-code]
+  severity = "error"
