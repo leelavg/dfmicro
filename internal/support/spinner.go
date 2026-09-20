@@ -15,6 +15,10 @@ var spinnerFrames = [...]string{
 }
 
 func Spinner(stop <-chan struct{}, interval time.Duration) {
+	if !stdoutIsTTY() {
+		return
+	}
+
 	var i int
 	for {
 		select {

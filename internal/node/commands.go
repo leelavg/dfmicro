@@ -53,7 +53,11 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					clusterName := cmd.String("cluster")
-					return newManager(clusterName, logger, runner).add(ctx, cmd.Bool("force"), cmd.StringSlice("mount"))
+					manager, err := newManager(clusterName, logger, runner)
+					if err != nil {
+						return err
+					}
+					return manager.add(ctx, cmd.Bool("force"), cmd.StringSlice("mount"))
 				},
 			},
 			{
@@ -75,7 +79,11 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					clusterName := cmd.String("cluster")
 					nodeName := cmd.String("name")
-					return newManager(clusterName, logger, runner).remove(ctx, nodeName)
+					manager, err := newManager(clusterName, logger, runner)
+					if err != nil {
+						return err
+					}
+					return manager.remove(ctx, nodeName)
 				},
 			},
 		},

@@ -8,12 +8,12 @@ import (
 
 const clusterConfigFileName = "config.json"
 
-func ClusterConfigPath(clusterName string) string {
+func clusterConfigPath(clusterName string) string {
 	return filepath.Join(ConfigDir(), clusterName, clusterConfigFileName)
 }
 
 func ReadClusterConfig(clusterName string) (ClusterConfig, error) {
-	data, err := os.ReadFile(ClusterConfigPath(clusterName))
+	data, err := os.ReadFile(clusterConfigPath(clusterName))
 	if err != nil {
 		return ClusterConfig{}, err
 	}
@@ -25,7 +25,7 @@ func ReadClusterConfig(clusterName string) (ClusterConfig, error) {
 }
 
 func WriteClusterConfig(cfg ClusterConfig) error {
-	path := ClusterConfigPath(cfg.Name)
+	path := clusterConfigPath(cfg.Name)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

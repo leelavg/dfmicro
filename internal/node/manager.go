@@ -22,33 +22,47 @@ import (
 
 type manager struct {
 	clusterName string
+	cfg         rootconfig.ClusterConfig
+	node        *support.NodeMgr
+	topolvm     *support.TopoLVMMgr
 	logger      *slog.Logger
 	runner      execx.Runner
 }
 
-func newManager(clusterName string, logger *slog.Logger, runner execx.Runner) *manager {
+type worker struct {
+	index           int
+	name            string
+	stateDir        string
+	controlNodeName string
+	controlNodeIP   string
+	mounts          []string
+}
+
+func newManager(clusterName string, logger *slog.Logger, runner execx.Runner) (*manager, error) {
+	cfg, err := rootconfig.ReadClusterConfig(clusterName)
+	if err != nil {
+		return nil, fmt.Errorf("read cluster config: %w", err)
+	}
 	return &manager{
 		clusterName: clusterName,
+		cfg:         cfg,
+		node:        support.NewNodeMgr(logger, runner),
+		topolvm:     support.NewTopoLVMMgr(runner, cfg),
 		logger:      logger,
 		runner:      runner,
-	}
+	}, nil
 }
 
 func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
-	cfg, err := rootconfig.ReadClusterConfig(m.clusterName)
-	if err != nil {
-		return fmt.Errorf("read cluster config: %w", err)
-	}
-
-	nodesCfg, err := ReadNodesConfig(m.clusterName)
+	nodesCfg, err := readNodesConfig(m.clusterName)
 	if err != nil {
 		return fmt.Errorf("read nodes config: %w", err)
 	}
 
-	if len(nodesCfg.Nodes) == 0 || nodesCfg.Nodes[0].Index != 0 {
-		return fmt.Errorf("cluster %q has no control node in nodes.json", m.clusterName)
+	controlNodeName, err := controlNode(nodesCfg)
+	if err != nil {
+		return err
 	}
-	controlNodeName := nodesCfg.Nodes[0].NodeName
 	if !force {
 		if err := m.waitForControlPlane(ctx, controlNodeName); err != nil {
 			return err
@@ -57,79 +71,94 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 	if err := network.ValidateWorkerAdd(m.clusterName); err != nil {
 		return err
 	}
-	nodeIndex := support.FirstAvailableIndex(nodesCfg.Nodes, func(node NodeConfig) int {
-		return node.Index
-	})
-	nodeName := rootconfig.NodeName(m.clusterName, nodeIndex)
-	nodeStateDir := filepath.Join(cfg.StateDir, nodeName)
-	if err := os.MkdirAll(nodeStateDir, 0o755); err != nil {
-		return fmt.Errorf("create node state directory: %w", err)
-	}
-
-	if cfg.EnableTopoLVM {
-		topolvm := support.NewTopoLVM(m.runner, cfg.StateDir, support.TopoLVMConfig{
-			VolumeSize:         cfg.LVMVolSize,
-			OverprovisionRatio: cfg.OverprovisionRatio,
-			Thinpool:           cfg.EnableThinpool,
-		})
-		if err := topolvm.CreateBackend(ctx, nodeName); err != nil {
-			return fmt.Errorf("create node storage: %w", err)
-		}
-	}
-
-	if err := m.extractBootstrapKubeconfig(ctx, cfg, controlNodeName); err != nil {
-		return fmt.Errorf("extract bootstrap kubeconfig: %w", err)
-	}
-
-	if err := m.extractKubeletCA(ctx, cfg, controlNodeName, nodeName); err != nil {
-		return fmt.Errorf("extract kubelet CA: %w", err)
-	}
-
-	controlNodeIP, err := support.GetContainerIP(ctx, m.runner, cfg.BridgeName, controlNodeName)
+	worker, err := m.prepareWorker(ctx, nodesCfg, controlNodeName, mounts)
 	if err != nil {
-		return fmt.Errorf("get control node IP: %w", err)
+		return err
 	}
-
-	if err := m.addWorkerNode(ctx, cfg, nodeName, controlNodeName, controlNodeIP, mounts); err != nil {
+	if err := m.createWorker(ctx, worker); err != nil {
 		return fmt.Errorf("add worker node: %w", err)
 	}
-	if cfg.EnableTopoLVM {
-		topolvm := support.NewTopoLVM(m.runner, cfg.StateDir, support.TopoLVMConfig{
-			VolumeSize:         cfg.LVMVolSize,
-			OverprovisionRatio: cfg.OverprovisionRatio,
-			Thinpool:           cfg.EnableThinpool,
-		})
-		if err := topolvm.Reconcile(ctx, m.clusterName, controlNodeName); err != nil {
-			return fmt.Errorf("apply topolvm manifest: %w", err)
-		}
+	if err := m.reconcileWorker(ctx, worker); err != nil {
+		return err
 	}
-	if multiNode, err := network.UsesWhereabouts(m.clusterName); err != nil {
-		return fmt.Errorf("read multi-node state: %w", err)
-	} else if multiNode {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
-			return fmt.Errorf("wait for worker node before labeling: %w", err)
-		}
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "label", "node", nodeName, "dfmicro.io/whereabouts=enabled", "--overwrite"); err != nil {
-			return fmt.Errorf("label worker node for whereabouts: %w", err)
-		}
-	}
-
-	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, nodeIndex, rootconfig.NodeConfig{
-		Index:      nodeIndex,
-		NodeName:   nodeName,
-		LVMDisk:    filepath.Join(nodeStateDir, nodeName+".image"),
-		VGName:     nodeName,
-		PullSecret: cfg.PullSecret,
-		IDMSFiles:  append([]string(nil), cfg.IDMSFiles...),
-		Mounts:     append([]string(nil), mounts...),
-	})
-
-	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
+	if err := m.persistWorker(nodesCfg, worker); err != nil {
 		return fmt.Errorf("write nodes config: %w", err)
 	}
 
-	m.logger.Info("worker node added", "cluster", m.clusterName, "node", nodeName, "control", controlNodeName)
+	m.logger.Info("worker node added", "cluster", m.clusterName, "node", worker.name, "control", worker.controlNodeName)
 	return nil
+}
+
+func controlNode(nodesCfg rootconfig.NodesConfig) (string, error) {
+	if len(nodesCfg.Nodes) == 0 || nodesCfg.Nodes[0].Index != 0 {
+		return "", fmt.Errorf("cluster has no control node in nodes.json")
+	}
+	return nodesCfg.Nodes[0].NodeName, nil
+}
+
+func (m *manager) prepareWorker(ctx context.Context, nodesCfg rootconfig.NodesConfig, controlNodeName string, mounts []string) (worker, error) {
+	index := support.FirstAvailableIndex(nodesCfg.Nodes, func(node rootconfig.NodeConfig) int {
+		return node.Index
+	})
+	name := rootconfig.NodeName(m.clusterName, index)
+	stateDir := filepath.Join(m.cfg.StateDir, name)
+	if err := os.MkdirAll(stateDir, 0o755); err != nil {
+		return worker{}, fmt.Errorf("create node state directory: %w", err)
+	}
+	if err := m.topolvm.CreateBackend(ctx, name); err != nil {
+		return worker{}, fmt.Errorf("create node storage: %w", err)
+	}
+	if err := m.extractBootstrapKubeconfig(ctx, m.cfg, controlNodeName); err != nil {
+		return worker{}, fmt.Errorf("extract bootstrap kubeconfig: %w", err)
+	}
+	if err := m.extractKubeletCA(ctx, m.cfg, controlNodeName, name); err != nil {
+		return worker{}, fmt.Errorf("extract kubelet CA: %w", err)
+	}
+	controlIP, err := support.GetContainerIP(ctx, m.runner, m.cfg.BridgeName, controlNodeName)
+	if err != nil {
+		return worker{}, fmt.Errorf("get control node IP: %w", err)
+	}
+	return worker{
+		index:           index,
+		name:            name,
+		stateDir:        stateDir,
+		controlNodeName: controlNodeName,
+		controlNodeIP:   controlIP,
+		mounts:          mounts,
+	}, nil
+}
+
+func (m *manager) reconcileWorker(ctx context.Context, w worker) error {
+	if err := m.topolvm.Reconcile(ctx, m.clusterName, w.controlNodeName); err != nil {
+		return fmt.Errorf("apply topolvm manifest: %w", err)
+	}
+	multiNode, err := network.UsesWhereabouts(m.clusterName)
+	if err != nil {
+		return fmt.Errorf("read multi-node state: %w", err)
+	}
+	if !multiNode {
+		return nil
+	}
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
+		return fmt.Errorf("wait for worker node before labeling: %w", err)
+	}
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "label", "node", w.name, "dfmicro.io/whereabouts=enabled", "--overwrite"); err != nil {
+		return fmt.Errorf("label worker node for whereabouts: %w", err)
+	}
+	return nil
+}
+
+func (m *manager) persistWorker(nodesCfg rootconfig.NodesConfig, w worker) error {
+	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, w.index, rootconfig.NodeConfig{
+		Index:      w.index,
+		NodeName:   w.name,
+		LVMDisk:    filepath.Join(w.stateDir, w.name+".image"),
+		VGName:     w.name,
+		PullSecret: m.cfg.PullSecret,
+		IDMSFiles:  append([]string(nil), m.cfg.IDMSFiles...),
+		Mounts:     append([]string(nil), w.mounts...),
+	})
+	return writeNodesConfig(m.clusterName, nodesCfg)
 }
 
 func (m *manager) waitForControlPlane(ctx context.Context, controlNodeName string) error {
@@ -252,26 +281,52 @@ cat /var/lib/microshift/certs/kube-apiserver-to-kubelet-client-signer/ca.crt
 	return nil
 }
 
-func (m *manager) addWorkerNode(ctx context.Context, cfg rootconfig.ClusterConfig, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
-	nodeStateDir := filepath.Join(cfg.StateDir, nodeName)
+func (m *manager) createWorker(ctx context.Context, w worker) error {
+	extraArgs, err := m.workerArgs(w)
+	if err != nil {
+		return err
+	}
+	if err := m.node.Create(ctx, support.NodeSpec{
+		Name:                w.name,
+		Image:               m.cfg.Image,
+		Network:             m.cfg.BridgeName,
+		StateDir:            w.stateDir,
+		ClusterName:         m.cfg.Name,
+		ShareHostContainers: m.cfg.ShareHostContainers,
+		PullSecret:          m.cfg.PullSecret,
+		IDMSFiles:           m.cfg.IDMSFiles,
+		Mounts:              w.mounts,
+		ExtraArgs:           extraArgs,
+		Trust:               m.networkTrust(),
+	}); err != nil {
+		return fmt.Errorf("create worker node: %w", err)
+	}
+	if err := m.configureWorkerNetwork(ctx, w); err != nil {
+		return err
+	}
+	return m.waitForWorker(ctx, w)
+}
+
+func (m *manager) workerArgs(w worker) ([]string, error) {
+	nodeStateDir := w.stateDir
 	multinodeConfigData := struct {
 		ControlNodeName string
 	}{
-		ControlNodeName: controlNodeName,
+		ControlNodeName: w.controlNodeName,
 	}
 
 	var multinodeBuf bytes.Buffer
 	tmpl := template.Must(template.New("").Parse(multinodeConfigTmpl))
 	if err := tmpl.Execute(&multinodeBuf, multinodeConfigData); err != nil {
-		return err
+		return nil, err
 	}
 
 	multinodePath := filepath.Join(nodeStateDir, "20-multinode.yaml")
 	if err := os.WriteFile(multinodePath, multinodeBuf.Bytes(), 0o644); err != nil {
-		return err
+		return nil, err
 	}
 
-	bootstrapSource := bootstrapKubeconfigPath(cfg.Name)
+	bootstrapSource := bootstrapKubeconfigPath(m.cfg.Name)
 	bootstrapTarget := "/var/lib/microshift/bootstrap/kubeconfig"
 
 	// Mount control plane's kubelet CA (not serving cert) so worker generates own cert signed by same CA
@@ -280,7 +335,7 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg rootconfig.ClusterConfi
 	caBundleFile := filepath.Join(nodeStateDir, "certs", "kubelet-ca.crt")
 	caBundleTarget := "/var/lib/microshift/certs/ca-bundle/kubelet-ca.crt"
 	extraArgs := []string{
-		"--add-host", controlNodeName + ":" + controlNodeIP,
+		"--add-host", w.controlNodeName + ":" + w.controlNodeIP,
 	}
 
 	networkData := struct {
@@ -290,20 +345,14 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg rootconfig.ClusterConfi
 		BaseDomain  string
 	}{
 		Clients:     nil,
-		ClusterCIDR: cfg.ClusterCIDR,
-		ServiceCIDR: cfg.ServiceCIDR,
-		BaseDomain:  cfg.Name + ".dfmicro.io",
-	}
-
-	var networkBuf bytes.Buffer
-	networkTmpl := template.Must(template.New("").Parse(networkConfigTmpl))
-	if err := networkTmpl.Execute(&networkBuf, networkData); err != nil {
-		return err
+		ClusterCIDR: m.cfg.ClusterCIDR,
+		ServiceCIDR: m.cfg.ServiceCIDR,
+		BaseDomain:  m.cfg.Name + ".dfmicro.io",
 	}
 
 	networkPath := filepath.Join(nodeStateDir, "15-networking.yaml")
-	if err := os.WriteFile(networkPath, networkBuf.Bytes(), 0o644); err != nil {
-		return err
+	if err := support.WriteNetworkConfig(networkPath, networkData.BaseDomain, networkData.ClusterCIDR, networkData.ServiceCIDR, networkData.Clients); err != nil {
+		return nil, err
 	}
 	extraArgs = append(extraArgs,
 		"--volume", networkPath+":/etc/microshift/config.d/15-networking.yaml:ro",
@@ -314,52 +363,53 @@ func (m *manager) addWorkerNode(ctx context.Context, cfg rootconfig.ClusterConfi
 		"--volume", caBundleFile+":"+caBundleTarget+":ro",
 	)
 
+	if m.cfg.PowerTuning {
+		powerTuningPath := filepath.Join(nodeStateDir, "power-tuning.yaml")
+		if err := support.WritePowerTuningConfig(powerTuningPath); err != nil {
+			return nil, err
+		}
+		extraArgs = append(extraArgs, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
+	}
+
 	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
-	if err := os.WriteFile(crioDropinPath, []byte(multusDropinConfig), 0o644); err != nil {
-		return err
+	if err := support.WriteMultusDropin(crioDropinPath); err != nil {
+		return nil, err
 	}
 	extraArgs = append(extraArgs, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
 
-	if err := support.NewNode(m.logger, m.runner).Create(ctx, support.NodeSpec{
-		Name:                nodeName,
-		Image:               cfg.Image,
-		Network:             cfg.BridgeName,
-		StateDir:            nodeStateDir,
-		ClusterName:         cfg.Name,
-		ShareHostContainers: cfg.ShareHostContainers,
-		PullSecret:          cfg.PullSecret,
-		IDMSFiles:           cfg.IDMSFiles,
-		Mounts:              mounts,
-		ExtraArgs:           extraArgs,
-	}); err != nil {
-		return fmt.Errorf("create worker node: %w", err)
+	return extraArgs, nil
+}
+
+func (m *manager) networkTrust() support.NetworkTrust {
+	return support.NetworkTrust{
+		Sources:    []string{m.cfg.ClusterCIDR, m.cfg.ServiceCIDR, m.cfg.BridgeSubnet},
+		Interfaces: []string{"eth0"},
 	}
-	if err := support.TrustContainerNetwork(ctx, m.runner, nodeName,
-		[]string{cfg.ClusterCIDR, cfg.ServiceCIDR, cfg.BridgeSubnet},
-		[]string{"eth0"},
-	); err != nil {
-		return fmt.Errorf("trust cluster CIDRs: %w", err)
-	}
-	apiIP, err := apiServerIP(cfg.ServiceCIDR)
+}
+
+func (m *manager) configureWorkerNetwork(ctx context.Context, w worker) error {
+	apiIP, err := apiServerIP(m.cfg.ServiceCIDR)
 	if err != nil {
 		return fmt.Errorf("calculate API server IP: %w", err)
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", nodeName, "ip", "route", "replace", apiIP+"/32", "via", controlNodeIP, "dev", "eth0"); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.name, "ip", "route", "replace", apiIP+"/32", "via", w.controlNodeIP, "dev", "eth0"); err != nil {
 		return fmt.Errorf("route API server IP through control node: %w", err)
 	}
-	m.logger.Info("waiting for worker readiness", "node", nodeName)
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+nodeName); err != nil {
+	return nil
+}
+
+func (m *manager) waitForWorker(ctx context.Context, w worker) error {
+	m.logger.Info("waiting for worker readiness", "node", w.name)
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
 		return fmt.Errorf("wait for worker registration: %w", err)
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+nodeName); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+w.name); err != nil {
 		return fmt.Errorf("wait for worker readiness: %w", err)
 	}
-	m.logger.Info("waiting for worker CNI/network", "node", nodeName)
-	if err := support.WaitForCNI(ctx, m.runner, nodeName); err != nil {
-		return fmt.Errorf("wait for worker CNI/network: %w", err)
+	if err := m.node.WaitReady(ctx, w.name); err != nil {
+		return fmt.Errorf("wait for worker node readiness: %w", err)
 	}
-	m.logger.Info("worker CNI/network is ready", "node", nodeName)
-	m.logger.Info("worker is ready", "node", nodeName)
+	m.logger.Info("worker is ready", "node", w.name)
 	return nil
 }
 
@@ -386,11 +436,7 @@ func apiServerIP(serviceCIDR string) (string, error) {
 }
 
 func (m *manager) remove(ctx context.Context, nodeName string) error {
-	cfg, err := rootconfig.ReadClusterConfig(m.clusterName)
-	if err != nil {
-		return fmt.Errorf("read cluster config: %w", err)
-	}
-	nodesCfg, err := ReadNodesConfig(m.clusterName)
+	nodesCfg, err := readNodesConfig(m.clusterName)
 	if err != nil {
 		return fmt.Errorf("read nodes config: %w", err)
 	}
@@ -400,65 +446,72 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 	if _, ok := nodeIndex(nodeName); !ok {
 		return fmt.Errorf("node %q is not a worker node", nodeName)
 	}
-
-	var cleanupErrs []error
-	if len(nodesCfg.Nodes) == 0 || nodesCfg.Nodes[0].Index != 0 {
-		return fmt.Errorf("cluster %q has no control node in nodes.json", m.clusterName)
+	controlNodeName, err := controlNode(nodesCfg)
+	if err != nil {
+		return err
 	}
-	controlNodeName := nodesCfg.Nodes[0].NodeName
-	node := support.NewNode(m.logger, m.runner)
+
+	cleanupErrs := []error{
+		m.removeWorkerResources(ctx, controlNodeName, nodeName),
+		m.removeWorkerContainer(ctx, nodeName),
+		m.removeWorkerStorage(ctx, nodeName),
+	}
+	nodesCfg = removeWorker(nodesCfg, nodeName)
+	cleanupErrs = append(cleanupErrs, m.persistNodeRemoval(nodesCfg))
+	cleanupErrs = append(cleanupErrs, m.topolvm.Reconcile(ctx, m.clusterName, controlNodeName))
+
+	m.logger.Info("worker node deleted", "cluster", m.clusterName, "node", nodeName)
+	return errors.Join(cleanupErrs...)
+}
+
+func (m *manager) removeWorkerResources(ctx context.Context, controlNodeName, nodeName string) error {
+	var errs []error
 	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "delete", "node", nodeName, "--ignore-not-found", "--wait=false"); err != nil {
-		cleanupErrs = append(cleanupErrs, fmt.Errorf("delete Kubernetes node: %w", err))
+		errs = append(errs, fmt.Errorf("delete Kubernetes node: %w", err))
 	}
-	if cfg.EnableTopoLVM {
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "-n", "topolvm-system", "delete", "daemonset,configmap", "-l", "dfmicro.io/topolvm-node="+nodeName, "--ignore-not-found"); err != nil {
-			cleanupErrs = append(cleanupErrs, fmt.Errorf("delete TopoLVM node resources: %w", err))
-		}
+	if err := m.topolvm.DeleteNodeResources(ctx, controlNodeName, nodeName); err != nil {
+		errs = append(errs, fmt.Errorf("delete TopoLVM node resources: %w", err))
 	}
-	if err := node.Stop(ctx, nodeName); err != nil {
-		cleanupErrs = append(cleanupErrs, fmt.Errorf("stop node container: %w", err))
-	}
+	return errors.Join(errs...)
+}
 
-	if err := node.Remove(ctx, nodeName); err != nil {
-		cleanupErrs = append(cleanupErrs, fmt.Errorf("remove node container: %w", err))
+func (m *manager) removeWorkerContainer(ctx context.Context, nodeName string) error {
+	var errs []error
+	if err := m.node.Stop(ctx, nodeName); err != nil {
+		errs = append(errs, fmt.Errorf("stop node container: %w", err))
 	}
+	if err := m.node.Remove(ctx, nodeName); err != nil {
+		errs = append(errs, fmt.Errorf("remove node container: %w", err))
+	}
+	return errors.Join(errs...)
+}
 
+func (m *manager) removeWorkerStorage(ctx context.Context, nodeName string) error {
+	var errs []error
+	if err := m.topolvm.DeleteBackends(ctx, nodeName); err != nil {
+		errs = append(errs, fmt.Errorf("delete node storage: %w", err))
+	}
+	if err := m.node.RemoveState(m.cfg.StateDir, nodeName); err != nil {
+		errs = append(errs, fmt.Errorf("remove node state: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func removeWorker(nodesCfg rootconfig.NodesConfig, nodeName string) rootconfig.NodesConfig {
 	for i, node := range nodesCfg.Nodes {
 		if node.NodeName == nodeName {
 			nodesCfg.Nodes = slices.Delete(nodesCfg.Nodes, i, i+1)
 			break
 		}
 	}
-	if cfg.EnableTopoLVM {
-		topolvm := support.NewTopoLVM(m.runner, cfg.StateDir, support.TopoLVMConfig{
-			VolumeSize:         cfg.LVMVolSize,
-			OverprovisionRatio: cfg.OverprovisionRatio,
-			Thinpool:           cfg.EnableThinpool,
-		})
-		if err := topolvm.DeleteBackends(ctx, nodeName); err != nil {
-			cleanupErrs = append(cleanupErrs, fmt.Errorf("delete node storage: %w", err))
-		}
-	}
-	if err := node.RemoveState(cfg.StateDir, nodeName); err != nil {
-		cleanupErrs = append(cleanupErrs, fmt.Errorf("remove node state: %w", err))
-	}
-	if cfg.EnableTopoLVM {
-		topolvm := support.NewTopoLVM(m.runner, cfg.StateDir, support.TopoLVMConfig{
-			VolumeSize:         cfg.LVMVolSize,
-			OverprovisionRatio: cfg.OverprovisionRatio,
-			Thinpool:           cfg.EnableThinpool,
-		})
-		if err := topolvm.Reconcile(ctx, m.clusterName, controlNodeName); err != nil {
-			cleanupErrs = append(cleanupErrs, fmt.Errorf("apply TopoLVM manifest: %w", err))
-		}
-	}
+	return nodesCfg
+}
 
-	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
-		cleanupErrs = append(cleanupErrs, fmt.Errorf("write nodes config: %w", err))
+func (m *manager) persistNodeRemoval(nodesCfg rootconfig.NodesConfig) error {
+	if err := writeNodesConfig(m.clusterName, nodesCfg); err != nil {
+		return fmt.Errorf("write nodes config: %w", err)
 	}
-
-	m.logger.Info("worker node deleted", "cluster", m.clusterName, "node", nodeName)
-	return errors.Join(cleanupErrs...)
+	return nil
 }
 
 func nodeIndex(name string) (int, bool) {

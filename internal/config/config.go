@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"dfmicro/internal/support"
 )
 
 func NodeName(cluster string, index int) string {
@@ -83,14 +81,19 @@ type NetworkCIDRs struct {
 
 var Load = sync.OnceValue(func() Defaults {
 	var cfg Defaults
-	support.MustOK(json.Unmarshal(embeddedConfig, &cfg))
+	if err := json.Unmarshal(embeddedConfig, &cfg); err != nil {
+		panic(err)
+	}
 	return cfg
 })
 
 func ConfigDir() string {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		configDir = support.Must(os.UserHomeDir())
+		configDir, err = os.UserHomeDir()
+		if err != nil {
+			panic(err)
+		}
 	}
 	return filepath.Join(configDir, "dfmicro")
 }

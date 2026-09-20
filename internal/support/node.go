@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"dfmicro/internal/execx"
@@ -22,18 +23,24 @@ type NodeSpec struct {
 	IDMSFiles           []string
 	Mounts              []string
 	ExtraArgs           []string
+	Trust               NetworkTrust
 }
 
-type Node struct {
+type NetworkTrust struct {
+	Sources    []string
+	Interfaces []string
+}
+
+type NodeMgr struct {
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func NewNode(logger *slog.Logger, runner execx.Runner) *Node {
-	return &Node{logger: logger, runner: runner}
+func NewNodeMgr(logger *slog.Logger, runner execx.Runner) *NodeMgr {
+	return &NodeMgr{logger: logger, runner: runner}
 }
 
-func (n *Node) Create(ctx context.Context, spec NodeSpec) error {
+func (n *NodeMgr) Create(ctx context.Context, spec NodeSpec) error {
 	args := []string{
 		"run", "--privileged", "-d",
 		"--ulimit", "nofile=524288:524288",
@@ -93,29 +100,31 @@ func (n *Node) Create(ctx context.Context, spec NodeSpec) error {
 	if _, err := RunPodmanPrivileged(ctx, n.runner, args...); err != nil {
 		return err
 	}
-	return n.WaitForDBus(ctx, spec.Name)
+	return n.waitAndTrust(ctx, spec.Name, spec.Trust)
 }
 
-func (n *Node) Stop(ctx context.Context, name string) error {
+func (n *NodeMgr) Stop(ctx context.Context, name string) error {
 	_, err := RunPodmanPrivileged(ctx, n.runner, "stop", "--ignore", "--time", "3", name)
 	return err
 }
 
-func (n *Node) Start(ctx context.Context, name string) error {
-	_, err := RunPodmanPrivileged(ctx, n.runner, "start", name)
-	return err
+func (n *NodeMgr) Start(ctx context.Context, name string, trust NetworkTrust) error {
+	if _, err := RunPodmanPrivileged(ctx, n.runner, "start", name); err != nil {
+		return err
+	}
+	return n.waitAndTrust(ctx, name, trust)
 }
 
-func (n *Node) Remove(ctx context.Context, name string) error {
+func (n *NodeMgr) Remove(ctx context.Context, name string) error {
 	_, err := RunPodmanPrivileged(ctx, n.runner, "rm", "--ignore", "-f", "--volumes", name)
 	return err
 }
 
-func (n *Node) RemoveState(stateDir, name string) error {
+func (n *NodeMgr) RemoveState(stateDir, name string) error {
 	return os.RemoveAll(filepath.Join(stateDir, name))
 }
 
-func (n *Node) WaitForDBus(ctx context.Context, name string) error {
+func (n *NodeMgr) waitForDBus(ctx context.Context, name string) error {
 	for range 60 {
 		if _, err := RunPodmanPrivileged(ctx, n.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
 			return nil
@@ -127,4 +136,78 @@ func (n *Node) WaitForDBus(ctx context.Context, name string) error {
 		}
 	}
 	return fmt.Errorf("the container did not activate the dbus service within 60 seconds")
+}
+
+func (n *NodeMgr) WaitReady(ctx context.Context, name string) error {
+	for {
+		state, err := n.systemdSubState(ctx, name, "microshift.service")
+		if err != nil {
+			return err
+		}
+		if state == "running" {
+			if err := n.checkCNI(ctx, name); err == nil {
+				return nil
+			}
+			n.logger.Info("waiting for CNI/network", "container", name)
+		} else {
+			n.logger.Info("waiting for node readiness", "container", name, "state", state)
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
+func (n *NodeMgr) systemdSubState(ctx context.Context, name, unit string) (string, error) {
+	result, err := RunPodmanPrivileged(ctx, n.runner, "exec", "-i", name, "systemctl", "show", "--property=SubState", "--value", unit)
+	if err != nil {
+		return "unknown", nil
+	}
+	return strings.TrimSpace(result.Stdout), nil
+}
+
+func (n *NodeMgr) VlanInterfaceExists(ctx context.Context, containerName, devName string) bool {
+	result, err := RunPodmanPrivileged(ctx, n.runner, "exec", containerName, "ip", "-br", "link", "show", devName)
+	return err == nil && strings.TrimSpace(result.Stdout) != ""
+}
+
+func (n *NodeMgr) checkCNI(ctx context.Context, containerName string) error {
+	for _, configPath := range []string{
+		"/etc/cni/net.d/10-kindnet.conflist",
+		"/etc/cni/net.d/00-multus.conf",
+	} {
+		if _, err := RunPodmanPrivileged(ctx, n.runner, "exec", containerName, "test", "-s", configPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n *NodeMgr) waitAndTrust(ctx context.Context, name string, trust NetworkTrust) error {
+	if err := n.waitForDBus(ctx, name); err != nil {
+		return err
+	}
+	return n.trustNetwork(ctx, name, trust)
+}
+
+func (n *NodeMgr) trustNetwork(ctx context.Context, container string, trust NetworkTrust) error {
+	if len(trust.Sources) > 0 {
+		args := []string{"exec", container, "firewall-cmd", "--zone=trusted"}
+		for _, source := range trust.Sources {
+			args = append(args, "--add-source="+source)
+		}
+		if _, err := RunPodmanPrivileged(ctx, n.runner, args...); err != nil {
+			return fmt.Errorf("trust container sources: %w", err)
+		}
+	}
+	for _, iface := range trust.Interfaces {
+		args := []string{"exec", container, "firewall-cmd", "--zone=trusted", "--add-interface=" + iface}
+		if _, err := RunPodmanPrivileged(ctx, n.runner, args...); err != nil {
+			return fmt.Errorf("trust container interface %s: %w", iface, err)
+		}
+	}
+	return nil
 }

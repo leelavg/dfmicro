@@ -11,37 +11,54 @@ import (
 	"strings"
 	"text/template"
 
+	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 )
 
 //go:embed topolvm-assets/*
 var topolvmAssets embed.FS
 
-type TopoLVMConfig struct {
-	VolumeSize         string
-	OverprovisionRatio float32
-	Thinpool           bool
+type topoLVMConfig struct {
+	enabled            bool
+	volumeSize         string
+	overprovisionRatio float32
+	thinpool           bool
 }
 
-type TopoLVM struct {
+type TopoLVMMgr struct {
 	runner   execx.Runner
 	stateDir string
-	config   TopoLVMConfig
+	config   topoLVMConfig
 }
 
-func NewTopoLVM(runner execx.Runner, stateDir string, config TopoLVMConfig) *TopoLVM {
-	return &TopoLVM{runner: runner, stateDir: stateDir, config: config}
+func NewTopoLVMMgr(runner execx.Runner, cfg rootconfig.ClusterConfig) *TopoLVMMgr {
+	return &TopoLVMMgr{runner: runner, stateDir: cfg.StateDir, config: topoLVMConfig{
+		enabled:            cfg.EnableTopoLVM,
+		volumeSize:         cfg.LVMVolSize,
+		overprovisionRatio: cfg.OverprovisionRatio,
+		thinpool:           cfg.EnableThinpool,
+	}}
 }
 
-func (t *TopoLVM) ManifestDir() string {
+func (t *TopoLVMMgr) Enabled() bool {
+	return t.config.enabled
+}
+
+func (t *TopoLVMMgr) ManifestDir() string {
 	return filepath.Join(t.stateDir, "topolvm")
 }
 
-func (t *TopoLVM) RemoveManifest() error {
+func (t *TopoLVMMgr) RemoveManifest() error {
+	if !t.Enabled() {
+		return nil
+	}
 	return os.RemoveAll(t.ManifestDir())
 }
 
-func (t *TopoLVM) Render(ctx context.Context, clusterName string, extraNodes ...string) error {
+func (t *TopoLVMMgr) Render(ctx context.Context, clusterName string, extraNodes ...string) error {
+	if !t.Enabled() {
+		return nil
+	}
 	nodes, err := AllClusterContainers(ctx, t.runner, clusterName)
 	if err != nil {
 		return err
@@ -57,23 +74,28 @@ func (t *TopoLVM) Render(ctx context.Context, clusterName string, extraNodes ...
 	return nil
 }
 
-func (t *TopoLVM) Apply(ctx context.Context, container string) error {
+func (t *TopoLVMMgr) Reconcile(ctx context.Context, clusterName, container string) error {
+	if !t.Enabled() {
+		return nil
+	}
+	if err := t.Render(ctx, clusterName); err != nil {
+		return err
+	}
 	return ApplyKustomization(ctx, t.runner, container, "/usr/lib/microshift/manifests.d/001-microshift-topolvm")
 }
 
-func (t *TopoLVM) Reconcile(ctx context.Context, clusterName, container string, extraNodes ...string) error {
-	if err := t.Render(ctx, clusterName, extraNodes...); err != nil {
-		return err
+func (t *TopoLVMMgr) CreateBackend(ctx context.Context, nodeName string) error {
+	if !t.Enabled() {
+		return nil
 	}
-	return t.Apply(ctx, container)
-}
-
-func (t *TopoLVM) CreateBackend(ctx context.Context, nodeName string) error {
 	disk := filepath.Join(t.stateDir, nodeName, nodeName+".image")
 	return t.createBackend(ctx, disk, nodeName)
 }
 
-func (t *TopoLVM) DeleteBackends(ctx context.Context, nodeNames ...string) error {
+func (t *TopoLVMMgr) DeleteBackends(ctx context.Context, nodeNames ...string) error {
+	if !t.Enabled() {
+		return nil
+	}
 	for _, name := range nodeNames {
 		disk := filepath.Join(t.stateDir, name, name+".image")
 		if err := t.deleteBackend(ctx, disk, name); err != nil {
@@ -83,7 +105,15 @@ func (t *TopoLVM) DeleteBackends(ctx context.Context, nodeNames ...string) error
 	return nil
 }
 
-func (t *TopoLVM) writeManifest(nodes []string) error {
+func (t *TopoLVMMgr) DeleteNodeResources(ctx context.Context, controlNode, nodeName string) error {
+	if !t.Enabled() {
+		return nil
+	}
+	_, err := RunPodmanPrivileged(ctx, t.runner, "exec", controlNode, "kubectl", "-n", "topolvm-system", "delete", "daemonset,configmap", "-l", "dfmicro.io/topolvm-node="+nodeName, "--ignore-not-found")
+	return err
+}
+
+func (t *TopoLVMMgr) writeManifest(nodes []string) error {
 	dir := t.ManifestDir()
 	if err := t.writeAssets(dir); err != nil {
 		return err
@@ -96,7 +126,7 @@ func (t *TopoLVM) writeManifest(nodes []string) error {
 	return os.WriteFile(filepath.Join(dir, "03-dynamic.yaml"), manifest, 0o644)
 }
 
-func (t *TopoLVM) writeAssets(dir string) error {
+func (t *TopoLVMMgr) writeAssets(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -112,7 +142,7 @@ func (t *TopoLVM) writeAssets(dir string) error {
 	return nil
 }
 
-func (t *TopoLVM) renderManifest(nodes []string) ([]byte, error) {
+func (t *TopoLVMMgr) renderManifest(nodes []string) ([]byte, error) {
 	if len(nodes) == 0 {
 		return nil, fmt.Errorf("at least one node is required")
 	}
@@ -131,8 +161,8 @@ func (t *TopoLVM) renderManifest(nodes []string) ([]byte, error) {
 		}{
 			NodeName:           node,
 			VGName:             node,
-			OverprovisionRatio: t.config.OverprovisionRatio,
-			Thinpool:           t.config.Thinpool,
+			OverprovisionRatio: t.config.overprovisionRatio,
+			Thinpool:           t.config.thinpool,
 		}
 		if err := tmpl.Execute(&rendered, data); err != nil {
 			return nil, err
@@ -141,7 +171,7 @@ func (t *TopoLVM) renderManifest(nodes []string) ([]byte, error) {
 	return []byte(rendered.String()), nil
 }
 
-func (t *TopoLVM) createBackend(ctx context.Context, disk, vg string) error {
+func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 	imageExists := false
 	if _, err := os.Stat(disk); err == nil {
 		imageExists = true
@@ -150,7 +180,7 @@ func (t *TopoLVM) createBackend(ctx context.Context, disk, vg string) error {
 			result, err := RunPrivileged(ctx, t.runner, "lvs", "--noheadings", "-o", "lv_name", vg)
 			if err == nil {
 				for lv := range strings.FieldsSeq(result.Stdout) {
-					if !t.config.Thinpool || lv == "thin" {
+					if !t.config.thinpool || lv == "thin" {
 						return nil
 					}
 				}
@@ -167,7 +197,7 @@ func (t *TopoLVM) createBackend(ctx context.Context, disk, vg string) error {
 		return err
 	}
 	if !imageExists {
-		if _, err := RunPrivileged(ctx, t.runner, "truncate", "--size="+t.config.VolumeSize, disk); err != nil {
+		if _, err := RunPrivileged(ctx, t.runner, "truncate", "--size="+t.config.volumeSize, disk); err != nil {
 			return err
 		}
 	}
@@ -184,7 +214,7 @@ func (t *TopoLVM) createBackend(ctx context.Context, disk, vg string) error {
 		_, _ = RunPrivileged(ctx, t.runner, "losetup", "--detach", device)
 		return err
 	}
-	if t.config.Thinpool {
+	if t.config.thinpool {
 		if _, err := RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg); err != nil {
 			if cleanupErr := t.deleteBackend(ctx, disk, vg); cleanupErr != nil {
 				return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
@@ -195,7 +225,7 @@ func (t *TopoLVM) createBackend(ctx context.Context, disk, vg string) error {
 	return nil
 }
 
-func (t *TopoLVM) deleteBackend(ctx context.Context, disk, vg string) error {
+func (t *TopoLVMMgr) deleteBackend(ctx context.Context, disk, vg string) error {
 	encodedVG := strings.ReplaceAll(vg, "-", "--")
 	result, err := RunPrivileged(ctx, t.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name")
 	if err != nil && !isMissingLVMResource(err) {

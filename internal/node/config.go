@@ -8,8 +8,7 @@ import (
 	rootconfig "dfmicro/internal/config"
 )
 
-type NodeConfig = rootconfig.NodeConfig
-type NodesConfig = rootconfig.NodesConfig
+type nodesConfig = rootconfig.NodesConfig
 
 type nodeOutput struct {
 	Role string `json:"role"`
@@ -18,11 +17,11 @@ type nodeOutput struct {
 	Kubeconfig      string `json:"kubeconfig,omitempty"`
 }
 
-func ReadNodesConfig(clusterName string) (NodesConfig, error) {
+func readNodesConfig(clusterName string) (nodesConfig, error) {
 	return rootconfig.ReadNodesConfig(clusterName)
 }
 
-func WriteNodesConfig(clusterName string, cfg NodesConfig) error {
+func writeNodesConfig(clusterName string, cfg nodesConfig) error {
 	return rootconfig.WriteNodesConfig(clusterName, cfg)
 }
 
@@ -31,7 +30,7 @@ func printNodesConfig(clusterName string) error {
 	if err != nil {
 		return err
 	}
-	nodesCfg, err := ReadNodesConfig(clusterName)
+	nodesCfg, err := readNodesConfig(clusterName)
 	if err != nil {
 		return err
 	}

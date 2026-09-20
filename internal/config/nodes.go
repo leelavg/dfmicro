@@ -9,12 +9,12 @@ import (
 
 const nodesConfigFileName = "nodes.json"
 
-func NodesConfigPath(clusterName string) string {
+func nodesConfigPath(clusterName string) string {
 	return filepath.Join(ConfigDir(), clusterName, nodesConfigFileName)
 }
 
 func ReadNodesConfig(clusterName string) (NodesConfig, error) {
-	data, err := os.ReadFile(NodesConfigPath(clusterName))
+	data, err := os.ReadFile(nodesConfigPath(clusterName))
 	if errors.Is(err, os.ErrNotExist) {
 		return NodesConfig{}, nil
 	}
@@ -29,7 +29,7 @@ func ReadNodesConfig(clusterName string) (NodesConfig, error) {
 }
 
 func WriteNodesConfig(clusterName string, cfg NodesConfig) error {
-	path := NodesConfigPath(clusterName)
+	path := nodesConfigPath(clusterName)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

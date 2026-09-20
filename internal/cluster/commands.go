@@ -262,7 +262,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner).PrintKubeconfig(ctx)
+					return newManager(cfg, logger, runner).printKubeconfig(ctx)
 				},
 			},
 			{

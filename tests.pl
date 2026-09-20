@@ -321,6 +321,65 @@ sub fping {
     check($passed == $should_work, $name);
 }
 
+sub node_has_whereabouts_label {
+	my ($kubeconfig, $node) = @_;
+	my ($passed, $value) = capture(
+		'kubectl', '--kubeconfig', $kubeconfig, 'get', 'node', $node,
+		'-o', 'jsonpath={.metadata.labels.dfmicro\\.io/whereabouts}',
+	);
+	return $passed && $value eq 'enabled';
+}
+
+sub storage_manifest {
+	my ($name, $node) = @_;
+	return <<"YAML";
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: $name
+spec:
+  serviceName: $name
+  replicas: 1
+  selector:
+    matchLabels:
+      app: $name
+  template:
+    metadata:
+      labels:
+        app: $name
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: $node
+      containers:
+      - name: writer
+        image: docker.io/nicolaka/netshoot:v0.16
+        command: ["sleep", "infinity"]
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi
+YAML
+}
+
+sub test_storage {
+	my ($kubeconfig, $name, $node) = @_;
+	kubectl_with_input("create $name StatefulSet", $kubeconfig, storage_manifest($name, $node));
+	kubectl_ok("wait for $name StatefulSet", $kubeconfig, "rollout status statefulset/$name --timeout=60s");
+	kubectl_ok("write to $name volume", $kubeconfig, "exec $name-0 -- sh -c 'printf dfmicro > /data/check'");
+	kubectl_ok("read from $name volume", $kubeconfig, "exec $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
+	unless ($keep) {
+		kubectl_ok("delete $name StatefulSet", $kubeconfig, "delete statefulset $name --wait=true --timeout=60s");
+		kubectl_ok("delete $name PVC", $kubeconfig, "delete pvc data-$name-0 --wait=true --timeout=60s");
+	}
+}
+
 sub kubeconfig {
 	my ($name) = @_;
 	my $path = "$work_dir/$name-kubeconfig";
@@ -466,52 +525,18 @@ run_ok('worker node config', "node config --cluster $first");
 $first_kubeconfig = kubeconfig($first);
 kubectl_ok('list worker cluster resources', $first_kubeconfig, 'get all -A');
 run_with_input('worker cluster exec', "oc get all -A\nexit\n", "cluster exec --name $first --container $first-1");
+run_with_input('worker has power tuning config', "test -s /etc/microshift/config.d/10-power-tuning.yaml\nexit\n", "cluster exec --name $first --container $first-1");
 run_ok('show storage resources', "ops resources --name $first");
 
-# A workload must provision, mount, write, and read persistent data.
+# A workload must provision, mount, write, and read persistent data on every node.
 section('persistent volume read and write');
-my $storage_manifest = <<'YAML';
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: dfmicro-storage-test
-spec:
-  serviceName: dfmicro-storage-test
-  replicas: 1
-  selector:
-    matchLabels:
-      app: dfmicro-storage-test
-  template:
-    metadata:
-      labels:
-        app: dfmicro-storage-test
-    spec:
-      nodeSelector:
-        kubernetes.io/hostname: first-0
-      containers:
-      - name: writer
-        image: docker.io/nicolaka/netshoot:v0.16
-        command: ["sleep", "infinity"]
-        volumeMounts:
-        - name: data
-          mountPath: /data
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-    spec:
-      accessModes: ["ReadWriteOnce"]
-      resources:
-        requests:
-          storage: 1Gi
-YAML
-kubectl_with_input('create TopoLVM StatefulSet', $first_kubeconfig, $storage_manifest);
-kubectl_ok('wait for StatefulSet', $first_kubeconfig, 'rollout status statefulset/dfmicro-storage-test --timeout=60s');
-kubectl_ok('write to TopoLVM volume', $first_kubeconfig, "exec dfmicro-storage-test-0 -- sh -c 'printf dfmicro > /data/check'");
-kubectl_ok('read from TopoLVM volume', $first_kubeconfig, "exec dfmicro-storage-test-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
-unless ($keep) {
-    kubectl_ok('delete storage StatefulSet', $first_kubeconfig, 'delete statefulset dfmicro-storage-test --wait=true --timeout=60s');
-    kubectl_ok('delete storage PVC', $first_kubeconfig, 'delete pvc data-dfmicro-storage-test-0 --wait=true --timeout=60s');
-}
+test_storage($first_kubeconfig, 'dfmicro-storage-control', 'first-0');
+test_storage($first_kubeconfig, 'dfmicro-storage-worker', 'first-1');
+
+section('multi-node cluster restart');
+run_ok('stop multi-node cluster', "cluster stop --name $first");
+run_ok('start multi-node cluster', "cluster start --name $first");
+kubectl_ok('multi-node cluster nodes ready', $first_kubeconfig, 'wait --for=condition=Ready nodes --all --timeout=120s');
 
 }
 
@@ -521,6 +546,7 @@ section('bridge connection and IPAM attachment');
 run_ok('create bridge network', "network create --name $network --subnet 172.31.0.0/16");
 run_fail('network connect rejects an unknown network', "network connect --cluster $first --to missing");
 run_ok('connect clusters with comma syntax', "network connect --cluster $first,$micro --to $network");
+run_ok('connect already connected clusters', "network connect --cluster $first,$micro --to $network");
 run_fail('network attach rejects duplicate cluster flags', "network attach --cluster $first --cluster $first --to $network");
 run_fail('network attach rejects an unknown cluster', "network attach --cluster missing --to $network");
 run_ok('attach default and gp1 groups', "network attach --cluster $first,$micro:gp1 --to $network");
@@ -537,6 +563,7 @@ run_netshoot('micro-gp1-b', $micro_kubeconfig, "$micro-0", "default/$network-gp1
 my $first_gp1_ip = network_ip($first_kubeconfig, 'first-gp1-b', "$network-gp1");
 my $micro_gp1_same_ip = network_ip($micro_kubeconfig, 'micro-gp1-b', "$network-gp1");
 check(defined $first_gp1_ip && defined $micro_gp1_same_ip, 'read shared secondary network addresses');
+check(defined $first_gp1_ip && defined $micro_gp1_same_ip && $first_gp1_ip ne $micro_gp1_same_ip, 'same-group secondary addresses are unique');
 fping('same group reaches across clusters', $first_kubeconfig, 'first-gp1-b', $micro_gp1_same_ip, 1) if defined $micro_gp1_same_ip;
 
 run_fail('host-local attachment blocks worker add', "node add --cluster $micro");
@@ -557,6 +584,15 @@ my $first_default_c_ip = network_ip($first_kubeconfig, 'first-default-c', "$netw
 my $micro_default_c_ip = network_ip($micro_kubeconfig, 'micro-default-c', "$network-default");
 check(defined $first_default_c_ip && defined $micro_default_c_ip, 'read reattached secondary network addresses');
 check(defined $first_default_b_ip && defined $micro_default_b_ip, 'read worker secondary network addresses');
+check(defined $first_default_b_ip && defined $first_default_c_ip && $first_default_b_ip ne $first_default_c_ip, 'first cluster secondary addresses are unique');
+check(defined $micro_default_b_ip && defined $micro_default_c_ip && $micro_default_b_ip ne $micro_default_c_ip, 'micro cluster secondary addresses are unique');
+check(
+	node_has_whereabouts_label($first_kubeconfig, 'first-0')
+		&& node_has_whereabouts_label($first_kubeconfig, 'first-1')
+		&& node_has_whereabouts_label($micro_kubeconfig, 'micro-0')
+		&& node_has_whereabouts_label($micro_kubeconfig, 'micro-1'),
+	'cluster nodes have Whereabouts labels',
+);
 fping('same cluster reaches between first nodes', $first_kubeconfig, 'first-default-c', $first_default_b_ip, 1) if defined $first_default_b_ip;
 fping('same cluster reaches between micro nodes', $micro_kubeconfig, 'micro-default-c', $micro_default_b_ip, 1) if defined $micro_default_b_ip;
 
@@ -592,6 +628,8 @@ section('idempotent peer removal');
 run_ok('unpeer with comma syntax', "network unpeer --cluster $first,$micro");
 run_ok('unpeer again with repeated flags', "network unpeer --cluster $first --cluster $micro");
 run_ok('network config', "network config --name $network");
+run_ok('disconnect clusters', "network disconnect --cluster $first,$micro --from $network");
+run_ok('disconnect already disconnected clusters', "network disconnect --cluster $first,$micro --from $network");
 
 }
 

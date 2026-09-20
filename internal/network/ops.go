@@ -142,6 +142,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 		}
 	}
 
+	node := support.NewNodeMgr(o.logger, o.runner)
 	for groupName := range groupToClusters {
 		clusterNames := groupToClusters[groupName]
 
@@ -186,7 +187,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 					)
 				}
 				devName := fmt.Sprintf("%s.%d", clusterEth, group.VlanID)
-				if !support.VlanInterfaceExists(ctx, o.runner, c, devName) {
+				if !node.VlanInterfaceExists(ctx, c, devName) {
 					if _, err := support.RunPodmanPrivileged(ctx, o.runner, "exec", c, "ip", "link", "add",
 						"link", clusterEth,
 						"name", devName, "up",
