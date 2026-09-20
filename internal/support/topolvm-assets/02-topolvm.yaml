@@ -857,6 +857,16 @@ spec:
           hostPath:
             path: /run/topolvm
             type: DirectoryOrCreate
+      initContainers:
+        - name: wait-for-lvmd
+          image: "ghcr.io/topolvm/topolvm-with-sidecar:0.41.1@sha256:70548dbe0c6addcccf79a557f29e95db2e6dc2cba2102988c91f30086004d0fc"
+          command:
+            - /bin/sh
+            - -c
+            - until [ -S /run/topolvm/lvmd.sock ]; do sleep 1; done
+          volumeMounts:
+            - name: lvmd-socket-dir
+              mountPath: /run/topolvm
 ---
 # Source: topolvm/templates/controller/deployment.yaml
 apiVersion: apps/v1

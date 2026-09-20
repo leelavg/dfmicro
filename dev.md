@@ -12,6 +12,7 @@
 make build          # fmt, vet, generate, compile -> bin/dfmicro
 make build-release  # same with -trimpath -s -w (stripped)
 make build-analyze  # same with -trimpath only (readable by gsa)
+make lint           # golangci-lint with Revive
 ```
 
 ## Generated files
@@ -24,11 +25,22 @@ make generate
 
 The CI workflow checks that committed docs match the source.
 
+## Tests
+
+Run the Perl suite on a clean Linux host with rootful Podman:
+
+```
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 3
+```
+
+Run `./tests.pl -h` for the available levels, filters, cleanup, and timeout
+options. Test output and executed commands are written to `/tmp/dfmicro-test`.
+
 ## Design decisions
 
 **Command structure**
 
-Commands are grouped into various top-level domains cand lives in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup via `support.SortCommand()` so the help output is stable without manual ordering.
+Commands are grouped into top-level domains, each in its own package under `internal/`. The root command sorts all subcommands and flags alphabetically at startup via `support.SortCommand()` so the help output is stable without manual ordering.
 
 **Addon mechanism**
 

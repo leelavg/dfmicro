@@ -11,13 +11,13 @@ BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
 TOPOLVM_VERSION ?= 17.2.0
 
-.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze build-fetch revive
+.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze build-fetch lint
 
 vet:
 	go vet -tags fetch ./...
 
-revive:
-	revive -config revive.toml ./...
+lint:
+	golangci-lint run
 
 fmt:
 	go fmt ./...
@@ -32,7 +32,7 @@ fix:
 	go fix -tags fetch ./...
 
 build-fetch: fmt vet
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -tags fetch -o $(BIN_DIR)/fetch ./cmd/fetch
 
 build: fmt vet generate fix
@@ -42,13 +42,13 @@ install: build
 	install $(BINARY) ~/.local/bin
 
 build-release: fmt vet generate
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w $(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-analyze: fmt vet generate
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-cross:
-	mkdir -p $(BIN_DIR)
+	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro

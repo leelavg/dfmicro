@@ -28,7 +28,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			attachCommand(logger, runner),
 			detachCommand(logger, runner),
 			deleteCommand(logger, runner),
-			configCommand(logger, runner),
+			configCommand(),
 			peerCommand(logger, runner),
 			unpeerCommand(logger, runner),
 		},
@@ -375,7 +375,7 @@ Example:
 	}
 }
 
-func configCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func configCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "config",
 		Usage: "Show bridge and IPAM configuration",

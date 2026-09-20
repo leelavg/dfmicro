@@ -35,10 +35,7 @@ func newBridgeManager(logger *slog.Logger, runner execx.Runner) *bridgeManager {
 }
 
 func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
-	exists, err := m.exists(ctx, cfg.name)
-	if err != nil {
-		return err
-	}
+	exists := m.exists(ctx, cfg.name)
 	if exists {
 		m.logger.Info("bridge already exists", "name", cfg.name)
 		return nil
@@ -78,12 +75,9 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 	return nil
 }
 
-func (m *bridgeManager) exists(ctx context.Context, name string) (bool, error) {
+func (m *bridgeManager) exists(ctx context.Context, name string) bool {
 	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "exists", name)
-	if err == nil {
-		return true, nil
-	}
-	return false, nil
+	return err == nil
 }
 
 func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error {
@@ -103,17 +97,14 @@ func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error
 		}
 	}
 
-	exists, err := m.exists(ctx, name)
-	if err != nil {
-		return err
-	}
+	exists := m.exists(ctx, name)
 	if !exists {
 		m.logger.Info("bridge does not exist", "name", name)
 		return nil
 	}
 
 	m.logger.Info("deleting bridge", "name", name)
-	_, err = support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", name)
+	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", name)
 	if err != nil {
 		return fmt.Errorf("failed to delete bridge: %w", err)
 	}

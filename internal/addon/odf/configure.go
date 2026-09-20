@@ -12,7 +12,7 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 	if cfg.clientOnly {
 		o.logger.Info("checking Driver CRD")
 		if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {
-			return fmt.Errorf("Driver CRD not found: %w", err)
+			return fmt.Errorf("driver CRD not found: %w", err)
 		}
 
 		o.logger.Info("patching external-snapshotter-operator CSV")

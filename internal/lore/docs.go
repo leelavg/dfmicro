@@ -31,10 +31,7 @@ func (f *fetcher) downloadDocs(ctx context.Context, version string) error {
 		return fmt.Errorf("failed to fetch TOC: %w", err)
 	}
 
-	sections, err := extractSections(tocHTML, version)
-	if err != nil {
-		return fmt.Errorf("failed to extract sections: %w", err)
-	}
+	sections := extractSections(tocHTML, version)
 
 	f.logger.Info("found documentation sections", "count", len(sections), "version", version)
 
@@ -181,7 +178,7 @@ func (f *fetcher) downloadFileWithRetry(ctx context.Context, url, filePath, sect
 	return fmt.Errorf("failed after %d attempts: %v", f.cfg.MaxRetries, lastErr)
 }
 
-func extractSections(html string, version string) ([]string, error) {
+func extractSections(html string, version string) []string {
 	pattern := regexp.MustCompile(
 		fmt.Sprintf(`"/documentation/red_hat_openshift_data_foundation/%s/html/([^"]+)`, version))
 
@@ -204,5 +201,5 @@ func extractSections(html string, version string) ([]string, error) {
 		}
 	}
 
-	return unique, nil
+	return unique
 }

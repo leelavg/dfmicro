@@ -80,6 +80,7 @@ my $config_dir = "$config_home/dfmicro";
 my $work_dir = '/tmp/dfmicro-test';
 my ($tests, $failed) = (0, 0);
 my $started = 0;
+my $interrupted;
 my $started_at = time;
 my %level_elapsed;
 my ($current_level, $current_level_started);
@@ -192,6 +193,7 @@ sub run_program {
         ? " 2>&1 | sed -n '1,${max_lines}p' >> " . shell_quote("$work_dir/tests.log")
         : " >> " . shell_quote("$work_dir/tests.log") . " 2>&1";
     my $status = system('sh', '-c', shell_command($program, @args) . $output);
+    abort_if_interrupted();
     return $status == 0;
 }
 
@@ -228,6 +230,7 @@ sub run_with_input {
         or die "start $dfmicro: $!";
     print {$child} $input;
     close $child;
+    abort_if_interrupted();
     check($? == 0, $name);
 }
 
@@ -244,6 +247,7 @@ sub capture {
     my $output = <$pipe> // '';
     close $pipe;
     my $status = $?;
+    abort_if_interrupted();
     return ($status == 0, $output);
 }
 
@@ -462,7 +466,8 @@ sub cleanup_level_3 {
 }
 
 sub cleanup_on_exit {
-	return if $list_only || $keep;
+	my ($force) = @_;
+	return if $list_only || ($keep && !$force);
 	remove_cluster($first);
 	remove_cluster($micro);
 	remove_network();
@@ -470,13 +475,18 @@ sub cleanup_on_exit {
 }
 
 sub install_signal_handlers {
-	$SIG{INT} = sub { cleanup_on_exit() if $started; exit 130 };
-	$SIG{TERM} = sub { cleanup_on_exit() if $started; exit 143 };
+	$SIG{INT} = sub { $interrupted = 130 };
+	$SIG{TERM} = sub { $interrupted = 143 };
 	$SIG{ALRM} = sub {
-		print STDERR "suite timeout exceeded\n";
-		cleanup_on_exit() if $started;
-		exit 124;
+		$interrupted = 124;
 	};
+}
+
+sub abort_if_interrupted {
+	return unless $interrupted;
+	print STDERR $interrupted == 124 ? "suite timeout exceeded\n" : "suite interrupted\n";
+	cleanup_on_exit(1) if $started;
+	exit $interrupted;
 }
 
 END { cleanup_on_exit() if $started }

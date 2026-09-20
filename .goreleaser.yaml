@@ -34,5 +34,4 @@ signs:
     artifacts: checksum
 
 changelog:
-  sort: asc
   abbrev: 7

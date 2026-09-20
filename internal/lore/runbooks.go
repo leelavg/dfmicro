@@ -66,7 +66,7 @@ func (f *fetcher) downloadRunbooks(ctx context.Context) error {
 	}
 
 	for _, ghfile := range files {
-		if strings.HasSuffix(ghfile.Path, ".md") == false {
+		if !strings.HasSuffix(ghfile.Path, ".md") {
 			continue
 		}
 

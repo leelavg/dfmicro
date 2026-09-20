@@ -103,7 +103,7 @@ func (a *ipamManager) removeClusterIPAMType(name string) {
 	delete(a.IPAMTypes, name)
 }
 
-func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup, clustersPerGroup int) (*groupAlloc, error) {
+func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePerGroup int) (*groupAlloc, error) {
 	for i := range a.Groups {
 		if a.Groups[i].Name == name {
 			return &a.Groups[i], nil
@@ -116,7 +116,7 @@ func (a *ipamManager) addGroup(name string, subnet string, groupCount, reservePe
 	}
 
 	a.Subnet = subnet
-	groupSubnet, rangeStart, rangeEnd, err := computeIPAMRange(subnet, index, clustersPerGroup, reservePerGroup)
+	groupSubnet, rangeStart, rangeEnd, err := computeIPAMRange(subnet, index, reservePerGroup)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute IPAM range for group %s: %w", name, err)
 	}
@@ -172,14 +172,13 @@ func (g *groupAlloc) addCluster(clusterName string, clustersPerGroup int) (*clus
 	return &g.Clusters[index], nil
 }
 
-func (g *groupAlloc) removeCluster(clusterName string) error {
+func (g *groupAlloc) removeCluster(clusterName string) {
 	for i := range g.Clusters {
 		if g.Clusters[i].Name == clusterName {
 			g.Clusters = slices.Delete(g.Clusters, i, i+1)
-			return nil
+			return
 		}
 	}
-	return nil
 }
 
 func addToIP(ip net.IP, offset int) net.IP {
@@ -188,7 +187,7 @@ func addToIP(ip net.IP, offset int) net.IP {
 	return result
 }
 
-func computeIPAMRange(subnet string, index, clustersPerGroup, reservePerGroup int) (string, string, string, error) {
+func computeIPAMRange(subnet string, index, reservePerGroup int) (string, string, string, error) {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil {
 		return "", "", "", fmt.Errorf("invalid CIDR %s: %w", subnet, err)

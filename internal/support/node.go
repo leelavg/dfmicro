@@ -2,8 +2,10 @@ package support
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,6 +117,45 @@ func (n *NodeMgr) Start(ctx context.Context, name string, trust NetworkTrust) er
 	return n.waitAndTrust(ctx, name, trust)
 }
 
+func (n *NodeMgr) ConfigureServiceRoute(ctx context.Context, name, serviceCIDR, controlIP string) error {
+	serviceIP, err := serviceIP(serviceCIDR)
+	if err != nil {
+		return err
+	}
+	if _, err := RunPodmanPrivileged(ctx, n.runner, "exec", name, "ip", "route", "replace", serviceIP+"/32", "via", controlIP, "dev", "eth0"); err != nil {
+		return fmt.Errorf("route API server IP through control node: %w", err)
+	}
+	return nil
+}
+
+func serviceIP(serviceCIDR string) (string, error) {
+	_, ipnet, err := net.ParseCIDR(serviceCIDR)
+	if err != nil {
+		return "", err
+	}
+	base := ipnet.IP.To4()
+	if base == nil {
+		return "", fmt.Errorf("IPv6 service CIDR is not supported")
+	}
+	ones, _ := ipnet.Mask.Size()
+	hostBits := 32 - ones
+	if hostBits == 0 {
+		return "", fmt.Errorf("service CIDR has no next subnet: %s", serviceCIDR)
+	}
+	step := uint32(1) << hostBits
+	value := binary.BigEndian.Uint32(base)
+	if value > ^uint32(0)-step {
+		return "", fmt.Errorf("service CIDR has no next subnet: %s", serviceCIDR)
+	}
+	return addToIP(base, int(step)).String(), nil
+}
+
+func addToIP(ip net.IP, offset int) net.IP {
+	result := make(net.IP, 4)
+	binary.BigEndian.PutUint32(result, binary.BigEndian.Uint32(ip)+uint32(offset))
+	return result
+}
+
 func (n *NodeMgr) Remove(ctx context.Context, name string) error {
 	_, err := RunPodmanPrivileged(ctx, n.runner, "rm", "--ignore", "-f", "--volumes", name)
 	return err
@@ -140,10 +181,7 @@ func (n *NodeMgr) waitForDBus(ctx context.Context, name string) error {
 
 func (n *NodeMgr) WaitReady(ctx context.Context, name string) error {
 	for {
-		state, err := n.systemdSubState(ctx, name, "microshift.service")
-		if err != nil {
-			return err
-		}
+		state := n.systemdSubState(ctx, name, "microshift.service")
 		if state == "running" {
 			if err := n.checkCNI(ctx, name); err == nil {
 				return nil
@@ -161,12 +199,12 @@ func (n *NodeMgr) WaitReady(ctx context.Context, name string) error {
 	}
 }
 
-func (n *NodeMgr) systemdSubState(ctx context.Context, name, unit string) (string, error) {
+func (n *NodeMgr) systemdSubState(ctx context.Context, name, unit string) string {
 	result, err := RunPodmanPrivileged(ctx, n.runner, "exec", "-i", name, "systemctl", "show", "--property=SubState", "--value", unit)
 	if err != nil {
-		return "unknown", nil
+		return "unknown"
 	}
-	return strings.TrimSpace(result.Stdout), nil
+	return strings.TrimSpace(result.Stdout)
 }
 
 func (n *NodeMgr) VlanInterfaceExists(ctx context.Context, containerName, devName string) bool {

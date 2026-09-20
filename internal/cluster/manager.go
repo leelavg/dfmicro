@@ -120,6 +120,18 @@ func (m *manager) start(ctx context.Context) error {
 			m.logger.Warn("failed to start container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
+	controlIP, err := support.GetContainerIP(ctx, m.runner, m.cfg.BridgeName, m.cfg.NodeName)
+	if err != nil {
+		return fmt.Errorf("get control node IP: %w", err)
+	}
+	for _, container := range containers {
+		if container == m.cfg.NodeName {
+			continue
+		}
+		if err := m.node.ConfigureServiceRoute(ctx, container, m.cfg.ServiceCIDR, controlIP); err != nil {
+			return fmt.Errorf("configure worker route %s: %w", container, err)
+		}
+	}
 
 	if err := m.waitReady(ctx); err != nil {
 		return err
@@ -282,11 +294,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	var clients []string
 	if m.cfg.ExposeKubeAPI {
-		var err error
-		clients, err = getClients()
-		if err != nil {
-			return err
-		}
+		clients = getClients()
 		extraArgs = append(extraArgs, "-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort))
 	}
 
@@ -400,8 +408,8 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 	}
 
 	if m.cfg.ExposeKubeAPI {
-		clients, err := getClients()
-		if err == nil && len(clients) > 0 {
+		clients := getClients()
+		if len(clients) > 0 {
 			var kubeconfigs []string
 			for _, client := range clients {
 				time.Sleep(delay)
@@ -519,7 +527,7 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 	return nil
 }
 
-func getClients() ([]string, error) {
+func getClients() []string {
 	var clients []string
 
 	hostname, err := os.Hostname()
@@ -532,7 +540,7 @@ func getClients() ([]string, error) {
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return clients, nil
+		return clients
 	}
 
 	seen := make(map[string]struct{})
@@ -564,7 +572,7 @@ func getClients() ([]string, error) {
 			}
 		}
 	}
-	return clients, nil
+	return clients
 }
 
 func writeKubeconfig(port int, content, path string) error {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/netip"
 	"os"
 	"path/filepath"
 	"slices"
@@ -334,9 +333,7 @@ func (m *manager) workerArgs(w worker) ([]string, error) {
 	csrSignerTarget := "/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer"
 	caBundleFile := filepath.Join(nodeStateDir, "certs", "kubelet-ca.crt")
 	caBundleTarget := "/var/lib/microshift/certs/ca-bundle/kubelet-ca.crt"
-	extraArgs := []string{
-		"--add-host", w.controlNodeName + ":" + w.controlNodeIP,
-	}
+	var extraArgs []string
 
 	networkData := struct {
 		Clients     []string
@@ -388,14 +385,7 @@ func (m *manager) networkTrust() support.NetworkTrust {
 }
 
 func (m *manager) configureWorkerNetwork(ctx context.Context, w worker) error {
-	apiIP, err := apiServerIP(m.cfg.ServiceCIDR)
-	if err != nil {
-		return fmt.Errorf("calculate API server IP: %w", err)
-	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.name, "ip", "route", "replace", apiIP+"/32", "via", w.controlNodeIP, "dev", "eth0"); err != nil {
-		return fmt.Errorf("route API server IP through control node: %w", err)
-	}
-	return nil
+	return m.node.ConfigureServiceRoute(ctx, w.name, m.cfg.ServiceCIDR, w.controlNodeIP)
 }
 
 func (m *manager) waitForWorker(ctx context.Context, w worker) error {
@@ -411,28 +401,6 @@ func (m *manager) waitForWorker(ctx context.Context, w worker) error {
 	}
 	m.logger.Info("worker is ready", "node", w.name)
 	return nil
-}
-
-func apiServerIP(serviceCIDR string) (string, error) {
-	prefix, err := netip.ParsePrefix(serviceCIDR)
-	if err != nil {
-		return "", err
-	}
-	if prefix.Addr().Is6() {
-		return "", fmt.Errorf("IPv6 service CIDR is not supported")
-	}
-	base := prefix.Masked().Addr().As4()
-	hostBits := 32 - prefix.Bits()
-	if hostBits == 0 {
-		return "", fmt.Errorf("service CIDR has no next subnet: %s", serviceCIDR)
-	}
-	step := uint32(1) << hostBits
-	value := uint32(base[0])<<24 | uint32(base[1])<<16 | uint32(base[2])<<8 | uint32(base[3])
-	if value > ^uint32(0)-step {
-		return "", fmt.Errorf("service CIDR has no next subnet: %s", serviceCIDR)
-	}
-	value += step
-	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)}).String(), nil
 }
 
 func (m *manager) remove(ctx context.Context, nodeName string) error {

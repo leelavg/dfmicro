@@ -1,0 +1,26 @@
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags:
+    - fetch
+
+linters:
+  default: none
+  enable:
+    - govet
+    - revive
+    - staticcheck
+    - unused
+    - unparam
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: strict
+    paths:
+      - ^bin/

@@ -23,6 +23,37 @@ cd dfmicro
 make build
 ```
 
+## Testing
+
+Run the suite on a clean Linux host with rootful Podman and a built binary:
+
+```
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 3
+```
+
+See all test options with:
+
+```
+./tests.pl -h
+```
+
+```
+Usage: perl tests.pl [options]
+
+  --upto N             Run through level N (0-3) (default: 0)
+  --etcd              Create clusters with etcd
+  --list [MODE]        List "tests" or "cmds" (default: tests)
+  --keep              Leave resources for inspection
+  --pause             Wait for Enter before cleanup
+  --fail-fast         Stop after the first failed check
+  --cleanup           Remove suite resources without testing
+  --timeout DURATION  Limit total runtime, for example 15m
+  --help              Show this help
+```
+
+Test output and executed commands are written to `/tmp/dfmicro-test/tests.log`
+and `/tmp/dfmicro-test/cmds.log`.
+
 ## Quick start
 
 ```

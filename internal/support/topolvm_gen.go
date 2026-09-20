@@ -24,74 +24,79 @@ data:
           overprovision-ratio: {{printf "%.1f" .OverprovisionRatio}}
 {{- end}}
 ---
+# Source: topolvm/templates/lvmd/daemonset.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: topolvm-lvmd-{{.NodeName}}
   namespace: topolvm-system
   labels:
+    idx: "0"
     helm.sh/chart: topolvm-17.2.0
     app.kubernetes.io/name: topolvm
     app.kubernetes.io/instance: topolvm
     app.kubernetes.io/version: "0.41.1"
     app.kubernetes.io/managed-by: Helm
-    dfmicro.io/topolvm-node: "{{.NodeName}}"
+    dfmicro.io/topolvm-node: '{{.NodeName}}'
 spec:
   selector:
     matchLabels:
+      idx: "0"
       app.kubernetes.io/component: lvmd
       app.kubernetes.io/name: topolvm
       app.kubernetes.io/instance: topolvm
-      dfmicro.io/topolvm-node: "{{.NodeName}}"
+      dfmicro.io/topolvm-node: '{{.NodeName}}'
   template:
     metadata:
       labels:
+        idx: "0"
         app.kubernetes.io/component: lvmd
         app.kubernetes.io/name: topolvm
         app.kubernetes.io/instance: topolvm
-        dfmicro.io/topolvm-node: "{{.NodeName}}"
+        dfmicro.io/topolvm-node: '{{.NodeName}}'
       annotations:
         prometheus.io/port: metrics
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: "{{.NodeName}}"
       serviceAccountName: topolvm-lvmd
       hostPID: true
       containers:
-      - name: lvmd
-        image: ghcr.io/topolvm/topolvm-with-sidecar:0.41.1@sha256:70548dbe0c6addcccf79a557f29e95db2e6dc2cba2102988c91f30086004d0fc
-        command: ["/lvmd"]
-        livenessProbe:
-          exec:
-            command:
+        - name: lvmd
+          image: "ghcr.io/topolvm/topolvm-with-sidecar:0.41.1@sha256:70548dbe0c6addcccf79a557f29e95db2e6dc2cba2102988c91f30086004d0fc"
+          securityContext:
+            privileged: true
+          command:
             - /lvmd
-            - health
-          initialDelaySeconds: 10
-          timeoutSeconds: 3
-          periodSeconds: 60
-        ports:
-        - name: metrics
-          containerPort: 8080
-          protocol: TCP
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: devices-dir
-          mountPath: /dev
-        - name: config
-          mountPath: /etc/topolvm
-        - name: lvmd-socket-dir
-          mountPath: /run/topolvm
+          livenessProbe:
+            exec:
+              command:
+                - /lvmd
+                - health
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 60
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: devices-dir
+              mountPath: /dev
+            - name: config
+              mountPath: /etc/topolvm
+            - name: lvmd-socket-dir
+              mountPath: /run/topolvm
       volumes:
-      - name: devices-dir
-        hostPath:
-          path: /dev
-          type: Directory
-      - name: config
-        configMap:
-          name: topolvm-lvmd-{{.NodeName}}
-      - name: lvmd-socket-dir
-        hostPath:
-          path: /run/topolvm
-          type: DirectoryOrCreate
+        - name: devices-dir
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: config
+          configMap:
+            name: topolvm-lvmd-{{.NodeName}}
+        - name: lvmd-socket-dir
+          hostPath:
+            path: /run/topolvm
+            type: DirectoryOrCreate
+      nodeSelector:
+        kubernetes.io/hostname: '{{.NodeName}}'
 `

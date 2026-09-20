@@ -146,7 +146,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 	for groupName := range groupToClusters {
 		clusterNames := groupToClusters[groupName]
 
-		group, err := o.ipam.addGroup(groupName, state.Subnet, state.GroupCount, state.ReservePerGroup, state.ClustersPerGroup)
+		group, err := o.ipam.addGroup(groupName, state.Subnet, state.GroupCount, state.ReservePerGroup)
 		if err != nil {
 			return fmt.Errorf("failed to allocate group %s: %w", groupName, err)
 		}
@@ -169,7 +169,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 			}
 			o.ipam.setClusterIPAMType(clusterName, ipamType)
 			for _, c := range containers {
-				if err := o.connectOps.connect(ctx, networkName, c); err != nil {
+				if err := o.connect(ctx, networkName, c); err != nil {
 					return err
 				}
 
@@ -252,16 +252,14 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 
 		for _, clusterName := range clusterNames {
 			if group != nil {
-				if err := group.removeCluster(clusterName); err != nil {
-					return fmt.Errorf("failed to remove cluster %s from group %s: %w", clusterName, groupName, err)
-				}
+				group.removeCluster(clusterName)
 			}
 			containers, err := support.AllClusterContainers(ctx, o.runner, clusterName)
 			if err != nil {
 				return fmt.Errorf("list containers for cluster %s: %w", clusterName, err)
 			}
 			for _, c := range containers {
-				if err := o.connectOps.disconnect(ctx, networkName, c); err != nil {
+				if err := o.disconnect(ctx, networkName, c); err != nil {
 					return err
 				}
 			}
