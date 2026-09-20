@@ -61,19 +61,14 @@ type ControlConfig struct {
 	Kubeconfig string `json:"kubeconfig,omitempty"`
 }
 
-type WorkerConfig struct {
-	NodeConfig
-	ControlNodeName string `json:"controlNodeName"`
-}
-
-type NodeRecord struct {
-	NodeConfig
-	Kubeconfig      string `json:"kubeconfig,omitempty"`
-	ControlNodeName string `json:"controlNodeName,omitempty"`
+type ClusterConfig struct {
+	ClusterDefaults
+	ControlConfig
+	StateDir string `json:"stateDir,omitempty"`
 }
 
 type NodesConfig struct {
-	Nodes []NodeRecord `json:"nodes"`
+	Nodes []NodeConfig `json:"nodes"`
 }
 
 type Defaults struct {

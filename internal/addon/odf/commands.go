@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"regexp"
 
-	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -24,7 +23,7 @@ func odfAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context
 		useKubectl := cmd.Bool("kubectl")
 		kubeconfig := cmd.String("kubeconfig")
 		if kubeconfig == "" {
-			kc, err := cluster.Kubeconfig(cmd.String("name"))
+			kc, err := rootconfig.Kubeconfig(cmd.String("name"))
 			if err != nil {
 				return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("name"), err)
 			}

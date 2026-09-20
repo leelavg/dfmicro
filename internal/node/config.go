@@ -8,7 +8,7 @@ import (
 	rootconfig "dfmicro/internal/config"
 )
 
-type NodeConfig = rootconfig.NodeRecord
+type NodeConfig = rootconfig.NodeConfig
 type NodesConfig = rootconfig.NodesConfig
 
 type nodeOutput struct {
@@ -16,10 +16,6 @@ type nodeOutput struct {
 	rootconfig.NodeConfig
 	ControlNodeName string `json:"controlNodeName,omitempty"`
 	Kubeconfig      string `json:"kubeconfig,omitempty"`
-}
-
-func nodesConfigPath(clusterName string) string {
-	return rootconfig.NodesConfigPath(clusterName)
 }
 
 func ReadNodesConfig(clusterName string) (NodesConfig, error) {
@@ -31,6 +27,10 @@ func WriteNodesConfig(clusterName string, cfg NodesConfig) error {
 }
 
 func printNodesConfig(clusterName string) error {
+	clusterCfg, err := rootconfig.ReadClusterConfig(clusterName)
+	if err != nil {
+		return err
+	}
 	nodesCfg, err := ReadNodesConfig(clusterName)
 	if err != nil {
 		return err
@@ -39,15 +39,15 @@ func printNodesConfig(clusterName string) error {
 	nodes := make([]nodeOutput, 0, len(nodesCfg.Nodes))
 	for _, node := range nodesCfg.Nodes {
 		role := "worker"
+		output := nodeOutput{Role: role, NodeConfig: node}
 		if node.Index == 0 {
 			role = "control"
+			output.Role = role
+			output.Kubeconfig = clusterCfg.Kubeconfig
+		} else {
+			output.ControlNodeName = clusterCfg.NodeName
 		}
-		nodes = append(nodes, nodeOutput{
-			Role:            role,
-			NodeConfig:      node.NodeConfig,
-			ControlNodeName: node.ControlNodeName,
-			Kubeconfig:      node.Kubeconfig,
-		})
+		nodes = append(nodes, output)
 	}
 	output := struct {
 		Nodes []nodeOutput `json:"nodes"`

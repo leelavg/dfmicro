@@ -7,7 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -201,7 +200,7 @@ func (o *multusOps) attachClusters(ctx context.Context, state *bridgeState, clus
 					o.logger.Info("vlan interface already exists", "container", c, "subif", devName)
 				}
 			}
-			kcPath, err := cluster.Kubeconfig(clusterName)
+			kcPath, err := rootconfig.Kubeconfig(clusterName)
 			if err != nil {
 				return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
 			}
@@ -265,7 +264,7 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 					return err
 				}
 			}
-			kcPath, err := cluster.Kubeconfig(clusterName)
+			kcPath, err := rootconfig.Kubeconfig(clusterName)
 			if err != nil {
 				return fmt.Errorf("failed to get kubeconfig for cluster %s: %w", clusterName, err)
 			}
@@ -294,7 +293,7 @@ func (o *multusOps) detachClusters(ctx context.Context, clusterToGroups map[stri
 }
 
 func (o *multusOps) labelClusterNodes(ctx context.Context, clusterName string, enabled bool) error {
-	kubeconfig, err := cluster.Kubeconfig(clusterName)
+	kubeconfig, err := rootconfig.Kubeconfig(clusterName)
 	if err != nil {
 		return fmt.Errorf("get kubeconfig for cluster %s: %w", clusterName, err)
 	}
@@ -324,7 +323,7 @@ func (o *peerOps) run(
 		clusterContainers[name] = containers
 
 		gatewayNode := rootconfig.NodeName(name, 0)
-		cfg, err := cluster.ReadClusterConfig(name)
+		cfg, err := rootconfig.ReadClusterConfig(name)
 		if err != nil {
 			return fmt.Errorf("failed to read config for cluster %s: %w", name, err)
 		}
@@ -333,7 +332,7 @@ func (o *peerOps) run(
 			return fmt.Errorf("failed to get node IP for cluster %s: %w", name, err)
 		}
 
-		cidrs, err := cluster.GetCIDRs(name)
+		cidrs, err := rootconfig.GetCIDRs(name)
 		if err != nil {
 			return fmt.Errorf("failed to get CIDRs for cluster %s: %w", name, err)
 		}

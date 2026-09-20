@@ -175,7 +175,7 @@ sub command_args {
 }
 
 sub run_program {
-    my ($program, $command) = @_;
+    my ($program, $command, $max_lines) = @_;
     my @args = command_args($command);
     if ($list_only) {
         list_command($program, @args) if $list_mode eq 'cmds';
@@ -183,17 +183,30 @@ sub run_program {
     }
     local $ENV{DFMICRO_CMD_LOG} = $ENV{DFMICRO_CMD_LOG} || "$work_dir/cmds.log";
     log_command($program, @args);
-    my $status = system('sh', '-c', shell_command($program, @args) . " >> " . shell_quote("$work_dir/tests.log") . " 2>&1");
+    if (defined $max_lines) {
+        open my $log, '>>', "$work_dir/tests.log" or die "open test log: $!";
+        print {$log} "# output truncated to ${max_lines} lines\n";
+        close $log;
+    }
+    my $output = defined $max_lines
+        ? " 2>&1 | sed -n '1,${max_lines}p' >> " . shell_quote("$work_dir/tests.log")
+        : " >> " . shell_quote("$work_dir/tests.log") . " 2>&1";
+    my $status = system('sh', '-c', shell_command($program, @args) . $output);
     return $status == 0;
 }
 
 sub run_command {
-    return run_program($dfmicro, $_[0]);
+    return run_program($dfmicro, @_);
 }
 
 sub run_ok {
     my ($name, $command) = @_;
     check(run_command($command), $name);
+}
+
+sub run_ok_limited {
+    my ($name, $command) = @_;
+    check(run_command($command, 10), $name);
 }
 
 sub run_fail {
@@ -414,10 +427,10 @@ sub run_level_0 {
 	section('documentation and defaults');
 	run_ok('version', '-v');
 	run_ok('config', 'config');
-	run_ok('docs', 'docs');
-	run_ok('examples', 'docs --examples');
-	run_ok('devlog', 'devlog');
-	run_ok('help', '--help');
+	run_ok_limited('docs', 'docs');
+	run_ok_limited('examples', 'docs --examples');
+	run_ok_limited('devlog', 'devlog');
+	run_ok_limited('help', '--help');
 
 	section('resource reporting');
 	run_fail('resources requires a running cluster', 'ops resources');

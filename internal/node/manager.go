@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/network"
@@ -36,7 +35,7 @@ func newManager(clusterName string, logger *slog.Logger, runner execx.Runner) *m
 }
 
 func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
-	cfg, err := cluster.ReadClusterConfig(m.clusterName)
+	cfg, err := rootconfig.ReadClusterConfig(m.clusterName)
 	if err != nil {
 		return fmt.Errorf("read cluster config: %w", err)
 	}
@@ -115,17 +114,14 @@ func (m *manager) add(ctx context.Context, force bool, mounts []string) error {
 		}
 	}
 
-	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, nodeIndex, NodeConfig{
-		NodeConfig: rootconfig.NodeConfig{
-			Index:      nodeIndex,
-			NodeName:   nodeName,
-			LVMDisk:    filepath.Join(nodeStateDir, nodeName+".image"),
-			VGName:     nodeName,
-			PullSecret: cfg.PullSecret,
-			IDMSFiles:  append([]string(nil), cfg.IDMSFiles...),
-			Mounts:     append([]string(nil), mounts...),
-		},
-		ControlNodeName: controlNodeName,
+	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, nodeIndex, rootconfig.NodeConfig{
+		Index:      nodeIndex,
+		NodeName:   nodeName,
+		LVMDisk:    filepath.Join(nodeStateDir, nodeName+".image"),
+		VGName:     nodeName,
+		PullSecret: cfg.PullSecret,
+		IDMSFiles:  append([]string(nil), cfg.IDMSFiles...),
+		Mounts:     append([]string(nil), mounts...),
 	})
 
 	if err := WriteNodesConfig(m.clusterName, nodesCfg); err != nil {
@@ -175,7 +171,7 @@ func (m *manager) waitForControlPlane(ctx context.Context, controlNodeName strin
 	return nil
 }
 
-func (m *manager) extractBootstrapKubeconfig(ctx context.Context, cfg cluster.Config, controlNodeName string) error {
+func (m *manager) extractBootstrapKubeconfig(ctx context.Context, cfg rootconfig.ClusterConfig, controlNodeName string) error {
 	bootstrapPath := bootstrapKubeconfigPath(cfg.Name)
 	if _, err := os.Stat(bootstrapPath); err == nil {
 		return nil
@@ -194,7 +190,7 @@ func (m *manager) extractBootstrapKubeconfig(ctx context.Context, cfg cluster.Co
 	return nil
 }
 
-func (m *manager) extractKubeletCA(ctx context.Context, cfg cluster.Config, controlNodeName, nodeName string) error {
+func (m *manager) extractKubeletCA(ctx context.Context, cfg rootconfig.ClusterConfig, controlNodeName, nodeName string) error {
 	workerCertsDir := filepath.Join(cfg.StateDir, nodeName, "certs")
 	csrSignerDir := filepath.Join(workerCertsDir, "kubelet-csr-signer-signer", "csr-signer")
 	caBundlePath := filepath.Join(workerCertsDir, "kubelet-ca.crt")
@@ -203,36 +199,47 @@ func (m *manager) extractKubeletCA(ctx context.Context, cfg cluster.Config, cont
 		return fmt.Errorf("create certs dir: %w", err)
 	}
 
+	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", controlNodeName, "sh", "-c", `
+set -e
+for file in ca.crt ca.key serial.txt; do
+    printf '\nDFMICRO_FILE:%s\n' "$file"
+    cat "/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer/$file"
+done
+printf '\nDFMICRO_FILE:kubelet-ca.crt\n'
+cat /var/lib/microshift/certs/ca-bundle/kubelet-ca.crt
+printf '\nDFMICRO_FILE:client-ca.crt\n'
+cat /var/lib/microshift/certs/kube-apiserver-to-kubelet-client-signer/ca.crt
+`)
+	if err != nil {
+		return fmt.Errorf("extract kubelet certificates from control node: %w", err)
+	}
+
+	files := make(map[string]string, 5)
+	for _, section := range strings.Split(result.Stdout, "DFMICRO_FILE:")[1:] {
+		before, after, ok := strings.Cut(section, "\n")
+		if !ok {
+			return fmt.Errorf("parse kubelet certificate output")
+		}
+		files[strings.TrimSpace(before)] = after
+	}
+
 	// Keep the signer inputs stable while adding workers to the same cluster.
 	for _, file := range []string{"ca.crt", "ca.key", "serial.txt"} {
 		targetPath := filepath.Join(csrSignerDir, file)
 		if _, err := os.Stat(targetPath); err == nil {
 			continue
 		}
-
-		sourcePath := filepath.Join("/var/lib/microshift/certs/kubelet-csr-signer-signer/csr-signer", file)
-		result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", controlNodeName, "cat", sourcePath)
-		if err != nil {
-			return fmt.Errorf("extract %s from control node: %w", file, err)
-		}
-
-		if err := os.WriteFile(targetPath, []byte(result.Stdout), 0o644); err != nil {
+		if err := os.WriteFile(targetPath, []byte(files[file]), 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", file, err)
 		}
 	}
 
-	result, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", controlNodeName, "cat", "/var/lib/microshift/certs/ca-bundle/kubelet-ca.crt")
-	if err != nil {
-		return fmt.Errorf("extract kubelet CA bundle from control node: %w", err)
+	caBundle := files["kubelet-ca.crt"]
+	clientCA := files["client-ca.crt"]
+	if !strings.Contains(caBundle, clientCA) {
+		caBundle += clientCA
 	}
-	clientCA, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", "-i", controlNodeName, "cat", "/var/lib/microshift/certs/kube-apiserver-to-kubelet-client-signer/ca.crt")
-	if err != nil {
-		return fmt.Errorf("extract kube-apiserver-to-kubelet client CA: %w", err)
-	}
-	if !strings.Contains(result.Stdout, clientCA.Stdout) {
-		result.Stdout += clientCA.Stdout
-	}
-	if err := os.WriteFile(caBundlePath, []byte(result.Stdout), 0o644); err != nil {
+	if err := os.WriteFile(caBundlePath, []byte(caBundle), 0o644); err != nil {
 		return fmt.Errorf("write kubelet CA bundle: %w", err)
 	}
 
@@ -245,7 +252,7 @@ func (m *manager) extractKubeletCA(ctx context.Context, cfg cluster.Config, cont
 	return nil
 }
 
-func (m *manager) addWorkerNode(ctx context.Context, cfg cluster.Config, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
+func (m *manager) addWorkerNode(ctx context.Context, cfg rootconfig.ClusterConfig, nodeName, controlNodeName, controlNodeIP string, mounts []string) error {
 	nodeStateDir := filepath.Join(cfg.StateDir, nodeName)
 	multinodeConfigData := struct {
 		ControlNodeName string
@@ -379,7 +386,7 @@ func apiServerIP(serviceCIDR string) (string, error) {
 }
 
 func (m *manager) remove(ctx context.Context, nodeName string) error {
-	cfg, err := cluster.ReadClusterConfig(m.clusterName)
+	cfg, err := rootconfig.ReadClusterConfig(m.clusterName)
 	if err != nil {
 		return fmt.Errorf("read cluster config: %w", err)
 	}

@@ -11,15 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-const configFileName = "config.json"
-
-type Config struct {
-	rootconfig.ClusterDefaults
-	rootconfig.ControlConfig
-	StateDir string `json:"stateDir,omitempty"`
-}
-
-func newConfigFromCommand(cmd *cli.Command) (Config, error) {
+func newConfigFromCommand(cmd *cli.Command) (rootconfig.ClusterConfig, error) {
 	name := cmd.String("name")
 	cfg := deriveConfig(defaultRootConfig.ClusterDefaults, name)
 
@@ -33,14 +25,14 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	if s := cmd.String("pull-secret"); s != "" {
 		abs, err := filepath.Abs(s)
 		if err != nil {
-			return Config{}, fmt.Errorf("pull-secret: %w", err)
+			return rootconfig.ClusterConfig{}, fmt.Errorf("pull-secret: %w", err)
 		}
 		cfg.PullSecret = abs
 	}
 	for _, f := range cmd.StringSlice("idms") {
 		abs, err := filepath.Abs(f)
 		if err != nil {
-			return Config{}, fmt.Errorf("idms %s: %w", f, err)
+			return rootconfig.ClusterConfig{}, fmt.Errorf("idms %s: %w", f, err)
 		}
 		cfg.IDMSFiles = append(cfg.IDMSFiles, abs)
 	}
@@ -68,12 +60,12 @@ func newConfigFromCommand(cmd *cli.Command) (Config, error) {
 	return cfg, nil
 }
 
-func deriveConfig(defaults rootconfig.ClusterDefaults, name string) Config {
+func deriveConfig(defaults rootconfig.ClusterDefaults, name string) rootconfig.ClusterConfig {
 	stateDir := filepath.Join(rootconfig.ConfigDir(), name)
 	controlNodeName := rootconfig.NodeName(name, 0)
 	controlNodeDir := filepath.Join(stateDir, controlNodeName)
 
-	cfg := Config{
+	cfg := rootconfig.ClusterConfig{
 		ClusterDefaults: defaults,
 		StateDir:        stateDir,
 		ControlConfig: rootconfig.ControlConfig{
@@ -90,62 +82,8 @@ func deriveConfig(defaults rootconfig.ClusterDefaults, name string) Config {
 	return cfg
 }
 
-func clusterConfigPath(name string) string {
-	return filepath.Join(rootconfig.ConfigDir(), name, configFileName)
-}
-
-func Kubeconfig(name string) (string, error) {
-	cfg, err := ReadClusterConfig(name)
-	if err != nil {
-		return "", err
-	}
-	return cfg.Kubeconfig, nil
-}
-
-func GetCIDRs(name string) (rootconfig.NetworkCIDRs, error) {
-	cfg, err := ReadClusterConfig(name)
-	if err != nil {
-		return rootconfig.NetworkCIDRs{}, err
-	}
-	return rootconfig.NetworkCIDRs{
-		Cluster: cfg.ClusterCIDR,
-		Service: cfg.ServiceCIDR,
-	}, nil
-}
-
-func ReadClusterConfig(name string) (Config, error) {
-	path := clusterConfigPath(name)
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, err
-	}
-
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, err
-	}
-	return cfg, nil
-}
-
-func writeClusterConfig(cfg Config) error {
-	path := clusterConfigPath(cfg.Name)
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-
-	return os.WriteFile(path, data, 0o644)
-}
-
 func printClusterConfig(name string) error {
-	cfg, err := ReadClusterConfig(name)
+	cfg, err := rootconfig.ReadClusterConfig(name)
 	if err != nil {
 		return err
 	}

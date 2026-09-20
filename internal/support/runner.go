@@ -21,7 +21,7 @@ func NewRunner(logger *slog.Logger) (execx.Runner, func(), error) {
 		cmdLogger := NewLogger(bw)
 
 		if !slices.Contains(os.Args, "--generate-shell-completion") {
-			cmdLogger.Info("starting new run")
+			cmdLogger.Info("starting new run", "name", os.Args[0], "args", os.Args[1:])
 		}
 
 		return execx.NewLoggingRunner(runner, cmdLogger),

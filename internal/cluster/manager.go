@@ -43,12 +43,12 @@ type podmanContainer struct {
 }
 
 type manager struct {
-	cfg    Config
+	cfg    rootconfig.ClusterConfig
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func newManager(cfg Config, logger *slog.Logger, runner execx.Runner) *manager {
+func newManager(cfg rootconfig.ClusterConfig, logger *slog.Logger, runner execx.Runner) *manager {
 	return &manager{
 		cfg:    cfg,
 		logger: logger,
@@ -99,13 +99,10 @@ func (m *manager) create(ctx context.Context) error {
 	if err := m.copyKubeconfig(ctx, containerName); err != nil {
 		return err
 	}
-	if err := writeClusterConfig(m.cfg); err != nil {
+	if err := rootconfig.WriteClusterConfig(m.cfg); err != nil {
 		return err
 	}
-	if err := rootconfig.WriteNodesConfig(m.cfg.Name, rootconfig.NodesConfig{Nodes: []rootconfig.NodeRecord{{
-		NodeConfig: m.cfg.NodeConfig,
-		Kubeconfig: m.cfg.Kubeconfig,
-	}}}); err != nil {
+	if err := rootconfig.WriteNodesConfig(m.cfg.Name, rootconfig.NodesConfig{Nodes: []rootconfig.NodeConfig{m.cfg.NodeConfig}}); err != nil {
 		return err
 	}
 
