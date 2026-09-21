@@ -15,6 +15,26 @@ tar -xzf dfmicro_linux_amd64.tar.gz
 install -m 0755 dfmicro ~/.local/bin/dfmicro
 ```
 
+Or use the installer:
+
+```
+curl -fsSL https://raw.githubusercontent.com/leelavg/dfmicro/main/install.sh | sh
+```
+
+Set `VERSION` to install a specific release, or `INSTALL_DIR` to change the
+destination directory:
+
+```
+curl -fsSL https://raw.githubusercontent.com/leelavg/dfmicro/main/install.sh |
+  VERSION=0.0.2 INSTALL_DIR="$HOME/bin" sh
+```
+
+List available releases without installing:
+
+```
+curl -fsSL https://raw.githubusercontent.com/leelavg/dfmicro/main/install.sh | sh -s -- --list
+```
+
 Or build from source:
 
 ```
@@ -23,9 +43,21 @@ cd dfmicro
 make build
 ```
 
+## Quick start
+
+```
+dfmicro ops sudoers create          # one-time: passwordless sudo for cluster tools on linux only
+dfmicro cluster create              # create cluster with default name
+dfmicro cluster kubeconfig          # outputs the cluster kubeconfig to stdout
+kubectl get nodes                   # save above config and run cluster operations
+
+dfmicro docs                        # for all the cli commands and args
+dfmicro docs --examples             # samples for specific scenarios
+```
+
 ## Testing
 
-Run the suite on a clean Linux host with rootful Podman and a built binary:
+Run the suite on a clean Linux host with rootful Podman and sudoers created against the built binary:
 
 ```
 DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 3
@@ -53,15 +85,6 @@ Usage: perl tests.pl [options]
 
 Test output and executed commands are written to `/tmp/dfmicro-test/tests.log`
 and `/tmp/dfmicro-test/cmds.log`.
-
-## Quick start
-
-```
-dfmicro ops sudoers create          # one-time: passwordless sudo for cluster tools
-dfmicro cluster create              # create cluster with default name
-dfmicro cluster kubeconfig > ~/.kube/config
-kubectl get nodes
-```
 
 ## Command reference
 
@@ -190,9 +213,9 @@ Bug reports and suggestions are welcome via [issues](https://github.com/leelavg/
 
 None of this would exist without the incredible work at [MicroShift](https://github.com/microshift-io/microshift).
 
-Thanks to [Anika](https://github.com/AnikaYadav) and [Tara](https://github.com/taraasrita10) for sourcing the shims and carrying out the proof of concept under guidance.
+Thanks to [Anika](https://github.com/AnikaYadav) and [Tara](https://github.com/taraasrita10) for sourcing df shims and carrying out the proof of concept under guidance.
 
-Thanks to all the folks whose shared knowledge archived in IBM Bob and Claude Code agents made the timeline shorter.
+Thanks to all the folks whose shared knowledge is archived in OpenAI Luna, Claude Sonnet/Haiku and IBM Bob agents which made the timeline shorter.
 
 ## License
 
