@@ -46,7 +46,7 @@ make build
 ## Quick start
 
 ```
-dfmicro ops sudoers create          # one-time: passwordless sudo for cluster tools
+dfmicro ops sudoers create          # one-time: passwordless sudo for cluster tools on linux only
 dfmicro cluster create              # create cluster with default name
 dfmicro cluster kubeconfig          # outputs the cluster kubeconfig to stdout
 kubectl get nodes                   # save above config and run cluster operations
