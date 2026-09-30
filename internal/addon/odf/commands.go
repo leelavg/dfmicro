@@ -139,12 +139,17 @@ Example:
 						Name:  "multi-node",
 						Usage: "Configure ODF for a multi-node cluster",
 					},
+					&cli.BoolFlag{
+						Name:  "hostnetwork",
+						Usage: "Run ODF storage pods on the host network",
+					},
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
 					return o.configure(ctx, configureConfig{
 						clientOnly:    cmd.Bool("client"),
 						includeCephFS: cmd.Bool("include-cephfs"),
 						multiNode:     cmd.Bool("multi-node"),
+						hostNetwork:   cmd.Bool("hostnetwork"),
 					})
 				}),
 			},

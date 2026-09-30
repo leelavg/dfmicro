@@ -85,6 +85,9 @@ metadata:
   namespace: openshift-storage
 spec:
   enableCephTools: true
+  hostNetwork: {{.HostNetwork}}
+  network:
+    hostNetwork: {{.HostNetwork}}
   monitoring:
     reconcileStrategy: ignore
   managedResources:
@@ -94,7 +97,7 @@ spec:
       reconcileStrategy: ignore
     cephObjectStoreUsers:
       reconcileStrategy: ignore
-{{- if not .IncludeCephFS}}
+{{- if eq .IncludeCephFS "false"}}
     cephFilesystems:
       reconcileStrategy: ignore
 {{- end}}

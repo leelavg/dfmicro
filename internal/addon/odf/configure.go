@@ -3,6 +3,7 @@ package odf
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"dfmicro/internal/support"
@@ -21,27 +22,11 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		}
 
 		o.logger.Info("patching ocs-client-operator CSV console deployment")
-		if err := o.patchClientCSV(ctx); err != nil {
+		if err := o.patchClientConsoleCSV(ctx); err != nil {
 			return err
 		}
 
-		if cfg.includeCephFS {
-			o.logger.Info("applying cephfs driver")
-			cephfs, err := odfFS.ReadFile("resources/00-cephfs-driver.yaml")
-			if err != nil {
-				return err
-			}
-			if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(cephfs)); err != nil {
-				return err
-			}
-		}
-
-		o.logger.Info("applying rbd driver")
-		rbd, err := odfFS.ReadFile("resources/00-rbd-driver.yaml")
-		if err != nil {
-			return err
-		}
-		return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(rbd))
+		return o.applyDrivers(ctx, cfg.includeCephFS)
 	}
 
 	o.logger.Info("checking StorageCluster CRD presence")
@@ -77,7 +62,24 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		return err
 	}
 
-	if cfg.includeCephFS {
+	if err := o.applyDrivers(ctx, cfg.includeCephFS); err != nil {
+		return err
+	}
+
+	o.logger.Info("applying StorageCluster")
+	scVars := map[string]string{
+		"IncludeCephFS": strconv.FormatBool(cfg.includeCephFS),
+		"HostNetwork":   strconv.FormatBool(cfg.hostNetwork),
+	}
+	sc, err := support.Render(storageclusterTmpl, scVars)
+	if err != nil {
+		return err
+	}
+	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, sc)
+}
+
+func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
+	if includeCephFS {
 		o.logger.Info("applying cephfs driver")
 		cephfs, err := odfFS.ReadFile("resources/00-cephfs-driver.yaml")
 		if err != nil {
@@ -93,20 +95,7 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(rbd)); err != nil {
-		return err
-	}
-
-	o.logger.Info("applying StorageCluster")
-	scVars := map[string]string{"IncludeCephFS": ""}
-	if cfg.includeCephFS {
-		scVars["IncludeCephFS"] = "true"
-	}
-	sc, err := support.Render(storageclusterTmpl, scVars)
-	if err != nil {
-		return err
-	}
-	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, sc)
+	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(rbd))
 }
 
 func (o *odf) ocsSubscriptionName(ctx context.Context) (string, error) {
@@ -190,7 +179,7 @@ func (o *odf) patchSnapshotCSV(ctx context.Context) error {
 	return err
 }
 
-func (o *odf) patchClientCSV(ctx context.Context) error {
+func (o *odf) patchClientConsoleCSV(ctx context.Context) error {
 	result, err := o.runner.Run(ctx, o.kubectl,
 		"get", "csv", "-n", "openshift-storage",
 		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/ocs-client-operator\.openshift-storage)].metadata.name}`,

@@ -57,6 +57,8 @@ Configure ODF to run on MicroShift
 
 **--client**: Client-only mode
 
+**--hostnetwork**: Run ODF storage pods on the host network
+
 **--include-cephfs**: Run CephFS and CSI Driver
 
 **--multi-node**: Configure ODF for a multi-node cluster

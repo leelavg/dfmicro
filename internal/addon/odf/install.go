@@ -22,6 +22,7 @@ type configureConfig struct {
 	clientOnly    bool
 	includeCephFS bool
 	multiNode     bool
+	hostNetwork   bool
 }
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
