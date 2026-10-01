@@ -13,6 +13,10 @@ func NodeName(cluster string, index int) string {
 	return fmt.Sprintf("%s-%d", cluster, index)
 }
 
+func BaseDomain(clusterName string) string {
+	return clusterName + ".dfmicro.io"
+}
+
 //go:embed defaults.json
 var embeddedConfig []byte
 

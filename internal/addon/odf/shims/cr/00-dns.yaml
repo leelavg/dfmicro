@@ -3,4 +3,4 @@ kind: DNS
 metadata:
   name: cluster
 spec:
-  baseDomain: cluster.local
+  baseDomain: {{.BaseDomain}}

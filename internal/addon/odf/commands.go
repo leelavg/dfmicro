@@ -113,12 +113,25 @@ Example:
 					return ctx, nil
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
+					clusterCIDR := rootconfig.Load().ClusterCIDR
+					serviceCIDR := rootconfig.Load().ServiceCIDR
+					if cmd.String("kubeconfig") == "" {
+						clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("name"))
+						if err != nil {
+							return fmt.Errorf("could not load cluster config for %q: %w", cmd.String("name"), err)
+						}
+						clusterCIDR = clusterConfig.ClusterCIDR
+						serviceCIDR = clusterConfig.ServiceCIDR
+					}
 					return o.install(ctx, installConfig{
 						catalogImage: cmd.String("catalog-image"),
 						channel:      cmd.String("channel"),
 						subNames:     cmd.StringSlice("sub-name"),
 						version:      cmd.String("version"),
 						shims:        cmd.Bool("shims"),
+						baseDomain:   rootconfig.BaseDomain(cmd.String("name")),
+						clusterCIDR:  clusterCIDR,
+						serviceCIDR:  serviceCIDR,
 					})
 				}),
 			},

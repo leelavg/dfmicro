@@ -344,7 +344,7 @@ func (m *manager) workerArgs(w worker) ([]string, error) {
 		Clients:     nil,
 		ClusterCIDR: m.cfg.ClusterCIDR,
 		ServiceCIDR: m.cfg.ServiceCIDR,
-		BaseDomain:  m.cfg.Name + ".dfmicro.io",
+		BaseDomain:  rootconfig.BaseDomain(m.cfg.Name),
 	}
 
 	networkPath := filepath.Join(nodeStateDir, "15-networking.yaml")

@@ -16,6 +16,9 @@ type installConfig struct {
 	subNames     []string
 	version      string
 	shims        bool
+	baseDomain   string
+	clusterCIDR  string
+	serviceCIDR  string
 }
 
 type configureConfig struct {
@@ -63,7 +66,11 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying shim CRs")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/cr"); err != nil {
+	if err := o.applyClusterResources(ctx, map[string]string{
+		"BaseDomain":  cfg.baseDomain,
+		"ClusterCIDR": cfg.clusterCIDR,
+		"ServiceCIDR": cfg.serviceCIDR,
+	}); err != nil {
 		return err
 	}
 
@@ -84,6 +91,23 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 			return err
 		}
 		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *odf) applyClusterResources(ctx context.Context, vars map[string]string) error {
+	for _, name := range []string{"00-dns.yaml", "01-infrastructure.yaml", "02-network.yaml"} {
+		data, err := odfFS.ReadFile("shims/cr/" + name)
+		if err != nil {
+			return err
+		}
+		resource, err := support.Render(string(data), vars)
+		if err != nil {
+			return err
+		}
+		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, resource); err != nil {
 			return err
 		}
 	}
