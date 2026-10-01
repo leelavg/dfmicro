@@ -66,6 +66,15 @@ spec:
     - openshift-storage
 `
 
+const ocsOperatorConfigTmpl = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ocs-operator-config
+  namespace: openshift-storage
+data:
+  ROOK_CURRENT_NAMESPACE_ONLY: "true"
+`
+
 const subscriptionTmpl = `apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
@@ -184,4 +193,123 @@ spec:
         requests:
           cpu: 100m
           memory: 100Mi
+`
+
+const rookProviderCephClusterTmpl = `apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: ` + providerCephCluster + `
+  namespace: ` + providerNamespace + `
+spec:
+  dataDirHostPath: /var/lib/rook
+  cephVersion:
+    image: {{.CephImage}}
+    allowUnsupported: true
+  mon:
+    count: 1
+    allowMultiplePerNode: true
+    volumeClaimTemplate:
+      spec:
+        storageClassName: topolvm-provisioner
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+  mgr:
+    count: 1
+    allowMultiplePerNode: true
+  dashboard:
+    enabled: false
+  crashCollector:
+    disable: true
+  network:
+    hostNetwork: true
+    connections:
+      requireMsgr2: true
+  storage:
+    storageClassDeviceSets:
+      - name: ` + providerBlockPool + `
+        count: 1
+        volumeClaimTemplates:
+          - metadata:
+              name: data
+            spec:
+              storageClassName: topolvm-provisioner
+              volumeMode: Block
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 5Gi
+  monitoring:
+    enabled: false
+  toolbox:
+    enabled: true
+  cephConfig:
+    global:
+      osd_pool_default_size: "1"
+      mon_warn_on_pool_no_redundancy: "false"
+`
+
+const rookProviderBlockPoolTmpl = `apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: ` + providerBlockPool + `
+  namespace: ` + providerNamespace + `
+spec:
+  failureDomain: host
+  replicated:
+    size: 1
+    requireSafeReplicaSize: false
+`
+
+const rookProviderFilesystemTmpl = `apiVersion: ceph.rook.io/v1
+kind: CephFilesystem
+metadata:
+  name: ` + providerFilesystem + `
+  namespace: ` + providerNamespace + `
+spec:
+  metadataPool:
+    failureDomain: host
+    replicated:
+      size: 1
+      requireSafeReplicaSize: false
+  dataPools:
+    - name: ` + providerFilesystemData + `
+      failureDomain: host
+      replicated:
+        size: 1
+        requireSafeReplicaSize: false
+  metadataServer:
+    activeCount: 1
+    activeStandby: false
+  preservePoolsOnDelete: false
+  preserveFilesystemOnDelete: false
+`
+
+const externalStorageClusterTmpl = `apiVersion: ocs.openshift.io/v1
+kind: StorageCluster
+metadata:
+  name: ocs-storagecluster
+  namespace: openshift-storage
+spec:
+  enableCephTools: true
+  externalStorage:
+    enable: true
+  monitoring:
+    reconcileStrategy: ignore
+  multiCloudGateway:
+    reconcileStrategy: ignore
+`
+
+const externalDetailsSecretTmpl = `apiVersion: v1
+kind: Secret
+metadata:
+  name: rook-ceph-external-cluster-details
+  namespace: openshift-storage
+type: Opaque
+stringData:
+  external_cluster_details: |-
+    {{.Details}}
 `

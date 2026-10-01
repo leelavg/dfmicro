@@ -3,6 +3,7 @@ package odf
 import (
 	"context"
 	"embed"
+	"slices"
 
 	"dfmicro/internal/support"
 )
@@ -19,13 +20,6 @@ type installConfig struct {
 	baseDomain   string
 	clusterCIDR  string
 	serviceCIDR  string
-}
-
-type configureConfig struct {
-	clientOnly    bool
-	includeCephFS bool
-	multiNode     bool
-	hostNetwork   bool
 }
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
@@ -82,6 +76,13 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	o.logger.Info("applying OAuth shims")
 	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/oauth"); err != nil {
 		return err
+	}
+
+	if slices.Contains(cfg.subNames, "rook-ceph-operator") {
+		o.logger.Info("applying OCS operator config")
+		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, ocsOperatorConfigTmpl); err != nil {
+			return err
+		}
 	}
 
 	for _, sub := range cfg.subNames {

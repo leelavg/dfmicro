@@ -57,6 +57,10 @@ Configure ODF to run on MicroShift
 
 **--client**: Client-only mode
 
+**--connect-to**="": Source cluster. With --client, connects to an ODF provider. Otherwise, connects to a Rook Ceph provider
+
+**--external-ceph**: Configure a Rook-managed Ceph provider
+
 **--hostnetwork**: Run ODF storage pods on the host network
 
 **--include-cephfs**: Run CephFS and CSI Driver

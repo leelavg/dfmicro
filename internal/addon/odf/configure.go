@@ -9,26 +9,52 @@ import (
 	"dfmicro/internal/support"
 )
 
+type configureConfig struct {
+	clientOnly    bool
+	includeCephFS bool
+	multiNode     bool
+	hostNetwork   bool
+	externalCeph  bool
+	connectTo     string
+}
+
 func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
-	if cfg.clientOnly {
-		o.logger.Info("checking Driver CRD")
-		if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {
-			return fmt.Errorf("driver CRD not found: %w", err)
-		}
-
-		o.logger.Info("patching external-snapshotter-operator CSV")
-		if err := o.patchSnapshotCSV(ctx); err != nil {
-			return err
-		}
-
-		o.logger.Info("patching ocs-client-operator CSV console deployment")
-		if err := o.patchClientConsoleCSV(ctx); err != nil {
-			return err
-		}
-
-		return o.applyDrivers(ctx, cfg.includeCephFS)
+	if err := o.labelStorageNodes(ctx); err != nil {
+		return err
 	}
 
+	switch {
+	case cfg.externalCeph:
+		return o.configureRookProvider(ctx, cfg.includeCephFS)
+	case cfg.connectTo != "" && !cfg.clientOnly:
+		return o.configureRookConsumer(ctx, cfg.connectTo, cfg.includeCephFS)
+	case cfg.clientOnly:
+		return o.configureClient(ctx, cfg.includeCephFS)
+	default:
+		return o.configureStorage(ctx, cfg)
+	}
+}
+
+func (o *odf) configureClient(ctx context.Context, includeCephFS bool) error {
+	o.logger.Info("checking Driver CRD")
+	if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {
+		return fmt.Errorf("driver CRD not found: %w", err)
+	}
+
+	o.logger.Info("patching external-snapshotter-operator CSV")
+	if err := o.patchSnapshotCSV(ctx); err != nil {
+		return err
+	}
+
+	o.logger.Info("patching ocs-client-operator CSV console deployment")
+	if err := o.patchClientConsoleCSV(ctx); err != nil {
+		return err
+	}
+
+	return o.applyDrivers(ctx, includeCephFS)
+}
+
+func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 	o.logger.Info("checking StorageCluster CRD presence")
 	if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "storageclusters.ocs.openshift.io", "--kubeconfig", o.kubeconfig); err != nil {
 		return fmt.Errorf("StorageCluster CRD not found, is the odf operator installed?: %w", err)
@@ -39,12 +65,6 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		if err := o.patchOCSSubscription(ctx); err != nil {
 			return err
 		}
-	}
-
-	o.logger.Info("labeling nodes")
-	if _, err := o.runner.Run(ctx, o.kubectl, "label", "nodes", "--all",
-		"cluster.ocs.openshift.io/openshift-storage=", "--overwrite", "--kubeconfig", o.kubeconfig); err != nil {
-		return err
 	}
 
 	o.logger.Info("applying PackageManifest for ocs-operator")
@@ -76,6 +96,13 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 		return err
 	}
 	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, sc)
+}
+
+func (o *odf) labelStorageNodes(ctx context.Context) error {
+	o.logger.Info("labeling nodes")
+	_, err := o.runner.Run(ctx, o.kubectl, "label", "nodes", "--all",
+		"cluster.ocs.openshift.io/openshift-storage=", "--overwrite", "--kubeconfig", o.kubeconfig)
+	return err
 }
 
 func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {

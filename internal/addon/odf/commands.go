@@ -156,6 +156,23 @@ Example:
 						Name:  "hostnetwork",
 						Usage: "Run ODF storage pods on the host network",
 					},
+					&cli.BoolFlag{
+						Name:  "external-ceph",
+						Usage: "Configure a Rook-managed Ceph provider",
+					},
+					&cli.StringFlag{
+						Name:  "connect-to",
+						Usage: "Source cluster. With --client, connects to an ODF provider. Otherwise, connects to a Rook Ceph provider",
+					},
+				},
+				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					if cmd.Bool("client") && cmd.Bool("external-ceph") {
+						return ctx, fmt.Errorf("--client cannot be combined with --external-ceph")
+					}
+					if cmd.Bool("external-ceph") && cmd.String("connect-to") != "" {
+						return ctx, fmt.Errorf("--external-ceph cannot be combined with --connect-to")
+					}
+					return ctx, nil
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
 					return o.configure(ctx, configureConfig{
@@ -163,6 +180,8 @@ Example:
 						includeCephFS: cmd.Bool("include-cephfs"),
 						multiNode:     cmd.Bool("multi-node"),
 						hostNetwork:   cmd.Bool("hostnetwork"),
+						externalCeph:  cmd.Bool("external-ceph"),
+						connectTo:     cmd.String("connect-to"),
 					})
 				}),
 			},
