@@ -415,3 +415,19 @@ stringData:
   external_cluster_details: |-
     {{.Details}}
 `
+
+const storageConsumerTmpl = `apiVersion: ocs.openshift.io/v1alpha1
+kind: StorageConsumer
+metadata:
+  name: {{.ClientCluster}}
+  namespace: openshift-storage
+`
+
+const storageClientTmpl = `apiVersion: ocs.openshift.io/v1alpha1
+kind: StorageClient
+metadata:
+  name: {{.ProviderCluster}}
+spec:
+  onboardingTicket: {{.Ticket}}
+  storageProviderEndpoint: {{.Endpoint}}
+`

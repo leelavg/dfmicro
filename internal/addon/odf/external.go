@@ -141,6 +141,123 @@ func (o *odf) configureRookConsumer(ctx context.Context, sourceName string, incl
 	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, externalStorageClusterTmpl)
 }
 
+func (o *odf) configureOdfClient(ctx context.Context, providerName string) error {
+	providerKubeconfig, err := rootconfig.Kubeconfig(providerName)
+	if err != nil {
+		return fmt.Errorf("could not load provider kubeconfig for %q: %w", providerName, err)
+	}
+	ready, err := o.odfClientReady(ctx, providerKubeconfig, providerName)
+	if err != nil {
+		return err
+	}
+	if ready {
+		o.logger.Info("ODF client already connected", "provider", providerName, "client", o.cluster)
+		return nil
+	}
+
+	consumer, err := support.Render(storageConsumerTmpl, map[string]string{"ClientCluster": o.cluster})
+	if err != nil {
+		return err
+	}
+	o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.cluster)
+	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, providerKubeconfig, consumer); err != nil {
+		return err
+	}
+
+	ticket, endpoint, err := o.odfOnboardingData(ctx, providerKubeconfig)
+	if err != nil {
+		return err
+	}
+	client, err := support.Render(storageClientTmpl, map[string]string{
+		"ProviderCluster": providerName,
+		"Ticket":          ticket,
+		"Endpoint":        endpoint,
+	})
+	if err != nil {
+		return err
+	}
+	o.logger.Info("applying StorageClient", "name", providerName)
+	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, client); err != nil {
+		return err
+	}
+
+	o.logger.Info("waiting for StorageClient", "name", providerName)
+	if _, err := o.runner.Run(ctx, o.kubectl,
+		"wait", "--for=jsonpath={.status.phase}=Connected", "--timeout=10m",
+		"storageclient/"+providerName, "--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("wait for StorageClient %s: %w", providerName, err)
+	}
+	o.logger.Info("StorageClient connected", "name", providerName)
+	return nil
+}
+
+func (o *odf) odfClientReady(ctx context.Context, providerKubeconfig, providerName string) (bool, error) {
+	consumer, err := o.runner.Run(ctx, o.kubectl,
+		"get", "storageconsumer", o.cluster, "-n", providerNamespace,
+		"-o", "jsonpath={.status.state}", "--kubeconfig", providerKubeconfig,
+	)
+	if err != nil {
+		return false, nil
+	}
+	client, err := o.runner.Run(ctx, o.kubectl,
+		"get", "storageclient", providerName,
+		"-o", "jsonpath={.status.phase}", "--kubeconfig", o.kubeconfig,
+	)
+	if err != nil {
+		return false, nil
+	}
+	return strings.TrimSpace(consumer.Stdout) == "Ready" && strings.TrimSpace(client.Stdout) == "Connected", nil
+}
+
+func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) (string, string, error) {
+	var ticket, endpoint string
+	err := o.poll(ctx, "StorageConsumer onboarding data", func() (bool, error) {
+		result, err := o.runner.Run(ctx, o.kubectl,
+			"get", "storageconsumer", o.cluster, "-n", providerNamespace,
+			"-o", "jsonpath={.status.onboardingTicketSecret.name}",
+			"--kubeconfig", providerKubeconfig,
+		)
+		if err != nil {
+			return false, fmt.Errorf("read StorageConsumer status: %w", err)
+		}
+		secretName := strings.TrimSpace(result.Stdout)
+		if secretName == "" {
+			return false, nil
+		}
+
+		result, err = o.runner.Run(ctx, o.kubectl,
+			"get", "secret", secretName, "-n", providerNamespace,
+			"-o", "jsonpath={.data.onboarding-token}", "--kubeconfig", providerKubeconfig,
+		)
+		if err != nil {
+			return false, fmt.Errorf("read onboarding Secret %s: %w", secretName, err)
+		}
+		ticketBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(result.Stdout))
+		if err != nil {
+			return false, fmt.Errorf("decode onboarding Secret %s: %w", secretName, err)
+		}
+
+		result, err = o.runner.Run(ctx, o.kubectl,
+			"get", "storagecluster", "ocs-storagecluster", "-n", providerNamespace,
+			"-o", "jsonpath={.status.storageProviderEndpoint}", "--kubeconfig", providerKubeconfig,
+		)
+		if err != nil {
+			return false, fmt.Errorf("read provider endpoint: %w", err)
+		}
+		endpoint = strings.TrimSpace(result.Stdout)
+		if endpoint == "" {
+			return false, nil
+		}
+		ticket = string(ticketBytes)
+		return true, nil
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return ticket, endpoint, nil
+}
+
 func (o *odf) rookCephImage(ctx context.Context) (string, error) {
 	result, err := o.runner.Run(ctx, o.kubectl, "get", "csv", "-n", providerNamespace,
 		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/rook-ceph-operator\.openshift-storage)].metadata.annotations.alm-examples}`,

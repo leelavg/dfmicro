@@ -8,6 +8,8 @@ import (
 )
 
 var uninstallCmds = []string{
+	"delete storageclient --all --ignore-not-found --wait=false",
+	"delete storageconsumer --all -n openshift-storage --ignore-not-found --wait=false",
 	"annotate storagecluster --all -n openshift-storage uninstall.ocs.openshift.io/confirm-deletion=true --overwrite",
 	"delete storagecluster --all -n openshift-storage --ignore-not-found",
 	"delete deployment rook-ceph-tools -n openshift-storage --ignore-not-found",
