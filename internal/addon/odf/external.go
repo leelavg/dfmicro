@@ -54,7 +54,7 @@ func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) err
 	if err != nil {
 		return err
 	}
-	names := newProviderNames(o.cluster)
+	names := newProviderNames(o.clusterName)
 	vars := map[string]string{
 		"CephImage":      image,
 		"ToolboxImage":   toolboxImage,
@@ -151,15 +151,15 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName string) error
 		return err
 	}
 	if ready {
-		o.logger.Info("ODF client already connected", "provider", providerName, "client", o.cluster)
+		o.logger.Info("ODF client already connected", "provider", providerName, "client", o.clusterName)
 		return nil
 	}
 
-	consumer, err := support.Render(storageConsumerTmpl, map[string]string{"ClientCluster": o.cluster})
+	consumer, err := support.Render(storageConsumerTmpl, map[string]string{"ClientCluster": o.clusterName})
 	if err != nil {
 		return err
 	}
-	o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.cluster)
+	o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.clusterName)
 	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, providerKubeconfig, consumer); err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName string) error
 
 func (o *odf) odfClientReady(ctx context.Context, providerKubeconfig, providerName string) (bool, error) {
 	consumer, err := o.runner.Run(ctx, o.kubectl,
-		"get", "storageconsumer", o.cluster, "-n", providerNamespace,
+		"get", "storageconsumer", o.clusterName, "-n", providerNamespace,
 		"-o", "jsonpath={.status.state}", "--kubeconfig", providerKubeconfig,
 	)
 	if err != nil {
@@ -214,7 +214,7 @@ func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) 
 	var ticket, endpoint string
 	err := o.poll(ctx, "StorageConsumer onboarding data", func() (bool, error) {
 		result, err := o.runner.Run(ctx, o.kubectl,
-			"get", "storageconsumer", o.cluster, "-n", providerNamespace,
+			"get", "storageconsumer", o.clusterName, "-n", providerNamespace,
 			"-o", "jsonpath={.status.onboardingTicketSecret.name}",
 			"--kubeconfig", providerKubeconfig,
 		)

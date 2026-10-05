@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -169,6 +170,10 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 	if err != nil {
 		return err
 	}
+	nodes, err := m.stateNodeNames(containers)
+	if err != nil {
+		return err
+	}
 
 	for _, container := range containers {
 		m.logger.Info("stopping container", "name", m.cfg.Name, "container", container)
@@ -187,28 +192,33 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		return nil
 	}
 
-	if err := m.topolvm.DeleteBackends(ctx, containers...); err != nil {
+	if err := m.topolvm.DeleteBackends(ctx, nodes...); err != nil {
 		return err
 	}
 	if err := m.topolvm.RemoveManifest(); err != nil {
 		return err
 	}
-	for _, container := range containers {
-		if err := m.node.RemoveState(m.cfg.StateDir, container); err != nil {
+	for _, node := range nodes {
+		if err := m.node.RemoveState(m.cfg.StateDir, node); err != nil {
 			return err
 		}
 	}
 	if err := m.removeStateFiles(); err != nil {
-		m.logger.Warn("failed to remove cluster state files", "cluster", m.cfg.Name, "error", err)
+		return fmt.Errorf("remove cluster state files: %w", err)
 	}
 
-	remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
+	networkExists, err := support.NetworkExists(ctx, m.runner, m.cfg.BridgeName)
 	if err != nil {
-		m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
-	} else if len(remaining) == 0 {
-		m.logger.Info("no containers left on network, removing", "network", m.cfg.BridgeName)
-		if _, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", m.cfg.BridgeName); err != nil {
-			m.logger.Warn("failed to remove network", "network", m.cfg.BridgeName, "error", err)
+		m.logger.Warn("failed to check network", "network", m.cfg.BridgeName, "error", err)
+	} else if networkExists {
+		remaining, err := support.AllNetworkContainers(ctx, m.runner, m.cfg.BridgeName)
+		if err != nil {
+			m.logger.Warn("failed to list network containers", "network", m.cfg.BridgeName, "error", err)
+		} else if len(remaining) == 0 {
+			m.logger.Info("no containers left on network, removing", "network", m.cfg.BridgeName)
+			if _, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "rm", m.cfg.BridgeName); err != nil {
+				m.logger.Warn("failed to remove network", "network", m.cfg.BridgeName, "error", err)
+			}
 		}
 	}
 
@@ -218,6 +228,23 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 		m.logger.Info("cluster removed", "name", m.cfg.Name)
 	}
 	return nil
+}
+
+func (m *manager) stateNodeNames(containers []string) ([]string, error) {
+	nodes := append([]string(nil), containers...)
+	entries, err := os.ReadDir(m.cfg.StateDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nodes, nil
+		}
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() != "topolvm" && !slices.Contains(nodes, entry.Name()) {
+			nodes = append(nodes, entry.Name())
+		}
+	}
+	return nodes, nil
 }
 
 func (m *manager) removeStateFiles() error {

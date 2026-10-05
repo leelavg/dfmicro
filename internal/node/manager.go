@@ -148,15 +148,18 @@ func (m *manager) reconcileWorker(ctx context.Context, w worker) error {
 }
 
 func (m *manager) persistWorker(nodesCfg rootconfig.NodesConfig, w worker) error {
-	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, w.index, rootconfig.NodeConfig{
+	node := rootconfig.NodeConfig{
 		Index:      w.index,
 		NodeName:   w.name,
-		LVMDisk:    filepath.Join(w.stateDir, w.name+".image"),
-		VGName:     w.name,
 		PullSecret: m.cfg.PullSecret,
 		IDMSFiles:  append([]string(nil), m.cfg.IDMSFiles...),
 		Mounts:     append([]string(nil), w.mounts...),
-	})
+	}
+	if m.cfg.EnableTopoLVM {
+		node.LVMDisk = filepath.Join(w.stateDir, w.name+".image")
+		node.VGName = w.name
+	}
+	nodesCfg.Nodes = slices.Insert(nodesCfg.Nodes, w.index, node)
 	return writeNodesConfig(m.clusterName, nodesCfg)
 }
 
@@ -419,17 +422,24 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 		return err
 	}
 
-	cleanupErrs := []error{
-		m.removeWorkerResources(ctx, controlNodeName, nodeName),
-		m.removeWorkerContainer(ctx, nodeName),
-		m.removeWorkerStorage(ctx, nodeName),
-	}
+	m.logger.Info("removing worker resources", "cluster", m.clusterName, "node", nodeName)
+	cleanupErrs := []error{m.removeWorkerResources(ctx, controlNodeName, nodeName)}
+	m.logger.Info("removing worker container", "cluster", m.clusterName, "node", nodeName)
+	cleanupErrs = append(cleanupErrs, m.removeWorkerContainer(ctx, nodeName))
+	m.logger.Info("removing worker storage", "cluster", m.clusterName, "node", nodeName)
+	cleanupErrs = append(cleanupErrs, m.removeWorkerStorage(ctx, nodeName))
 	nodesCfg = removeWorker(nodesCfg, nodeName)
+	m.logger.Info("updating cluster state", "cluster", m.clusterName, "node", nodeName)
 	cleanupErrs = append(cleanupErrs, m.persistNodeRemoval(nodesCfg))
+	m.logger.Info("reconciling TopoLVM", "cluster", m.clusterName, "node", nodeName)
 	cleanupErrs = append(cleanupErrs, m.topolvm.Reconcile(ctx, m.clusterName, controlNodeName))
 
+	if err := errors.Join(cleanupErrs...); err != nil {
+		m.logger.Error("worker node removal incomplete", "cluster", m.clusterName, "node", nodeName, "error", err)
+		return err
+	}
 	m.logger.Info("worker node deleted", "cluster", m.clusterName, "node", nodeName)
-	return errors.Join(cleanupErrs...)
+	return nil
 }
 
 func (m *manager) removeWorkerResources(ctx context.Context, controlNodeName, nodeName string) error {

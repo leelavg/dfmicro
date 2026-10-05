@@ -13,9 +13,13 @@ var RunPrivileged func(context.Context, execx.Runner, string, ...string) (execx.
 var WritePrivileged func(context.Context, execx.Runner, string, string, os.FileMode) error
 var RunPodmanPrivileged func(context.Context, execx.Runner, ...string) (execx.Result, error)
 var RunPodmanPrivilegedInteractive func(context.Context, execx.Runner, ...string) error
+var RunUnprivileged func(context.Context, execx.Runner, string, ...string) (execx.Result, error)
 
 func init() {
 	if IsMacOS {
+		RunUnprivileged = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
+			return runner.Run(ctx, "podman", "machine", "ssh", sshCmd(cmd, args...))
+		}
 		RunPrivileged = func(ctx context.Context, runner execx.Runner, cmd string, args ...string) (execx.Result, error) {
 			return runner.Run(ctx, "podman", []string{"machine", "ssh", "sudo", sshCmd(cmd, args...)}...)
 		}
@@ -32,6 +36,7 @@ func init() {
 			return runner.RunInteractive(ctx, "podman", args...)
 		}
 	} else {
+		RunUnprivileged = execx.Run
 		RunPrivileged = execx.RunSudo
 		WritePrivileged = func(ctx context.Context, runner execx.Runner, path, content string, mode os.FileMode) error {
 			f, err := os.CreateTemp("", "dfmicro-*")

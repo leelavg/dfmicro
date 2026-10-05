@@ -53,8 +53,6 @@ Manage OpenShift Data Foundation on a MicroShift cluster
 
 Configure ODF to run on MicroShift
 
->Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.
-
 **--client**: Client-only mode
 
 **--connect-to**="": Source cluster. With --client, connects to an ODF provider. Otherwise, connects to a Rook Ceph provider

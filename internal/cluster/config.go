@@ -50,6 +50,10 @@ func newConfigFromCommand(cmd *cli.Command) (rootconfig.ClusterConfig, error) {
 	if cmd.IsSet("no-topolvm") {
 		cfg.EnableTopoLVM = !cmd.Bool("no-topolvm")
 	}
+	if !cfg.EnableTopoLVM {
+		cfg.LVMDisk = ""
+		cfg.VGName = ""
+	}
 	if cmd.IsSet("no-thinpool") {
 		cfg.EnableThinpool = !cmd.Bool("no-thinpool")
 	}

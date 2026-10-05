@@ -136,9 +136,8 @@ Example:
 				}),
 			},
 			{
-				Name:      "configure",
-				Usage:     "Configure ODF to run on MicroShift",
-				UsageText: `Run after 'install' once the operator CSV reaches Succeeded. Applies without retries and fails fast on any error.`,
+				Name:  "configure",
+				Usage: "Configure ODF to run on MicroShift",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "client",

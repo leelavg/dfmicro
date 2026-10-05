@@ -32,7 +32,11 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying ClusterVersion")
-	cv, err := support.Render(clusterVersionTmpl, map[string]string{"Channel": cfg.channel, "Version": cfg.version})
+	cv, err := support.Render(clusterVersionTmpl, map[string]string{
+		"Channel":   cfg.channel,
+		"Version":   cfg.version,
+		"ClusterID": clusterID(o.clusterName),
+	})
 	if err != nil {
 		return err
 	}

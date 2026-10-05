@@ -221,19 +221,28 @@ func (o *odf) applyPackageManifest(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	result, err := o.runner.Run(ctx, o.kubectl,
-		"get", "subscription", name, "-n", "openshift-storage",
-		"-o", "jsonpath={.spec.channel},{.spec.name},{.status.installedCSV}",
-		"--kubeconfig", o.kubeconfig,
-	)
+	o.logger.Info("waiting for ocs-operator subscription readiness", "name", name)
+	var channel, pkg, csv string
+	err = o.poll(ctx, "ocs-operator subscription readiness", func() (bool, error) {
+		result, err := o.runner.Run(ctx, o.kubectl,
+			"get", "subscription", name, "-n", "openshift-storage",
+			"-o", "jsonpath={.spec.channel},{.spec.name},{.status.installedCSV}",
+			"--kubeconfig", o.kubeconfig,
+		)
+		if err != nil {
+			return false, fmt.Errorf("failed to get ocs-operator subscription: %w", err)
+		}
+		parts := strings.SplitN(strings.TrimSpace(result.Stdout), ",", 3)
+		if len(parts) != 3 || parts[2] == "" {
+			return false, nil
+		}
+		channel, pkg, csv = parts[0], parts[1], parts[2]
+		return true, nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get ocs-operator subscription: %w", err)
+		return err
 	}
-	parts := strings.SplitN(strings.TrimSpace(result.Stdout), ",", 3)
-	if len(parts) != 3 || parts[2] == "" {
-		return fmt.Errorf("ocs-operator subscription not ready, installedCSV is empty")
-	}
-	channel, pkg, csv := parts[0], parts[1], parts[2]
+	o.logger.Info("ocs-operator subscription ready", "name", name, "csv", csv)
 
 	pm, err := support.Render(packageManifestTmpl, map[string]string{
 		"Package": pkg,
@@ -247,17 +256,10 @@ func (o *odf) applyPackageManifest(ctx context.Context) error {
 }
 
 func (o *odf) patchSnapshotCSV(ctx context.Context) error {
-	result, err := o.runner.Run(ctx, o.kubectl,
-		"get", "csv", "-n", "openshift-storage",
-		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-external-snapshotter-operator\.openshift-storage)].metadata.name}`,
-		"--kubeconfig", o.kubeconfig,
-	)
+	csvName, err := o.csvName(ctx, "external-snapshotter-operator",
+		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-external-snapshotter-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
-		return fmt.Errorf("failed to find external-snapshotter-operator CSV: %w", err)
-	}
-	csvName := strings.TrimSpace(result.Stdout)
-	if csvName == "" {
-		return fmt.Errorf("external-snapshotter-operator CSV not found")
+		return err
 	}
 
 	_, err = o.runner.Run(ctx, o.kubectl,
@@ -269,17 +271,10 @@ func (o *odf) patchSnapshotCSV(ctx context.Context) error {
 }
 
 func (o *odf) patchClientConsoleCSV(ctx context.Context) error {
-	result, err := o.runner.Run(ctx, o.kubectl,
-		"get", "csv", "-n", "openshift-storage",
-		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/ocs-client-operator\.openshift-storage)].metadata.name}`,
-		"--kubeconfig", o.kubeconfig,
-	)
+	csvName, err := o.csvName(ctx, "ocs-client-operator",
+		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/ocs-client-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
-		return fmt.Errorf("failed to find ocs-client-operator CSV: %w", err)
-	}
-	csvName := strings.TrimSpace(result.Stdout)
-	if csvName == "" {
-		return fmt.Errorf("ocs-client-operator CSV not found")
+		return err
 	}
 
 	_, err = o.runner.Run(ctx, o.kubectl,
@@ -291,17 +286,10 @@ func (o *odf) patchClientConsoleCSV(ctx context.Context) error {
 }
 
 func (o *odf) patchODFConsoleCSV(ctx context.Context) error {
-	result, err := o.runner.Run(ctx, o.kubectl,
-		"get", "csv", "-n", "openshift-storage",
-		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-operator\.openshift-storage)].metadata.name}`,
-		"--kubeconfig", o.kubeconfig,
-	)
+	csvName, err := o.csvName(ctx, "odf-operator",
+		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
-		return fmt.Errorf("failed to find odf-operator CSV: %w", err)
-	}
-	csvName := strings.TrimSpace(result.Stdout)
-	if csvName == "" {
-		return fmt.Errorf("odf-operator CSV not found")
+		return err
 	}
 
 	_, err = o.runner.Run(ctx, o.kubectl,
@@ -310,4 +298,26 @@ func (o *odf) patchODFConsoleCSV(ctx context.Context) error {
 		"--kubeconfig", o.kubeconfig,
 	)
 	return err
+}
+
+func (o *odf) csvName(ctx context.Context, name, output string) (string, error) {
+	o.logger.Info("waiting for CSV", "name", name)
+	var csvName string
+	err := o.poll(ctx, name+" CSV", func() (bool, error) {
+		result, err := o.runner.Run(ctx, o.kubectl,
+			"get", "csv", "-n", "openshift-storage",
+			"-o", output,
+			"--kubeconfig", o.kubeconfig,
+		)
+		if err != nil {
+			return false, fmt.Errorf("failed to find %s CSV: %w", name, err)
+		}
+		csvName = strings.TrimSpace(result.Stdout)
+		return csvName != "", nil
+	})
+	if err != nil {
+		return "", err
+	}
+	o.logger.Info("CSV found", "name", name, "csv", csvName)
+	return csvName, nil
 }

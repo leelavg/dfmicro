@@ -26,7 +26,7 @@ metadata:
   name: version
 spec:
   channel: {{.Channel}}
-  clusterID: microshift-cluster-001
+  clusterID: {{.ClusterID}}
 status:
   desired:
     version: {{.Version}}

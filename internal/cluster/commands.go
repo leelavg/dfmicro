@@ -206,12 +206,19 @@ Examples:
 				Flags:     clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
-					if err != nil && !errors.Is(err, os.ErrNotExist) {
+					if err == nil {
+						return newManager(cfg, logger, runner).delete(ctx, false)
+					}
+					if !errors.Is(err, os.ErrNotExist) {
 						return err
 					}
-					// TODO: ugly hack, revisit
-					cfg.Name = cmd.String("name")
-					return newManager(cfg, logger, runner).delete(ctx, errors.Is(err, os.ErrNotExist))
+					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, cmd.String("name"))
+					if _, err := os.Stat(cfg.StateDir); errors.Is(err, os.ErrNotExist) {
+						cfg.Name = cmd.String("name")
+						return newManager(cfg, logger, runner).delete(ctx, true)
+					}
+					cfg.EnableTopoLVM = true
+					return newManager(cfg, logger, runner).delete(ctx, false)
 				},
 			},
 			{
