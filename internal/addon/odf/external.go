@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 
@@ -13,14 +12,29 @@ import (
 	"dfmicro/internal/support"
 )
 
-const (
-	providerNamespace      = "openshift-storage"
-	providerCephCluster    = "rook-prov-cephcluster"
-	providerBlockPool      = "rook-prov-rbd"
-	providerFilesystem     = "rook-prov-cephfs"
-	providerFilesystemMeta = "rook-prov-cephfs-metadata"
-	providerFilesystemData = "rook-prov-cephfs-data0"
-)
+const providerNamespace = "openshift-storage"
+
+type providerNames struct {
+	cephCluster    string
+	blockPool      string
+	filesystem     string
+	filesystemMeta string
+	filesystemData string
+}
+
+func newProviderNames(cluster string) providerNames {
+	prefix := "rook-prov"
+	if cluster != "" {
+		prefix = cluster
+	}
+	return providerNames{
+		cephCluster:    prefix + "-cephcluster",
+		blockPool:      prefix + "-rbd",
+		filesystem:     prefix + "-cephfs",
+		filesystemMeta: prefix + "-cephfs-metadata",
+		filesystemData: prefix + "-cephfs-data0",
+	}
+}
 
 var reImage = regexp.MustCompile(`"image"\s*:\s*"([^"\r\n]+)`)
 
@@ -31,21 +45,46 @@ type externalResource struct {
 }
 
 func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) error {
+	o.logger.Info("reading Rook Ceph image")
 	image, err := o.rookCephImage(ctx)
 	if err != nil {
 		return err
 	}
-	vars := map[string]string{"CephImage": image}
-	for _, tmpl := range []string{rookProviderCephClusterTmpl, rookProviderBlockPoolTmpl} {
-		resource, err := support.Render(tmpl, vars)
+	toolboxImage, err := o.rookOperatorImage(ctx)
+	if err != nil {
+		return err
+	}
+	names := newProviderNames(o.cluster)
+	vars := map[string]string{
+		"CephImage":      image,
+		"ToolboxImage":   toolboxImage,
+		"CephCluster":    names.cephCluster,
+		"BlockPool":      names.blockPool,
+		"Filesystem":     names.filesystem,
+		"FilesystemMeta": names.filesystemMeta,
+		"FilesystemData": names.filesystemData,
+	}
+	resources := []struct {
+		name string
+		tmpl string
+	}{
+		{"Rook Ceph SCC", rookProviderSccTmpl},
+		{"Rook provider CephCluster", rookProviderCephClusterTmpl},
+		{"Rook toolbox", rookProviderToolboxTmpl},
+		{"Rook provider block pool", rookProviderBlockPoolTmpl},
+	}
+	for _, resource := range resources {
+		o.logger.Info("applying resource", "name", resource.name)
+		rendered, err := support.Render(resource.tmpl, vars)
 		if err != nil {
 			return err
 		}
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, resource); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, rendered); err != nil {
 			return err
 		}
 	}
 	if includeCephFS {
+		o.logger.Info("applying resource", "name", "Rook provider filesystem")
 		resource, err := support.Render(rookProviderFilesystemTmpl, vars)
 		if err != nil {
 			return err
@@ -55,10 +94,20 @@ func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) err
 	return nil
 }
 
-func (o *odf) configureRookConsumer(ctx context.Context, sourceName string, includeCephFS bool) error {
-	if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "storageclusters.ocs.openshift.io", "--kubeconfig", o.kubeconfig); err != nil {
-		return fmt.Errorf("StorageCluster CRD not found, is the odf operator installed?: %w", err)
+func (o *odf) rookOperatorImage(ctx context.Context) (string, error) {
+	result, err := o.runner.Run(ctx, o.kubectl, "get", "csv", "-n", providerNamespace,
+		"-o", "jsonpath={.items[?(@.metadata.labels.operators\\.coreos\\.com/rook-ceph-operator\\.openshift-storage)].spec.install.spec.deployments[0].spec.template.spec.containers[0].image}", "--kubeconfig", o.kubeconfig)
+	if err != nil {
+		return "", fmt.Errorf("read Rook operator image: %w", err)
 	}
+	image := strings.TrimSpace(result.Stdout)
+	if image == "" {
+		return "", fmt.Errorf("Rook operator image is empty")
+	}
+	return image, nil
+}
+
+func (o *odf) configureRookConsumer(ctx context.Context, sourceName string, includeCephFS bool) error {
 	if err := o.patchODFConsoleCSV(ctx); err != nil {
 		return err
 	}
@@ -73,7 +122,8 @@ func (o *odf) configureRookConsumer(ctx context.Context, sourceName string, incl
 	if err != nil {
 		return fmt.Errorf("could not load provider kubeconfig for %q: %w", sourceName, err)
 	}
-	details, err := o.exportExternalDetails(ctx, sourceKubeconfig, includeCephFS)
+	o.logger.Info("exporting external Ceph details", "source", sourceName)
+	details, err := o.exportExternalDetails(ctx, sourceKubeconfig, sourceName, includeCephFS)
 	if err != nil {
 		return fmt.Errorf("export external Ceph details from %q: %w", sourceName, err)
 	}
@@ -82,10 +132,12 @@ func (o *odf) configureRookConsumer(ctx context.Context, sourceName string, incl
 	if err != nil {
 		return err
 	}
+	o.logger.Info("applying external Ceph details")
 	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, secret); err != nil {
 		return err
 	}
 
+	o.logger.Info("applying external StorageCluster")
 	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, externalStorageClusterTmpl)
 }
 
@@ -122,7 +174,7 @@ func (o *odf) rookCephImage(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("Rook Ceph image not found in CSV alm-examples")
 }
 
-func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig string, includeCephFS bool) (string, error) {
+func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig, sourceName string, includeCephFS bool) (string, error) {
 	result, err := o.runner.Run(ctx, o.kubectl, "get", "configmap", "rook-ceph-external-cluster-script-config", "-n", providerNamespace, "-o", "jsonpath={.data.script}", "--kubeconfig", kubeconfig)
 	if err != nil {
 		return "", err
@@ -141,28 +193,10 @@ func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig string, incl
 		return "", fmt.Errorf("Rook toolbox pod not found")
 	}
 
-	file, err := os.CreateTemp("", "dfmicro-ceph-export-*.py")
-	if err != nil {
-		return "", err
-	}
-	path := file.Name()
-	defer os.Remove(path)
-	if _, err := file.Write(script); err != nil {
-		file.Close()
-		return "", err
-	}
-	if err := file.Close(); err != nil {
-		return "", err
-	}
-	remotePath := "/tmp/dfmicro-ceph-export.py"
-	if _, err := o.runner.Run(ctx, o.kubectl, "cp", path, providerNamespace+"/"+toolbox+":"+remotePath, "--kubeconfig", kubeconfig); err != nil {
-		return "", fmt.Errorf("copy exporter to Rook toolbox: %w", err)
-	}
-	defer o.runner.Run(ctx, o.kubectl, "exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "rm", "-f", remotePath)
-
-	args := []string{"exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "python3", remotePath, "--namespace", providerNamespace, "--rbd-data-pool-name", providerBlockPool, "--skip-monitoring-endpoint", "--format", "json"}
+	names := newProviderNames(sourceName)
+	args := []string{"exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "python3", "-c", string(script), "--namespace", providerNamespace, "--rbd-data-pool-name", names.blockPool, "--format", "json"}
 	if includeCephFS {
-		args = append(args, "--cephfs-filesystem-name", providerFilesystem, "--cephfs-metadata-pool-name", providerFilesystemMeta, "--cephfs-data-pool-name", providerFilesystemData)
+		args = append(args, "--cephfs-filesystem-name", names.filesystem, "--cephfs-metadata-pool-name", names.filesystemMeta, "--cephfs-data-pool-name", names.filesystemData)
 	}
 	result, err = o.runner.Run(ctx, o.kubectl, args...)
 	if err != nil {

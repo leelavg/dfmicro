@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"dfmicro/internal/support"
 )
@@ -25,22 +26,49 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 
 	switch {
 	case cfg.externalCeph:
+		if err := o.waitForCRD(ctx, "cephclusters.ceph.rook.io"); err != nil {
+			return err
+		}
 		return o.configureRookProvider(ctx, cfg.includeCephFS)
 	case cfg.connectTo != "" && !cfg.clientOnly:
+		if err := o.waitForCRD(ctx, "storageclusters.ocs.openshift.io"); err != nil {
+			return err
+		}
 		return o.configureRookConsumer(ctx, cfg.connectTo, cfg.includeCephFS)
 	case cfg.clientOnly:
+		if err := o.waitForCRD(ctx, "drivers.csi.ceph.io"); err != nil {
+			return err
+		}
 		return o.configureClient(ctx, cfg.includeCephFS)
 	default:
+		if err := o.waitForCRD(ctx, "storageclusters.ocs.openshift.io"); err != nil {
+			return err
+		}
 		return o.configureStorage(ctx, cfg)
 	}
 }
 
-func (o *odf) configureClient(ctx context.Context, includeCephFS bool) error {
-	o.logger.Info("checking Driver CRD")
-	if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "drivers.csi.ceph.io", "--kubeconfig", o.kubeconfig); err != nil {
-		return fmt.Errorf("driver CRD not found: %w", err)
+func (o *odf) waitForCRD(ctx context.Context, name string) error {
+	o.logger.Info("waiting for CRD creation", "name", name)
+	if _, err := o.runner.Run(ctx, o.kubectl,
+		"wait", "--for=create", "--timeout=10m", "crd/"+name,
+		"--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("wait for CRD %s creation: %w", name, err)
 	}
+	o.logger.Info("CRD created", "name", name)
+	o.logger.Info("waiting for CRD establishment", "name", name)
+	if _, err := o.runner.Run(ctx, o.kubectl,
+		"wait", "--for=condition=Established", "--timeout=10m", "crd/"+name,
+		"--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("wait for CRD %s establishment: %w", name, err)
+	}
+	o.logger.Info("CRD established", "name", name)
+	return nil
+}
 
+func (o *odf) configureClient(ctx context.Context, includeCephFS bool) error {
 	o.logger.Info("patching external-snapshotter-operator CSV")
 	if err := o.patchSnapshotCSV(ctx); err != nil {
 		return err
@@ -55,11 +83,6 @@ func (o *odf) configureClient(ctx context.Context, includeCephFS bool) error {
 }
 
 func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
-	o.logger.Info("checking StorageCluster CRD presence")
-	if _, err := o.runner.Run(ctx, o.kubectl, "get", "crd", "storageclusters.ocs.openshift.io", "--kubeconfig", o.kubeconfig); err != nil {
-		return fmt.Errorf("StorageCluster CRD not found, is the odf operator installed?: %w", err)
-	}
-
 	if !cfg.multiNode {
 		o.logger.Info("patching ocs-operator subscription with SINGLE_NODE")
 		if err := o.patchOCSSubscription(ctx); err != nil {
@@ -126,19 +149,27 @@ func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 }
 
 func (o *odf) ocsSubscriptionName(ctx context.Context) (string, error) {
-	result, err := o.runner.Run(ctx, o.kubectl,
-		"get", "subscription", "-n", "openshift-storage",
-		"-o", `jsonpath={.items[?(@.spec.name=="ocs-operator")].metadata.name}`,
-		"--kubeconfig", o.kubeconfig,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to list subscriptions: %w", err)
+	o.logger.Info("waiting for ODF subscription", "name", "ocs-operator")
+	for range int(10 * time.Minute / (2 * time.Second)) {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		result, err := o.runner.Run(ctx, o.kubectl,
+			"get", "subscription", "-n", "openshift-storage",
+			"-o", `jsonpath={.items[?(@.spec.name=="ocs-operator")].metadata.name}`,
+			"--kubeconfig", o.kubeconfig,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to list subscriptions: %w", err)
+		}
+		name := strings.TrimSpace(result.Stdout)
+		if name != "" {
+			o.logger.Info("ODF subscription created", "name", name)
+			return name, nil
+		}
+		time.Sleep(2 * time.Second)
 	}
-	name := strings.TrimSpace(result.Stdout)
-	if name == "" {
-		return "", fmt.Errorf("no subscription found with spec.name=ocs-operator")
-	}
-	return name, nil
+	return "", fmt.Errorf("timed out waiting for subscription with spec.name=ocs-operator")
 }
 
 func (o *odf) patchOCSSubscription(ctx context.Context) error {

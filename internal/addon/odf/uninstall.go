@@ -8,8 +8,13 @@ import (
 )
 
 var uninstallCmds = []string{
-	"annotate storagecluster ocs-storagecluster -n openshift-storage uninstall.ocs.openshift.io/confirm-deletion=true --overwrite",
-	"delete storagecluster ocs-storagecluster -n openshift-storage --ignore-not-found",
+	"annotate storagecluster --all -n openshift-storage uninstall.ocs.openshift.io/confirm-deletion=true --overwrite",
+	"delete storagecluster --all -n openshift-storage --ignore-not-found",
+	"delete deployment rook-ceph-tools -n openshift-storage --ignore-not-found",
+	"delete cephfilesystem --all -n openshift-storage --ignore-not-found",
+	"delete cephblockpool --all -n openshift-storage --ignore-not-found",
+	"delete cephcluster --all -n openshift-storage --ignore-not-found",
+	"delete scc rook-ceph --ignore-not-found",
 	"delete configmap ocs-client-operator-config -n openshift-storage --ignore-not-found",
 	"delete clusterserviceversions --all -n openshift-storage --ignore-not-found",
 	"delete subscription --all -n openshift-storage --ignore-not-found",
@@ -30,6 +35,8 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 		}
 		fmt.Println("# for each csiaddonsnodes.csiaddons.openshift.io in openshift-storage:")
 		fmt.Println(o.kubectl + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
+		fmt.Println("# for each clientprofiles.ocs.openshift.io in openshift-storage:")
+		fmt.Println(o.kubectl + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
 		for _, c := range uninstallFinalCmds {
 			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
@@ -45,7 +52,8 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 		time.Sleep(time.Second)
 	}
 
-	o.removeCsiAddonsNodeFinalizers(ctx)
+	o.removeFinalizers(ctx, "clientprofiles.ocs.openshift.io")
+	o.removeFinalizers(ctx, "csiaddonsnodes.csiaddons.openshift.io")
 
 	for _, c := range uninstallFinalCmds {
 		args := append(strings.Fields(c), "--kubeconfig", o.kubeconfig)
@@ -58,8 +66,8 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 	return nil
 }
 
-func (o *odf) removeCsiAddonsNodeFinalizers(ctx context.Context) {
-	result, err := o.runner.Run(ctx, o.kubectl, "get", "csiaddonsnodes.csiaddons.openshift.io",
+func (o *odf) removeFinalizers(ctx context.Context, resource string) {
+	result, err := o.runner.Run(ctx, o.kubectl, "get", resource,
 		"-n", "openshift-storage", "-o", "name", "--kubeconfig", o.kubeconfig)
 	if err != nil {
 		return

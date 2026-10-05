@@ -195,10 +195,49 @@ spec:
           memory: 100Mi
 `
 
+const rookProviderSccTmpl = `apiVersion: security.openshift.io/v1
+kind: SecurityContextConstraints
+metadata:
+  name: rook-ceph
+allowPrivilegedContainer: true
+allowHostDirVolumePlugin: true
+allowHostIPC: true
+allowHostNetwork: true
+allowHostPorts: true
+allowedCapabilities:
+  - MKNOD
+  - SYS_ADMIN
+requiredDropCapabilities:
+  - ALL
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: MustRunAs
+fsGroup:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+volumes:
+  - configMap
+  - downwardAPI
+  - emptyDir
+  - hostPath
+  - persistentVolumeClaim
+  - projected
+  - secret
+users:
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-system
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-default
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-mgr
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-osd
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-rgw
+  - system:serviceaccount:` + providerNamespace + `:rook-ceph-nvmeof
+`
+
 const rookProviderCephClusterTmpl = `apiVersion: ceph.rook.io/v1
 kind: CephCluster
 metadata:
-  name: ` + providerCephCluster + `
+  name: {{.CephCluster}}
   namespace: ` + providerNamespace + `
 spec:
   dataDirHostPath: /var/lib/rook
@@ -229,7 +268,7 @@ spec:
       requireMsgr2: true
   storage:
     storageClassDeviceSets:
-      - name: ` + providerBlockPool + `
+      - name: {{.BlockPool}}
         count: 1
         volumeClaimTemplates:
           - metadata:
@@ -244,18 +283,82 @@ spec:
                   storage: 5Gi
   monitoring:
     enabled: false
-  toolbox:
-    enabled: true
+    metricsDisabled: true
   cephConfig:
     global:
       osd_pool_default_size: "1"
       mon_warn_on_pool_no_redundancy: "false"
 `
 
+const rookProviderToolboxTmpl = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rook-ceph-tools
+  namespace: ` + providerNamespace + `
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rook-ceph-tools
+  template:
+    metadata:
+      labels:
+        app: rook-ceph-tools
+      annotations:
+        openshift.io/required-scc: rook-ceph
+    spec:
+      serviceAccountName: rook-ceph-default
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: rook-ceph-tools
+          image: {{.ToolboxImage}}
+          command:
+            - /bin/bash
+          args:
+            - -m
+            - -c
+            - /usr/local/bin/toolbox.sh
+          tty: true
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 2016
+            runAsGroup: 2016
+          env:
+            - name: ROOK_CEPH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rook-ceph-mon
+                  key: ceph-username
+          volumeMounts:
+            - name: ceph-config
+              mountPath: /etc/ceph
+            - name: mon-endpoint-volume
+              mountPath: /etc/rook
+            - name: ceph-admin-secret
+              mountPath: /var/lib/rook-ceph-mon
+              readOnly: true
+      volumes:
+        - name: ceph-config
+          emptyDir: {}
+        - name: mon-endpoint-volume
+          configMap:
+            name: rook-ceph-mon-endpoints
+            items:
+              - key: data
+                path: mon-endpoints
+        - name: ceph-admin-secret
+          secret:
+            secretName: rook-ceph-mon
+            items:
+              - key: ceph-secret
+                path: secret.keyring
+`
+
 const rookProviderBlockPoolTmpl = `apiVersion: ceph.rook.io/v1
 kind: CephBlockPool
 metadata:
-  name: ` + providerBlockPool + `
+  name: {{.BlockPool}}
   namespace: ` + providerNamespace + `
 spec:
   failureDomain: host
@@ -267,7 +370,7 @@ spec:
 const rookProviderFilesystemTmpl = `apiVersion: ceph.rook.io/v1
 kind: CephFilesystem
 metadata:
-  name: ` + providerFilesystem + `
+  name: {{.Filesystem}}
   namespace: ` + providerNamespace + `
 spec:
   metadataPool:
@@ -276,7 +379,7 @@ spec:
       size: 1
       requireSafeReplicaSize: false
   dataPools:
-    - name: ` + providerFilesystemData + `
+    - name: {{.FilesystemData}}
       failureDomain: host
       replicated:
         size: 1
@@ -294,7 +397,6 @@ metadata:
   name: ocs-storagecluster
   namespace: openshift-storage
 spec:
-  enableCephTools: true
   externalStorage:
     enable: true
   monitoring:

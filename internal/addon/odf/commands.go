@@ -16,20 +16,20 @@ import (
 // basic X.Y.Z check, use a semver library if stricter validation is needed
 var reVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
-var defaultName = rootconfig.Load().Name
+var defaultCluster = rootconfig.Load().Name
 
 func odfAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *cli.Command, *odf) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
 		useKubectl := cmd.Bool("kubectl")
 		kubeconfig := cmd.String("kubeconfig")
 		if kubeconfig == "" {
-			kc, err := rootconfig.Kubeconfig(cmd.String("name"))
+			kc, err := rootconfig.Kubeconfig(cmd.String("cluster"))
 			if err != nil {
-				return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("name"), err)
+				return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("cluster"), err)
 			}
 			kubeconfig = kc
 		}
-		o := newOdf(logger, runner, useKubectl, kubeconfig)
+		o := newOdf(logger, runner, useKubectl, kubeconfig, cmd.String("cluster"))
 		return fn(ctx, cmd, o)
 	}
 }
@@ -40,7 +40,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Usage: "Manage OpenShift Data Foundation on a MicroShift cluster",
 		UsageText: `Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
 
-Note: --name and --kubeconfig apply to all subcommands and must come before the subcommand name.`,
+Note: --cluster and --kubeconfig apply to all subcommands and must come before the subcommand name.`,
 		Action: support.UnknownSubcommand,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
@@ -51,7 +51,7 @@ Note: --name and --kubeconfig apply to all subcommands and must come before the 
 		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 			{
 				Flags: [][]cli.Flag{
-					{&cli.StringFlag{Name: "name", Usage: "Cluster name to resolve kubeconfig from", Value: defaultName}},
+					{&cli.StringFlag{Name: "cluster", Usage: "Cluster name to resolve kubeconfig from", Value: defaultCluster}},
 					{&cli.StringFlag{Name: "kubeconfig", Usage: "Path to an existing kubeconfig file"}},
 				},
 			},
@@ -98,16 +98,16 @@ Example:
 				},
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					if cmd.Bool("shims") {
-						for _, name := range []string{"catalog-image", "channel", "version"} {
-							if cmd.IsSet(name) {
-								return ctx, fmt.Errorf("--shims cannot be combined with --%s", name)
+						for _, cflag := range []string{"catalog-image", "channel", "version"} {
+							if cmd.IsSet(cflag) {
+								return ctx, fmt.Errorf("--shims cannot be combined with --%s", cflag)
 							}
 						}
 						return ctx, nil
 					}
-					for _, name := range []string{"catalog-image", "channel", "version"} {
-						if cmd.String(name) == "" {
-							return ctx, fmt.Errorf("--%s is required unless --shims is set", name)
+					for _, cflag := range []string{"catalog-image", "channel", "version"} {
+						if cmd.String(cflag) == "" {
+							return ctx, fmt.Errorf("--%s is required unless --shims is set", cflag)
 						}
 					}
 					return ctx, nil
@@ -116,9 +116,9 @@ Example:
 					clusterCIDR := rootconfig.Load().ClusterCIDR
 					serviceCIDR := rootconfig.Load().ServiceCIDR
 					if cmd.String("kubeconfig") == "" {
-						clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("name"))
+						clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("cluster"))
 						if err != nil {
-							return fmt.Errorf("could not load cluster config for %q: %w", cmd.String("name"), err)
+							return fmt.Errorf("could not load cluster config for %q: %w", cmd.String("cluster"), err)
 						}
 						clusterCIDR = clusterConfig.ClusterCIDR
 						serviceCIDR = clusterConfig.ServiceCIDR
@@ -129,7 +129,7 @@ Example:
 						subNames:     cmd.StringSlice("sub-name"),
 						version:      cmd.String("version"),
 						shims:        cmd.Bool("shims"),
-						baseDomain:   rootconfig.BaseDomain(cmd.String("name")),
+						baseDomain:   rootconfig.BaseDomain(cmd.String("cluster")),
 						clusterCIDR:  clusterCIDR,
 						serviceCIDR:  serviceCIDR,
 					})

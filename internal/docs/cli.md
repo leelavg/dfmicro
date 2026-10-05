@@ -41,13 +41,13 @@ Manage OpenShift Data Foundation on a MicroShift cluster
 
     Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
 
-    Note: --name and --kubeconfig apply to all subcommands and must come before the subcommand name.
+    Note: --cluster and --kubeconfig apply to all subcommands and must come before the subcommand name.
+
+**--cluster**="": Cluster name to resolve kubeconfig from (default: "micro")
 
 **--kubeconfig**="": Path to an existing kubeconfig file
 
 **--kubectl**: Use kubectl instead of oc for cluster operations
-
-**--name**="": Cluster name to resolve kubeconfig from (default: "micro")
 
 #### configure
 

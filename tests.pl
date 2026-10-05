@@ -269,8 +269,12 @@ sub kubectl_ok {
 }
 
 sub kubectl_with_input {
-    my ($name, $kubeconfig, $input) = @_;
-    return list_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-') if $list_only;
+	my ($name, $kubeconfig, $input) = @_;
+	if ($list_only) {
+		list_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-') if $list_mode eq 'cmds';
+		check(1, $name);
+		return;
+	}
     local $ENV{DFMICRO_CMD_LOG} = $ENV{DFMICRO_CMD_LOG} || "$work_dir/cmds.log";
     log_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-');
     open my $child, '|-', 'sh', '-c', shell_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-')
