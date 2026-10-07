@@ -2,6 +2,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: odf-consoleplugin-manager
+  labels:
+    app.kubernetes.io/created-by: dfmicro
 rules:
 - apiGroups:
   - console.openshift.io
@@ -21,6 +23,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: odf-consoleplugin-manager
+  labels:
+    app.kubernetes.io/created-by: dfmicro
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole

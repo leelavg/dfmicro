@@ -2,6 +2,8 @@ apiVersion: config.openshift.io/v1
 kind: Network
 metadata:
   name: cluster
+  labels:
+    app.kubernetes.io/created-by: dfmicro
 spec:
   clusterNetwork:
   - cidr: {{.ClusterCIDR}}

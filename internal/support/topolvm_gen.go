@@ -8,6 +8,7 @@ metadata:
   name: topolvm-lvmd-{{.NodeName}}
   namespace: topolvm-system
   labels:
+    app.kubernetes.io/created-by: dfmicro
     dfmicro.io/topolvm-node: "{{.NodeName}}"
 data:
   lvmd.yaml: |
@@ -31,6 +32,7 @@ metadata:
   name: topolvm-lvmd-{{.NodeName}}
   namespace: topolvm-system
   labels:
+    app.kubernetes.io/created-by: dfmicro
     idx: "0"
     helm.sh/chart: topolvm-17.2.0
     app.kubernetes.io/name: topolvm

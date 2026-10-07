@@ -5,3 +5,5 @@ metadata:
   namespace: openshift-config-managed
   annotations:
     service.beta.openshift.io/inject-cabundle: "true"
+  labels:
+    app.kubernetes.io/created-by: dfmicro

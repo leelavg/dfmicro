@@ -5,6 +5,8 @@ kind: ConfigMap
 metadata:
   name: kindnet-config
   namespace: kube-kindnet
+  labels:
+    app.kubernetes.io/created-by: dfmicro
 data:
   podSubnet: {{ .ClusterCIDR }}
 `

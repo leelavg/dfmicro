@@ -5,6 +5,8 @@ kind: NetworkAttachmentDefinition
 metadata:
   name: {{.Name}}
   namespace: {{.Namespace}}
+  labels:
+    app.kubernetes.io/created-by: dfmicro
 spec:
   config: |
     {
