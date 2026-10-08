@@ -180,10 +180,13 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 		imageExists = true
 		result, err := RunPrivileged(ctx, t.runner, "vgs", "--noheadings", "-o", "vg_name", vg)
 		if err == nil && strings.TrimSpace(result.Stdout) == vg {
+			if !t.config.thinpool {
+				return nil
+			}
 			result, err := RunPrivileged(ctx, t.runner, "lvs", "--noheadings", "-o", "lv_name", vg)
 			if err == nil {
 				for lv := range strings.FieldsSeq(result.Stdout) {
-					if !t.config.thinpool || lv == "thin" {
+					if lv == "thin" {
 						return nil
 					}
 				}
@@ -191,6 +194,7 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 			if err := t.deleteBackend(ctx, disk, vg); err != nil {
 				return fmt.Errorf("remove incomplete volume group %s: %w", vg, err)
 			}
+			imageExists = false
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
@@ -311,7 +315,6 @@ func (t *TopoLVMMgr) deleteBackend(ctx context.Context, disk, vg string) error {
 }
 
 func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error {
-	encodedVG := strings.ReplaceAll(vg, "-", "--")
 	result, err := RunPrivileged(ctx, t.runner, "dmsetup", "ls", "--noheadings", "-C", "-o", "name")
 	if err != nil {
 		if isMissingLVMResource(err) {
@@ -323,7 +326,7 @@ func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error 
 	var devices []string
 	for name := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
 		name = strings.TrimSpace(name)
-		if name != "" && strings.HasPrefix(name, encodedVG+"-") {
+		if name != "" && deviceVolumeGroup(name) == vg {
 			devices = append(devices, name)
 		}
 	}
@@ -349,6 +352,23 @@ func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error 
 		}
 	}
 	return nil
+}
+
+func deviceVolumeGroup(name string) string {
+	var decoded strings.Builder
+	for index := 0; index < len(name); index++ {
+		if name[index] != '-' {
+			decoded.WriteByte(name[index])
+			continue
+		}
+		if index+1 < len(name) && name[index+1] == '-' {
+			decoded.WriteByte('-')
+			index++
+			continue
+		}
+		return decoded.String()
+	}
+	return ""
 }
 
 func mappingDepth(name string) int {

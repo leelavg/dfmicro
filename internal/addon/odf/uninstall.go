@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 )
 
 var uninstallCmds = []string{
@@ -15,7 +14,16 @@ var uninstallCmds = []string{
 	"delete deployment rook-ceph-tools -n openshift-storage --ignore-not-found",
 	"delete cephfilesystem --all -n openshift-storage --ignore-not-found",
 	"delete cephblockpool --all -n openshift-storage --ignore-not-found",
-	"delete cephcluster --all -n openshift-storage --ignore-not-found",
+}
+
+const deleteCephClusterCmd = "delete cephcluster --all -n openshift-storage --ignore-not-found"
+
+var cleanupJobCmds = []string{
+	"wait --for=create --timeout=120s job -l rook-ceph-cleanup=true -n openshift-storage",
+	"wait --for=condition=complete --timeout=300s job -l rook-ceph-cleanup=true -n openshift-storage",
+}
+
+var uninstallPostCleanupCmds = []string{
 	"delete configmap ocs-client-operator-config -n openshift-storage --ignore-not-found",
 	"delete clusterserviceversions --all -n openshift-storage --ignore-not-found",
 	"delete subscription --all -n openshift-storage --ignore-not-found",
@@ -25,14 +33,26 @@ var uninstallCmds = []string{
 
 var uninstallFinalCmds = []string{
 	"delete mutatingwebhookconfiguration csv.odf.openshift.io --ignore-not-found",
-	"delete namespace openshift-storage --ignore-not-found",
 	"delete scc rook-ceph --ignore-not-found",
+	"delete namespace openshift-storage --ignore-not-found",
 }
 
 func (o *odf) uninstall(ctx context.Context, attempt bool) error {
+	cleanupPolicyCmd := fmt.Sprintf(
+		"patch cephcluster %s -n openshift-storage --type=merge --patch={\"spec\":{\"cleanupPolicy\":{\"confirmation\":\"yes-really-destroy-data\"}}}",
+		newProviderNames(o.clusterName).cephCluster,
+	)
 	if !attempt {
-		fmt.Println("# Run the following to uninstall:")
+		fmt.Println("# Run the following to uninstall and cleanup commands if you ran single/{odf,rook}-provider configurations:")
 		for _, c := range uninstallCmds {
+			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+		}
+		fmt.Println(o.kubectl + " " + cleanupPolicyCmd + " --kubeconfig " + o.kubeconfig)
+		fmt.Println(o.kubectl + " " + deleteCephClusterCmd + " --kubeconfig " + o.kubeconfig)
+		for _, c := range cleanupJobCmds {
+			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+		}
+		for _, c := range uninstallPostCleanupCmds {
 			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
 		fmt.Println("# for each csiaddonsnodes.csiaddons.openshift.io in openshift-storage:")
@@ -45,28 +65,52 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 		return nil
 	}
 
+	cleanupExpected := o.hasCleanupResources(ctx)
 	for _, c := range uninstallCmds {
-		args := append(strings.Fields(c), "--kubeconfig", o.kubeconfig)
-		o.logger.Info("running", "cmd", o.kubectl, "args", args)
-		if _, err := o.runner.Run(ctx, o.kubectl, args...); err != nil {
-			o.logger.Warn("failed", "cmd", c, "error", err)
+		o.runUninstallCommand(ctx, c)
+	}
+	o.runUninstallCommand(ctx, cleanupPolicyCmd)
+	o.runUninstallCommand(ctx, deleteCephClusterCmd)
+	if cleanupExpected {
+		for _, c := range cleanupJobCmds {
+			o.runUninstallCommand(ctx, c)
 		}
-		time.Sleep(time.Second)
+	}
+	for _, c := range uninstallPostCleanupCmds {
+		o.runUninstallCommand(ctx, c)
 	}
 
+	// TODO: find why some of these are left behind
 	o.removeFinalizers(ctx, "clientprofiles.ocs.openshift.io")
 	o.removeFinalizers(ctx, "csiaddonsnodes.csiaddons.openshift.io")
 	o.removeFinalizers(ctx, "clientprofiles.csi.ceph.io")
 
 	for _, c := range uninstallFinalCmds {
-		args := append(strings.Fields(c), "--kubeconfig", o.kubeconfig)
-		o.logger.Info("running", "cmd", o.kubectl, "args", args)
-		if _, err := o.runner.Run(ctx, o.kubectl, args...); err != nil {
-			o.logger.Warn("failed", "cmd", c, "error", err)
-		}
-		time.Sleep(time.Second)
+		o.runUninstallCommand(ctx, c)
 	}
 	return nil
+}
+
+func (o *odf) hasCleanupResources(ctx context.Context) bool {
+	for _, args := range [][]string{
+		{"get", "cephcluster", "-n", "openshift-storage"},
+		{"get", "jobs", "-n", "openshift-storage", "-l", "app=rook-ceph-cleanup"},
+	} {
+		args = append(args, "--ignore-not-found", "-o", "name", "--kubeconfig", o.kubeconfig)
+		result, err := o.runner.Run(ctx, o.kubectl, args...)
+		if err == nil && strings.TrimSpace(result.Stdout) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (o *odf) runUninstallCommand(ctx context.Context, command string) {
+	args := append(strings.Fields(command), "--kubeconfig", o.kubeconfig)
+	o.logger.Info("running", "cmd", o.kubectl, "args", args)
+	if _, err := o.runner.Run(ctx, o.kubectl, args...); err != nil {
+		o.logger.Warn("failed", "cmd", command, "error", err)
+	}
 }
 
 func (o *odf) removeFinalizers(ctx context.Context, resource string) {
