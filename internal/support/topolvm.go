@@ -324,10 +324,10 @@ func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error 
 	}
 
 	var devices []string
-	for name := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
-		name = strings.TrimSpace(name)
-		if name != "" && deviceVolumeGroup(name) == vg {
-			devices = append(devices, name)
+	for line := range strings.SplitSeq(strings.TrimSpace(result.Stdout), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && deviceVolumeGroup(fields[0]) == vg {
+			devices = append(devices, fields[0])
 		}
 	}
 	if len(devices) == 0 {

@@ -2,6 +2,7 @@ package odf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -82,10 +83,33 @@ func (o *odf) waitForCRD(ctx context.Context, name string) error {
 	}
 	o.logger.Info("CRD created", "name", name)
 	o.logger.Info("waiting for CRD establishment", "name", name)
-	if _, err := o.runner.Run(ctx, o.kubectl,
-		"wait", "--for=condition=Established", "--timeout=10m", "crd/"+name,
-		"--kubeconfig", o.kubeconfig,
-	); err != nil {
+	if err := o.poll(ctx, "CRD "+name+" establishment", func() (bool, error) {
+		result, err := o.runner.Run(ctx, o.kubectl,
+			"get", "crd/"+name,
+			"-o", "json",
+			"--kubeconfig", o.kubeconfig,
+		)
+		if err != nil {
+			return false, err
+		}
+		var crd struct {
+			Status struct {
+				Conditions []struct {
+					Type   string `json:"type"`
+					Status string `json:"status"`
+				} `json:"conditions"`
+			} `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(result.Stdout), &crd); err != nil {
+			return false, err
+		}
+		for _, condition := range crd.Status.Conditions {
+			if condition.Type == "Established" && condition.Status == "True" {
+				return true, nil
+			}
+		}
+		return false, nil
+	}); err != nil {
 		return fmt.Errorf("wait for CRD %s establishment: %w", name, err)
 	}
 	o.logger.Info("CRD established", "name", name)

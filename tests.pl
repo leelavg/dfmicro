@@ -431,14 +431,16 @@ YAML
 sub test_storage {
 	my ($kubeconfig, $name, $node, $storage_class, $timeout) = @_;
 	$timeout //= 60;
-	kubectl_with_input("create $name StatefulSet", $kubeconfig, storage_manifest($name, $node, $storage_class));
-	# TODO: reduce the external-storage timeout after finding why CSI provisioning is slow on a fresh cluster.
-	kubectl_ok("wait for $name StatefulSet", $kubeconfig, "rollout status statefulset/$name -n default --timeout=${timeout}s");
-	kubectl_ok("write to $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'printf dfmicro > /data/check'");
-	kubectl_ok("read from $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
+	my ($cluster) = $node =~ /^(.*)-\d+$/;
+	my $prefix = defined $cluster ? "[$cluster] " : '';
+	kubectl_with_input("$prefix create $name StatefulSet", $kubeconfig, storage_manifest($name, $node, $storage_class));
+	kubectl_ok("$prefix wait for $name PVC", $kubeconfig, "wait --for=create --for=jsonpath={.status.phase}=Bound --timeout=${timeout}s pvc/data-$name-0 -n default");
+	kubectl_ok("$prefix wait for $name StatefulSet", $kubeconfig, "rollout status statefulset/$name -n default --timeout=${timeout}s");
+	kubectl_ok("$prefix write to $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'printf dfmicro > /data/check'");
+	kubectl_ok("$prefix read from $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
 	unless ($keep) {
-		kubectl_ok("delete $name StatefulSet", $kubeconfig, "delete statefulset $name -n default --wait=true --timeout=60s");
-		kubectl_ok("delete $name PVC", $kubeconfig, "delete pvc data-$name-0 -n default --wait=true --timeout=60s");
+		kubectl_ok("$prefix delete $name StatefulSet", $kubeconfig, "delete statefulset $name -n default --wait=true --timeout=60s");
+		kubectl_ok("$prefix delete $name PVC", $kubeconfig, "delete pvc data-$name-0 -n default --wait=true --timeout=60s");
 	}
 }
 
@@ -489,6 +491,21 @@ sub remove_netshoots {
 	}
 }
 
+sub remove_storage_workloads {
+	my %workloads = (
+		$first => [qw(dfmicro-storage-control dfmicro-storage-worker dfmicro-odf-single dfmicro-odf-provider dfmicro-test)],
+		$micro => [qw(dfmicro-odf-external dfmicro-odf-client)],
+	);
+	for my $cluster ($first, $micro) {
+		my $kubeconfig = $cluster eq $first ? $first_kubeconfig : $micro_kubeconfig;
+		next unless defined $kubeconfig;
+		for my $name (@{$workloads{$cluster}}) {
+			kubectl($kubeconfig, "delete statefulset $name -n default --ignore-not-found --grace-period=5 --wait=true --timeout=10s");
+			kubectl($kubeconfig, "delete pvc data-$name-0 -n default --ignore-not-found --grace-period=5 --wait=true --timeout=10s");
+		}
+	}
+}
+
 sub cleanup_level_1 {
     return if $list_only;
     remove_cluster($micro);
@@ -521,6 +538,9 @@ sub cleanup_network_state {
 sub cleanup_on_exit {
 	my ($force) = @_;
 	return if $list_only || ($keep && !$force);
+	remove_storage_workloads();
+	run_command("addon odf --cluster $micro uninstall --attempt");
+	run_command("addon odf --cluster $first uninstall --attempt");
 	remove_cluster($first);
 	remove_cluster($micro);
 	remove_network();
@@ -529,6 +549,7 @@ sub cleanup_on_exit {
 
 sub cleanup_odf {
 	my ($cluster) = @_;
+	remove_storage_workloads();
 	run_ok("uninstall ODF from $cluster", "addon odf --cluster $cluster uninstall --attempt");
 }
 
@@ -536,8 +557,14 @@ sub wait_storage_cluster {
 	my ($name, $kubeconfig) = @_;
 	kubectl_ok("$name StorageCluster is ready", $kubeconfig,
 		'wait --for=jsonpath={.status.phase}=Ready --timeout=600s storagecluster/ocs-storagecluster -n openshift-storage');
+	kubectl_ok("$name RBD StorageClass is created", $kubeconfig,
+		'wait --for=create --timeout=120s storageclass/ocs-storagecluster-ceph-rbd');
+	kubectl_ok("$name RBD CSI controller is created", $kubeconfig,
+		'wait --for=create --timeout=120s deployment/openshift-storage.rbd.csi.ceph.com-ctrlplugin -n openshift-storage');
 	kubectl_ok("$name RBD CSI controller is ready", $kubeconfig,
 		'rollout status deployment/openshift-storage.rbd.csi.ceph.com-ctrlplugin --timeout=120s -n openshift-storage');
+	kubectl_ok("$name RBD CSI node plugin is created", $kubeconfig,
+		'wait --for=create --timeout=120s daemonset/openshift-storage.rbd.csi.ceph.com-nodeplugin -n openshift-storage');
 	kubectl_ok("$name RBD CSI node plugin is ready", $kubeconfig,
 		'rollout status daemonset/openshift-storage.rbd.csi.ceph.com-nodeplugin --timeout=120s -n openshift-storage');
 }
@@ -579,10 +606,13 @@ sub run_level_6 {
 	run_ok('install ODF provider on first', "addon odf --cluster $first install " . odf_install_args('odf-operator'));
 	run_ok('configure multi-node ODF provider', "addon odf --cluster $first configure --hostnetwork --multi-node");
 	wait_storage_cluster('multi-node ODF provider', $first_kubeconfig);
+	test_storage($first_kubeconfig, 'dfmicro-odf-provider', "$first-0", 'ocs-storagecluster-ceph-rbd', 300);
 
 	section('client-only ODF consumer');
 	run_ok('install ODF client operator on micro', "addon odf --cluster $micro install " . odf_install_args('ocs-client-operator'));
 	run_ok('configure ODF client on micro', "addon odf --cluster $micro configure --client --connect-to $first");
+	kubectl_ok('set client StorageClass', $first_kubeconfig,
+		"patch storageconsumer $micro -n openshift-storage --type=json -p '[{\"op\":\"add\",\"path\":\"/spec/storageClasses\",\"value\":[{\"name\":\"ocs-storagecluster-ceph-rbd\"}]}]'");
 	test_storage($micro_kubeconfig, 'dfmicro-odf-client', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
 }
 
@@ -676,19 +706,19 @@ run_netshoot('first-default-a', $first_kubeconfig, "$first-0", "default/$network
 run_netshoot('micro-gp1-a', $micro_kubeconfig, "$micro-0", "default/$network-gp1");
 my $first_default_ip = network_ip($first_kubeconfig, 'first-default-a', "$network-default");
 my $micro_gp1_ip = network_ip($micro_kubeconfig, 'micro-gp1-a', "$network-gp1");
-check(defined $first_default_ip && defined $micro_gp1_ip, 'read initial secondary network addresses');
-fping('different groups do not reach each other', $first_kubeconfig, 'first-default-a', $micro_gp1_ip, 0) if defined $micro_gp1_ip;
+check(defined $first_default_ip && defined $micro_gp1_ip, '[first,micro] read initial secondary network addresses');
+fping('[first -> micro] different groups do not reach each other', $first_kubeconfig, 'first-default-a', $micro_gp1_ip, 0) if defined $micro_gp1_ip;
 
 run_ok('attach same group with repeated flags', "network attach --cluster $first:gp1 --cluster $micro:gp1 --to $network");
 run_netshoot('first-gp1-b', $first_kubeconfig, "$first-0", "default/$network-gp1");
 run_netshoot('micro-gp1-b', $micro_kubeconfig, "$micro-0", "default/$network-gp1");
 my $first_gp1_ip = network_ip($first_kubeconfig, 'first-gp1-b', "$network-gp1");
 my $micro_gp1_same_ip = network_ip($micro_kubeconfig, 'micro-gp1-b', "$network-gp1");
-check(defined $first_gp1_ip && defined $micro_gp1_same_ip, 'read shared secondary network addresses');
-check(defined $first_gp1_ip && defined $micro_gp1_same_ip && $first_gp1_ip ne $micro_gp1_same_ip, 'same-group secondary addresses are unique');
-fping('same group reaches across clusters', $first_kubeconfig, 'first-gp1-b', $micro_gp1_same_ip, 1) if defined $micro_gp1_same_ip;
+check(defined $first_gp1_ip && defined $micro_gp1_same_ip, '[first,micro] read shared secondary network addresses');
+check(defined $first_gp1_ip && defined $micro_gp1_same_ip && $first_gp1_ip ne $micro_gp1_same_ip, '[first,micro] same-group secondary addresses are unique');
+fping('[first -> micro] same group reaches across clusters', $first_kubeconfig, 'first-gp1-b', $micro_gp1_same_ip, 1) if defined $micro_gp1_same_ip;
 
-run_fail('host-local attachment blocks worker add', "node add --cluster $micro");
+run_fail("[$micro] host-local attachment blocks worker add", "node add --cluster $micro");
 for my $pod (qw(first-default-a micro-gp1-a first-gp1-b micro-gp1-b)) {
 	    kubectl_ok("delete netshoot $pod", $pod =~ /^first/ ? $first_kubeconfig : $micro_kubeconfig, "delete pod $pod --ignore-not-found --grace-period=2 --wait=false");
 }
@@ -704,19 +734,19 @@ my $first_default_b_ip = network_ip($first_kubeconfig, 'first-default-b', "$netw
 my $micro_default_b_ip = network_ip($micro_kubeconfig, 'micro-default-b', "$network-default");
 my $first_default_c_ip = network_ip($first_kubeconfig, 'first-default-c', "$network-default");
 my $micro_default_c_ip = network_ip($micro_kubeconfig, 'micro-default-c', "$network-default");
-check(defined $first_default_c_ip && defined $micro_default_c_ip, 'read reattached secondary network addresses');
-check(defined $first_default_b_ip && defined $micro_default_b_ip, 'read worker secondary network addresses');
-check(defined $first_default_b_ip && defined $first_default_c_ip && $first_default_b_ip ne $first_default_c_ip, 'first cluster secondary addresses are unique');
-check(defined $micro_default_b_ip && defined $micro_default_c_ip && $micro_default_b_ip ne $micro_default_c_ip, 'micro cluster secondary addresses are unique');
+check(defined $first_default_c_ip && defined $micro_default_c_ip, '[first,micro] read reattached secondary network addresses');
+check(defined $first_default_b_ip && defined $micro_default_b_ip, '[first,micro] read worker secondary network addresses');
+check(defined $first_default_b_ip && defined $first_default_c_ip && $first_default_b_ip ne $first_default_c_ip, "[$first] secondary addresses are unique");
+check(defined $micro_default_b_ip && defined $micro_default_c_ip && $micro_default_b_ip ne $micro_default_c_ip, "[$micro] secondary addresses are unique");
 check(
 	node_has_whereabouts_label($first_kubeconfig, 'first-0')
 		&& node_has_whereabouts_label($first_kubeconfig, 'first-1')
 		&& node_has_whereabouts_label($micro_kubeconfig, 'micro-0')
 		&& node_has_whereabouts_label($micro_kubeconfig, 'micro-1'),
-	'cluster nodes have Whereabouts labels',
+	'[first,micro] cluster nodes have Whereabouts labels',
 );
-fping('same cluster reaches between first nodes', $first_kubeconfig, 'first-default-c', $first_default_b_ip, 1) if defined $first_default_b_ip;
-fping('same cluster reaches between micro nodes', $micro_kubeconfig, 'micro-default-c', $micro_default_b_ip, 1) if defined $micro_default_b_ip;
+fping("[$first] same cluster reaches between nodes", $first_kubeconfig, 'first-default-c', $first_default_b_ip, 1) if defined $first_default_b_ip;
+fping("[$micro] same cluster reaches between nodes", $micro_kubeconfig, 'micro-default-c', $micro_default_b_ip, 1) if defined $micro_default_b_ip;
 
 # Plain cluster traffic must fail before peering and work after peering.
 section('plain pod routing before and after peering');
@@ -724,12 +754,12 @@ run_netshoot('plain-first', $first_kubeconfig, "$first-0", '');
 run_netshoot('plain-micro', $micro_kubeconfig, "$micro-0", '');
 my $plain_first_ip = pod_ip($first_kubeconfig, 'plain-first');
 my $plain_micro_ip = pod_ip($micro_kubeconfig, 'plain-micro');
-check(defined $plain_first_ip && defined $plain_micro_ip, 'read plain pod addresses');
-fping('plain pods fail across clusters before peer', $first_kubeconfig, 'plain-first', $plain_micro_ip, 0) if defined $plain_micro_ip;
+check(defined $plain_first_ip && defined $plain_micro_ip, '[first,micro] read plain pod addresses');
+fping('[first -> micro] plain pods fail across clusters before peer', $first_kubeconfig, 'plain-first', $plain_micro_ip, 0) if defined $plain_micro_ip;
 
 run_ok('peer with comma syntax', "network peer --cluster $first,$micro");
 run_ok('peer again with repeated flags', "network peer --cluster $first --cluster $micro");
-fping('plain pods reach across clusters after peer', $first_kubeconfig, 'plain-first', $plain_micro_ip, 1) if defined $plain_micro_ip;
+fping('[first -> micro] plain pods reach across clusters after peer', $first_kubeconfig, 'plain-first', $plain_micro_ip, 1) if defined $plain_micro_ip;
 
 # Newly added workers need the peer rules applied explicitly.
 section('peer refresh after worker replacement');
@@ -740,10 +770,10 @@ run_ok('remove worker after peer', "node rm --cluster $micro --name $micro-1");
 run_ok('add worker after peer', "node add --cluster $micro");
 run_netshoot('plain-micro-new', $micro_kubeconfig, "$micro-1", '');
 my $plain_micro_new_ip = pod_ip($micro_kubeconfig, 'plain-micro-new');
-check(defined $plain_micro_new_ip, 'read replacement worker pod address');
-fping('new worker is not reached by old peer rules', $first_kubeconfig, 'plain-first', $plain_micro_new_ip, 0) if defined $plain_micro_new_ip;
-run_ok('peer replacement worker', "network peer --cluster $first,$micro");
-fping('replacement worker reaches after peer refresh', $first_kubeconfig, 'plain-first', $plain_micro_new_ip, 1) if defined $plain_micro_new_ip;
+check(defined $plain_micro_new_ip, "[$micro] read replacement worker pod address");
+fping("[$first -> $micro] new worker is not reached by old peer rules", $first_kubeconfig, 'plain-first', $plain_micro_new_ip, 0) if defined $plain_micro_new_ip;
+run_ok("[$first,$micro] peer replacement worker", "network peer --cluster $first,$micro");
+fping("[$first -> $micro] replacement worker reaches after peer refresh", $first_kubeconfig, 'plain-first', $plain_micro_new_ip, 1) if defined $plain_micro_new_ip;
 
 # Removing routes and rules repeatedly must remain successful.
 section('idempotent peer removal');
@@ -786,7 +816,7 @@ sub main {
 	if ($upto == 1) {
 		pause_before_cleanup();
 		cleanup_level_1() unless $keep;
-		$started = 0 if $keep;
+		$started = 0;
 		finish();
 	}
 
@@ -794,7 +824,7 @@ sub main {
 	if ($upto == 2) {
 		pause_before_cleanup();
 		cleanup_level_2() unless $keep;
-		$started = 0 if $keep;
+		$started = 0;
 		finish();
 	}
 
@@ -806,7 +836,7 @@ sub main {
 		remove_cluster($micro) unless $keep;
 		check(!-d "$config_dir/,networks", 'network state directory is removed') unless $keep;
 		check(config_is_empty(), 'level 3 cleanup removes all test state') unless $keep;
-		$started = 0 if $keep;
+		$started = 0;
 		finish();
 	}
 
@@ -817,7 +847,7 @@ sub main {
 		remove_cluster($first) unless $keep;
 		remove_cluster($micro) unless $keep;
 		check(config_is_empty(), 'level 4 cleanup removes all test state') unless $keep;
-		$started = 0 if $keep;
+		$started = 0;
 		finish();
 	}
 	cleanup_odf($first);
@@ -830,7 +860,7 @@ sub main {
 		remove_cluster($first) unless $keep;
 		remove_cluster($micro) unless $keep;
 		check(config_is_empty(), 'level 5 cleanup removes all test state') unless $keep;
-		$started = 0 if $keep;
+		$started = 0;
 		finish();
 	}
 	cleanup_odf($micro);
@@ -843,7 +873,7 @@ sub main {
 	remove_cluster($first) unless $keep;
 	remove_cluster($micro) unless $keep;
 	check(config_is_empty(), 'level 6 cleanup removes all test state') unless $keep;
-	$started = 0 if $keep;
+	$started = 0;
 	finish();
 }
 

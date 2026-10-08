@@ -65,16 +65,18 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 		return nil
 	}
 
-	cleanupExpected := o.hasCleanupResources(ctx)
+	cephClusterExists := o.hasResource(ctx, "cephcluster")
+	cleanupJobExists := o.hasResource(ctx, "jobs", "-l", "app=rook-ceph-cleanup")
 	for _, c := range uninstallCmds {
 		o.runUninstallCommand(ctx, c)
 	}
 	o.runUninstallCommand(ctx, cleanupPolicyCmd)
 	o.runUninstallCommand(ctx, deleteCephClusterCmd)
-	if cleanupExpected {
-		for _, c := range cleanupJobCmds {
-			o.runUninstallCommand(ctx, c)
-		}
+	if cephClusterExists {
+		o.runUninstallCommand(ctx, cleanupJobCmds[0])
+	}
+	if cephClusterExists || cleanupJobExists {
+		o.runUninstallCommand(ctx, cleanupJobCmds[1])
 	}
 	for _, c := range uninstallPostCleanupCmds {
 		o.runUninstallCommand(ctx, c)
@@ -91,18 +93,11 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 	return nil
 }
 
-func (o *odf) hasCleanupResources(ctx context.Context) bool {
-	for _, args := range [][]string{
-		{"get", "cephcluster", "-n", "openshift-storage"},
-		{"get", "jobs", "-n", "openshift-storage", "-l", "app=rook-ceph-cleanup"},
-	} {
-		args = append(args, "--ignore-not-found", "-o", "name", "--kubeconfig", o.kubeconfig)
-		result, err := o.runner.Run(ctx, o.kubectl, args...)
-		if err == nil && strings.TrimSpace(result.Stdout) != "" {
-			return true
-		}
-	}
-	return false
+func (o *odf) hasResource(ctx context.Context, resource string, extra ...string) bool {
+	args := append([]string{"get", resource}, extra...)
+	args = append(args, "-n", "openshift-storage", "--ignore-not-found", "-o", "name", "--kubeconfig", o.kubeconfig)
+	result, err := o.runner.Run(ctx, o.kubectl, args...)
+	return err == nil && strings.TrimSpace(result.Stdout) != ""
 }
 
 func (o *odf) runUninstallCommand(ctx context.Context, command string) {

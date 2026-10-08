@@ -525,30 +525,68 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 		return err
 	}
 
-	if len(containers) == 0 {
-		return nil
+	clusterMap := make(map[string]map[string]string)
+	entries, err := os.ReadDir(rootconfig.ConfigDir())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
 	}
-
-	clusterMap := make(map[string]struct {
-		running []string
-		stopped []string
-	})
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		clusterName := entry.Name()
+		cfg, err := rootconfig.ReadClusterConfig(clusterName)
+		if err != nil {
+			logger.Warn("failed to load cluster config", "name", clusterName, "error", err)
+			continue
+		}
+		nodes, err := rootconfig.ReadNodesConfig(clusterName)
+		if err != nil {
+			return err
+		}
+		clusterMap[clusterName] = make(map[string]string)
+		if len(nodes.Nodes) == 0 {
+			clusterMap[clusterName][cfg.NodeName] = "orphaned"
+			continue
+		}
+		for _, node := range nodes.Nodes {
+			clusterMap[clusterName][node.NodeName] = "orphaned"
+		}
+	}
 
 	for _, container := range containers {
 		clusterName := container.Labels["part-of"]
-		info := clusterMap[clusterName]
+		if clusterName == "" {
+			continue
+		}
+		if clusterMap[clusterName] == nil {
+			clusterMap[clusterName] = make(map[string]string)
+		}
 		for _, name := range container.Names {
 			if container.State == "running" {
-				info.running = append(info.running, name)
+				clusterMap[clusterName][name] = "running"
 			} else {
-				info.stopped = append(info.stopped, name)
+				clusterMap[clusterName][name] = "stopped"
 			}
 		}
-		clusterMap[clusterName] = info
 	}
 
-	for clusterName, info := range clusterMap {
-		logger.Info("found cluster", "name", clusterName, "running", info.running, "stopped", info.stopped)
+	for clusterName, nodes := range clusterMap {
+		var running, stopped, orphaned []string
+		for node, state := range nodes {
+			switch state {
+			case "running":
+				running = append(running, node)
+			case "stopped":
+				stopped = append(stopped, node)
+			default:
+				orphaned = append(orphaned, node)
+			}
+		}
+		slices.Sort(running)
+		slices.Sort(stopped)
+		slices.Sort(orphaned)
+		logger.Info("found cluster", "name", clusterName, "running", running, "stopped", stopped, "orphaned", orphaned)
 	}
 
 	return nil
