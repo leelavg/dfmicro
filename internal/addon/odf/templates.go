@@ -300,8 +300,7 @@ spec:
                 requests:
                   storage: 5Gi
   monitoring:
-    enabled: false
-    metricsDisabled: true
+    enabled: true
   cephConfig:
     global:
       osd_pool_default_size: "1"
@@ -358,6 +357,9 @@ spec:
             - name: ceph-admin-secret
               mountPath: /var/lib/rook-ceph-mon
               readOnly: true
+            - name: external-cluster-script
+              mountPath: /var/run/rook/external-cluster-script
+              readOnly: true
       volumes:
         - name: ceph-config
           emptyDir: {}
@@ -373,6 +375,13 @@ spec:
             items:
               - key: ceph-secret
                 path: secret.keyring
+        - name: external-cluster-script
+          configMap:
+            name: rook-ceph-external-cluster-script-config
+            optional: true
+            items:
+              - key: script
+                path: script.py
 `
 
 const rookProviderBlockPoolTmpl = `apiVersion: ceph.rook.io/v1

@@ -159,6 +159,9 @@ func (o *odf) labelStorageNodes(ctx context.Context) error {
 }
 
 func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
+	if err := o.waitForCRD(ctx, "drivers.csi.ceph.io"); err != nil {
+		return err
+	}
 	if includeCephFS {
 		o.logger.Info("applying cephfs driver")
 		cephfs, err := odfFS.ReadFile("resources/00-cephfs-driver.yaml")

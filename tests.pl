@@ -22,7 +22,7 @@ my ($list_only, $timeout_seconds, $backend_option);
 
 sub usage {
     print "Usage:\tperl tests.pl [options]\n\n";
-    printf "  %-16s\t%s\n", '--upto N', 'Run through level N (0-3) (default: 0)';
+    printf "  %-16s\t%s\n", '--upto N', 'Run through level N (0-6) (default: 0)';
     printf "  %-16s\t%s\n", '--etcd', 'Create clusters with etcd';
     printf "  %-16s\t%s\n", '--list [MODE]', 'List "tests" or "cmds" (default: tests)';
     printf "  %-16s\t%s\n", '--keep', 'Leave resources for inspection';
@@ -62,7 +62,7 @@ sub parse_options {
 	die "--list must be tests or cmds\n"
 		if defined $list_mode && $list_mode ne 'tests' && $list_mode ne 'cmds';
 	$list_only = defined $list_mode;
-	die "--upto must be between 0 and 3\n" unless $upto >= 0 && $upto <= 3;
+    die "--upto must be between 0 and 6\n" unless $upto >= 0 && $upto <= 6;
 	die "--pause and --keep cannot be used together\n" if $pause && $keep;
 	die "--cleanup cannot be combined with test options\n"
 		if $cleanup_only && ($upto != 0 || $etcd || $list_only || $keep || $pause || $fail_fast);
@@ -77,6 +77,7 @@ my $network = 'backbone';
 my $api_port = 16443;
 my $config_home = $ENV{XDG_CONFIG_HOME} || "$ENV{HOME}/.config";
 my $config_dir = "$config_home/dfmicro";
+my $test_conf = $ENV{DFMICRO_TEST_CONF} || 'tests.conf';
 my $work_dir = '/tmp/dfmicro-test';
 my ($tests, $failed) = (0, 0);
 my $started = 0;
@@ -85,6 +86,7 @@ my $started_at = time;
 my %level_elapsed;
 my ($current_level, $current_level_started);
 my ($micro_kubeconfig, $first_kubeconfig);
+my ($pull_secret, $catalog_image, $channel, $ocp_version, @idms);
 
 sub check {
     my ($passed, $name) = @_;
@@ -154,6 +156,52 @@ sub shell_quote {
     my ($value) = @_;
     $value =~ s/'/'\\''/g;
     return "'$value'";
+}
+
+sub load_test_config {
+	return if $upto <= 3 || $list_only;
+	die "missing $test_conf, copy tests.conf.example and edit it\n" unless -f $test_conf;
+
+	my ($ok, $output) = capture('git', 'config', '--file', $test_conf, '--get', 'mounts.pull-secret');
+	die "tests.conf is missing mounts.pull-secret\n" unless $ok && ($pull_secret = $output) =~ s/\s+$//;
+	die "pull secret does not exist: $pull_secret\n" unless -f $pull_secret;
+
+	($ok, $output) = capture('git', 'config', '--file', $test_conf, '--get-all', 'mounts.idms');
+	die "tests.conf is missing mounts.idms\n" unless $ok;
+	@idms = grep { $_ ne '' } map { s/\s+$//r } split /\n/, $output;
+	die "tests.conf is missing mounts.idms\n" unless @idms;
+	for my $idms (@idms) {
+		die "IDMS file does not exist: $idms\n" unless -f $idms;
+	}
+
+	for my $key (qw(catalog-image channel ocp-version)) {
+		($ok, $output) = capture('git', 'config', '--file', $test_conf, '--get', "odf.$key");
+		$output =~ s/\s+$// if $ok;
+		die "tests.conf is missing odf.$key\n" unless $ok && $output ne '';
+		if ($key eq 'catalog-image') {
+			$catalog_image = $output;
+		} elsif ($key eq 'channel') {
+			$channel = $output;
+		} else {
+			$ocp_version = $output;
+		}
+	}
+}
+
+sub cluster_input_args {
+	return '' unless $upto > 3;
+	my $secret = $list_only ? '<tests.conf:mounts.pull-secret>' : $pull_secret;
+	my @configured_idms = @idms ? @idms : ('<tests.conf:mounts.idms>');
+	return join(' ', '--pull-secret', shell_quote($secret), map { ('--idms', shell_quote($_)) } @configured_idms);
+}
+
+sub odf_install_args {
+	my ($sub_name) = @_;
+	my $catalog = $list_only ? '<tests.conf:odf.catalog-image>' : $catalog_image;
+	my $odf_channel = $list_only ? '<tests.conf:odf.channel>' : $channel;
+	my $ocp = $list_only ? '<tests.conf:odf.ocp-version>' : $ocp_version;
+	return join(' ', '--catalog-image', shell_quote($catalog), '--channel', shell_quote($odf_channel),
+		'--version', shell_quote($ocp), '--sub-name', shell_quote($sub_name));
 }
 
 sub shell_command {
@@ -339,12 +387,16 @@ sub node_has_whereabouts_label {
 }
 
 sub storage_manifest {
-	my ($name, $node) = @_;
+	my ($name, $node, $storage_class) = @_;
+	my $storage_class_yaml = defined $storage_class
+		? "      storageClassName: $storage_class\n"
+		: '';
 	return <<"YAML";
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: $name
+  namespace: default
 spec:
   serviceName: $name
   replicas: 1
@@ -370,21 +422,23 @@ spec:
       name: data
     spec:
       accessModes: ["ReadWriteOnce"]
-      resources:
+${storage_class_yaml}      resources:
         requests:
           storage: 1Gi
 YAML
 }
 
 sub test_storage {
-	my ($kubeconfig, $name, $node) = @_;
-	kubectl_with_input("create $name StatefulSet", $kubeconfig, storage_manifest($name, $node));
-	kubectl_ok("wait for $name StatefulSet", $kubeconfig, "rollout status statefulset/$name --timeout=60s");
-	kubectl_ok("write to $name volume", $kubeconfig, "exec $name-0 -- sh -c 'printf dfmicro > /data/check'");
-	kubectl_ok("read from $name volume", $kubeconfig, "exec $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
+	my ($kubeconfig, $name, $node, $storage_class, $timeout) = @_;
+	$timeout //= 60;
+	kubectl_with_input("create $name StatefulSet", $kubeconfig, storage_manifest($name, $node, $storage_class));
+	# TODO: reduce the external-storage timeout after finding why CSI provisioning is slow on a fresh cluster.
+	kubectl_ok("wait for $name StatefulSet", $kubeconfig, "rollout status statefulset/$name -n default --timeout=${timeout}s");
+	kubectl_ok("write to $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'printf dfmicro > /data/check'");
+	kubectl_ok("read from $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
 	unless ($keep) {
-		kubectl_ok("delete $name StatefulSet", $kubeconfig, "delete statefulset $name --wait=true --timeout=60s");
-		kubectl_ok("delete $name PVC", $kubeconfig, "delete pvc data-$name-0 --wait=true --timeout=60s");
+		kubectl_ok("delete $name StatefulSet", $kubeconfig, "delete statefulset $name -n default --wait=true --timeout=60s");
+		kubectl_ok("delete $name PVC", $kubeconfig, "delete pvc data-$name-0 -n default --wait=true --timeout=60s");
 	}
 }
 
@@ -456,17 +510,12 @@ sub cleanup_level_2 {
     $started = 0;
 }
 
-sub cleanup_level_3 {
+sub cleanup_network_state {
 	return if $list_only;
 	remove_netshoots();
 	run_command("network unpeer --cluster $first,$micro");
-    run_command("network detach --cluster $first:default/gp1,$micro:default/gp1 --from $network");
-    remove_network();
-    remove_cluster($first);
-    remove_cluster($micro);
-    check(!-d "$config_dir/,networks", 'network state directory is removed');
-    check(config_is_empty(), 'level 3 cleanup removes all test state');
-    $started = 0;
+	run_command("network detach --cluster $first:default/gp1,$micro:default/gp1 --from $network");
+	remove_network();
 }
 
 sub cleanup_on_exit {
@@ -476,6 +525,65 @@ sub cleanup_on_exit {
 	remove_cluster($micro);
 	remove_network();
 	$started = 0;
+}
+
+sub cleanup_odf {
+	my ($cluster) = @_;
+	run_ok("uninstall ODF from $cluster", "addon odf --cluster $cluster uninstall --attempt");
+}
+
+sub wait_storage_cluster {
+	my ($name, $kubeconfig) = @_;
+	kubectl_ok("$name StorageCluster is ready", $kubeconfig,
+		'wait --for=jsonpath={.status.phase}=Ready --timeout=600s storagecluster/ocs-storagecluster -n openshift-storage');
+	kubectl_ok("$name RBD CSI controller is ready", $kubeconfig,
+		'rollout status deployment/openshift-storage.rbd.csi.ceph.com-ctrlplugin --timeout=120s -n openshift-storage');
+	kubectl_ok("$name RBD CSI node plugin is ready", $kubeconfig,
+		'rollout status daemonset/openshift-storage.rbd.csi.ceph.com-nodeplugin --timeout=120s -n openshift-storage');
+}
+
+sub run_level_4 {
+	level_section('level 4: single-node ODF');
+	section('prepare single-node ODF');
+	run_ok('remove first worker for single-node ODF', "node rm --cluster $first --name $first-1");
+	run_ok('load ODF kernel modules', 'addon odf modules load');
+	run_ok('install ODF on first', "addon odf --cluster $first install " . odf_install_args('odf-operator'));
+	run_ok('configure single-node ODF on first', "addon odf --cluster $first configure");
+	wait_storage_cluster('single-node ODF', $first_kubeconfig);
+	section('single-node ODF persistent volume');
+	test_storage($first_kubeconfig, 'dfmicro-odf-single', "$first-0");
+}
+
+sub run_level_5 {
+	level_section('level 5: Rook provider and external consumer');
+	section('prepare multi-node Rook provider');
+	run_ok('add first provider worker', "node add --cluster $first");
+	run_ok('add second provider worker', "node add --cluster $first");
+	run_ok('install Rook Ceph operator on first', "addon odf --cluster $first install " . odf_install_args('rook-ceph-operator'));
+	run_ok('configure Rook provider on first', "addon odf --cluster $first configure --external-ceph");
+	kubectl_ok('Rook CephCluster is ready', $first_kubeconfig,
+		'wait --for=condition=Ready --timeout=600s cephcluster/first-cephcluster -n openshift-storage');
+	kubectl_ok('Rook toolbox is ready', $first_kubeconfig,
+		'wait --for=condition=Available --timeout=600s deployment/rook-ceph-tools -n openshift-storage');
+
+	section('external ODF consumer');
+	run_ok('install ODF on external consumer', "addon odf --cluster $micro install " . odf_install_args('odf-operator'));
+	run_ok('configure external ODF consumer', "addon odf --cluster $micro configure --connect-to $first");
+	wait_storage_cluster('external consumer ODF', $micro_kubeconfig);
+	test_storage($micro_kubeconfig, 'dfmicro-odf-external', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
+}
+
+sub run_level_6 {
+	level_section('level 6: ODF provider and client-only consumer');
+	section('multi-node ODF provider');
+	run_ok('install ODF provider on first', "addon odf --cluster $first install " . odf_install_args('odf-operator'));
+	run_ok('configure multi-node ODF provider', "addon odf --cluster $first configure --hostnetwork --multi-node");
+	wait_storage_cluster('multi-node ODF provider', $first_kubeconfig);
+
+	section('client-only ODF consumer');
+	run_ok('install ODF client operator on micro', "addon odf --cluster $micro install " . odf_install_args('ocs-client-operator'));
+	run_ok('configure ODF client on micro', "addon odf --cluster $micro configure --client --connect-to $first");
+	test_storage($micro_kubeconfig, 'dfmicro-odf-client', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
 }
 
 sub install_signal_handlers {
@@ -515,7 +623,7 @@ sub run_level_1 {
 
 level_section('level 1: default cluster');
 section('cluster start');
-run_ok('create default cluster', "cluster create --no-topolvm --api-server-port $api_port $backend_option");
+run_ok('create default cluster', "cluster create --no-topolvm --api-server-port $api_port $backend_option " . cluster_input_args());
 run_fail('duplicate cluster creation is rejected', "cluster create --name $micro --no-topolvm --api-server-port $api_port");
 run_ok('cluster config', "cluster config --name $micro");
 $micro_kubeconfig = kubeconfig($micro);
@@ -533,7 +641,7 @@ run_ok('storage command', 'ops storage');
 sub run_level_2 {
 level_section('level 2: TopoLVM and worker');
 section('worker onboarding');
-run_ok('create TopoLVM cluster', "cluster create --name $first --api-server-port " . ($api_port + 1) . " --cluster-cidr 10.52.0.0/16 --service-cidr 10.53.0.0/16 --lvm-volsize 2G $backend_option");
+run_ok('create TopoLVM cluster', "cluster create --name $first --api-server-port " . ($api_port + 1) . " --cluster-cidr 10.52.0.0/16 --service-cidr 10.53.0.0/16 --lvm-volsize 2G $backend_option " . cluster_input_args());
 run_ok('add worker', "node add --cluster $first");
 run_ok('worker node config', "node config --cluster $first");
 $first_kubeconfig = kubeconfig($first);
@@ -667,6 +775,7 @@ sub main {
 		unlink "$work_dir/cmds.log", "$work_dir/tests.log";
 		print_log_paths();
 	}
+	load_test_config();
 	exit 1 unless clean_slate();
 	$started = 1;
 
@@ -690,8 +799,50 @@ sub main {
 	}
 
 	run_level_3();
+	cleanup_network_state();
+	if ($upto == 3) {
+		pause_before_cleanup();
+		remove_cluster($first) unless $keep;
+		remove_cluster($micro) unless $keep;
+		check(!-d "$config_dir/,networks", 'network state directory is removed') unless $keep;
+		check(config_is_empty(), 'level 3 cleanup removes all test state') unless $keep;
+		$started = 0 if $keep;
+		finish();
+	}
+
+	run_level_4();
+	if ($upto == 4) {
+		pause_before_cleanup();
+		cleanup_odf($first) unless $keep;
+		remove_cluster($first) unless $keep;
+		remove_cluster($micro) unless $keep;
+		check(config_is_empty(), 'level 4 cleanup removes all test state') unless $keep;
+		$started = 0 if $keep;
+		finish();
+	}
+	cleanup_odf($first);
+
+	run_level_5();
+	if ($upto == 5) {
+		pause_before_cleanup();
+		cleanup_odf($micro) unless $keep;
+		cleanup_odf($first) unless $keep;
+		remove_cluster($first) unless $keep;
+		remove_cluster($micro) unless $keep;
+		check(config_is_empty(), 'level 5 cleanup removes all test state') unless $keep;
+		$started = 0 if $keep;
+		finish();
+	}
+	cleanup_odf($micro);
+	cleanup_odf($first);
+
+	run_level_6();
 	pause_before_cleanup();
-	cleanup_level_3() unless $keep;
+	cleanup_odf($micro) unless $keep;
+	cleanup_odf($first) unless $keep;
+	remove_cluster($first) unless $keep;
+	remove_cluster($micro) unless $keep;
+	check(config_is_empty(), 'level 6 cleanup removes all test state') unless $keep;
 	$started = 0 if $keep;
 	finish();
 }

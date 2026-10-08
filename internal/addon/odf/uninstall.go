@@ -16,7 +16,6 @@ var uninstallCmds = []string{
 	"delete cephfilesystem --all -n openshift-storage --ignore-not-found",
 	"delete cephblockpool --all -n openshift-storage --ignore-not-found",
 	"delete cephcluster --all -n openshift-storage --ignore-not-found",
-	"delete scc rook-ceph --ignore-not-found",
 	"delete configmap ocs-client-operator-config -n openshift-storage --ignore-not-found",
 	"delete clusterserviceversions --all -n openshift-storage --ignore-not-found",
 	"delete subscription --all -n openshift-storage --ignore-not-found",
@@ -27,6 +26,7 @@ var uninstallCmds = []string{
 var uninstallFinalCmds = []string{
 	"delete mutatingwebhookconfiguration csv.odf.openshift.io --ignore-not-found",
 	"delete namespace openshift-storage --ignore-not-found",
+	"delete scc rook-ceph --ignore-not-found",
 }
 
 func (o *odf) uninstall(ctx context.Context, attempt bool) error {
@@ -56,6 +56,7 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 
 	o.removeFinalizers(ctx, "clientprofiles.ocs.openshift.io")
 	o.removeFinalizers(ctx, "csiaddonsnodes.csiaddons.openshift.io")
+	o.removeFinalizers(ctx, "clientprofiles.csi.ceph.io")
 
 	for _, c := range uninstallFinalCmds {
 		args := append(strings.Fields(c), "--kubeconfig", o.kubeconfig)

@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"text/template"
+	"time"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
@@ -216,20 +218,59 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 		return err
 	}
 	if t.config.thinpool {
-		if _, err := RunUnprivileged(ctx, t.runner, "udevadm", "settle"); err != nil {
-			if cleanupErr := t.deleteBackend(ctx, disk, vg); cleanupErr != nil {
-				return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
-			}
-			return fmt.Errorf("wait for LVM devices: %w", err)
-		}
-		if _, err := RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg); err != nil {
+		if err := t.waitForVolumeGroup(ctx, vg); err != nil {
 			if cleanupErr := t.deleteBackend(ctx, disk, vg); cleanupErr != nil {
 				return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
 			}
 			return err
 		}
+		var err error
+		for range 60 {
+			_, err = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
+			if err == nil {
+				_, err = RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
+			}
+			if err == nil {
+				return nil
+			}
+			if !isTransientThinpoolError(err) {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		if cleanupErr := t.deleteBackend(ctx, disk, vg); cleanupErr != nil {
+			return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
+		}
+		return err
 	}
 	return nil
+}
+
+func (t *TopoLVMMgr) waitForVolumeGroup(ctx context.Context, vg string) error {
+	for range 60 {
+		result, err := RunPrivileged(ctx, t.runner, "vgs", "--noheadings", "-o", "vg_name", vg)
+		if err == nil && strings.TrimSpace(result.Stdout) == vg {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("timed out waiting for volume group %s", vg)
+}
+
+func isTransientThinpoolError(err error) bool {
+	message := err.Error()
+	for _, text := range []string{
+		"device not cleared",
+		"Failed to activate new LV",
+		"thin_tmeta",
+		"thin_tdata",
+		"metadata spare LV",
+	} {
+		if strings.Contains(message, text) {
+			return true
+		}
+	}
+	return false
 }
 
 func (t *TopoLVMMgr) deleteBackend(ctx context.Context, disk, vg string) error {
@@ -237,10 +278,15 @@ func (t *TopoLVMMgr) deleteBackend(ctx context.Context, disk, vg string) error {
 		if cleanupErr := t.removeDeviceMappings(ctx, vg); cleanupErr != nil {
 			return fmt.Errorf("remove logical volumes for %s: %w (device cleanup failed: %v)", vg, err, cleanupErr)
 		}
+		_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
 		if _, retryErr := RunPrivileged(ctx, t.runner, "lvremove", "--force", "-y", vg); retryErr != nil && !isMissingLVMResource(retryErr) {
 			return fmt.Errorf("remove logical volumes for %s: %w", vg, retryErr)
 		}
 	}
+	if err := t.removeDeviceMappings(ctx, vg); err != nil {
+		return fmt.Errorf("remove device mappings for %s: %w", vg, err)
+	}
+	_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
 	if _, err := RunPrivileged(ctx, t.runner, "vgremove", "--force", "-y", vg); err != nil && !isMissingLVMResource(err) {
 		return fmt.Errorf("remove volume group %s: %w", vg, err)
 	}
@@ -285,16 +331,38 @@ func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error 
 		return nil
 	}
 
-	var errs []error
+	sort.SliceStable(devices, func(i, j int) bool {
+		return mappingDepth(devices[i]) < mappingDepth(devices[j])
+	})
 	for _, device := range devices {
-		if _, err := RunPrivileged(ctx, t.runner, "dmsetup", "remove", "--force", device); err != nil && !isMissingLVMResource(err) {
-			errs = append(errs, fmt.Errorf("remove device mapping %s: %w", device, err))
+		var err error
+		for range 10 {
+			_, err = RunPrivileged(ctx, t.runner, "dmsetup", "remove", "--force", device)
+			if err == nil || isMissingLVMResource(err) {
+				break
+			}
+			_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
+			time.Sleep(200 * time.Millisecond)
+		}
+		if err != nil && !isMissingLVMResource(err) {
+			return fmt.Errorf("remove device mapping %s: %w", device, err)
 		}
 	}
-	return errors.Join(errs...)
+	return nil
+}
+
+func mappingDepth(name string) int {
+	switch {
+	case strings.HasSuffix(name, "-tpool"):
+		return 1
+	case strings.HasSuffix(name, "_tdata"), strings.HasSuffix(name, "_tmeta"):
+		return 2
+	default:
+		return 0
+	}
 }
 
 func isMissingLVMResource(err error) bool {
 	text := strings.ToLower(err.Error())
-	return strings.Contains(text, "not found") || strings.Contains(text, "does not exist")
+	return strings.Contains(text, "not found") || strings.Contains(text, "does not exist") || strings.Contains(text, "no such device")
 }

@@ -45,6 +45,10 @@ type externalResource struct {
 }
 
 func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) error {
+	if _, err := o.csvName(ctx, "rook-ceph-operator",
+		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/rook-ceph-operator\.openshift-storage)].metadata.name}`); err != nil {
+		return err
+	}
 	o.logger.Info("reading Rook Ceph image")
 	image, err := o.rookCephImage(ctx)
 	if err != nil {
@@ -89,7 +93,9 @@ func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) err
 		if err != nil {
 			return err
 		}
-		return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, resource)
+		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, resource); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -292,13 +298,14 @@ func (o *odf) rookCephImage(ctx context.Context) (string, error) {
 }
 
 func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig, sourceName string, includeCephFS bool) (string, error) {
-	result, err := o.runner.Run(ctx, o.kubectl, "get", "configmap", "rook-ceph-external-cluster-script-config", "-n", providerNamespace, "-o", "jsonpath={.data.script}", "--kubeconfig", kubeconfig)
-	if err != nil {
-		return "", err
+	names := newProviderNames(sourceName)
+	o.logger.Info("waiting for Rook CephCluster", "name", names.cephCluster)
+	if _, err := o.runner.Run(ctx, o.kubectl, "wait", "--for=condition=Ready", "--timeout=10m",
+		"cephcluster/"+names.cephCluster, "-n", providerNamespace, "--kubeconfig", kubeconfig); err != nil {
+		return "", fmt.Errorf("wait for Rook CephCluster: %w", err)
 	}
-	script, err := base64.StdEncoding.DecodeString(strings.TrimSpace(result.Stdout))
-	if err != nil {
-		return "", fmt.Errorf("decode exporter script: %w", err)
+	if _, err := o.runner.Run(ctx, o.kubectl, "get", "configmap", "rook-ceph-external-cluster-script-config", "-n", providerNamespace, "--kubeconfig", kubeconfig); err != nil {
+		return "", fmt.Errorf("find Rook external exporter: %w", err)
 	}
 
 	pod, err := o.runner.Run(ctx, o.kubectl, "get", "pods", "-n", providerNamespace, "-l", "app=rook-ceph-tools", "-o", "jsonpath={.items[0].metadata.name}", "--kubeconfig", kubeconfig)
@@ -310,12 +317,13 @@ func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig, sourceName 
 		return "", fmt.Errorf("Rook toolbox pod not found")
 	}
 
-	names := newProviderNames(sourceName)
-	args := []string{"exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "python3", "-c", string(script), "--namespace", providerNamespace, "--rbd-data-pool-name", names.blockPool, "--format", "json"}
+	scriptArgs := []string{"--namespace", providerNamespace, "--rbd-data-pool-name", names.blockPool, "--format", "json"}
 	if includeCephFS {
-		args = append(args, "--cephfs-filesystem-name", names.filesystem, "--cephfs-metadata-pool-name", names.filesystemMeta, "--cephfs-data-pool-name", names.filesystemData)
+		scriptArgs = append(scriptArgs, "--cephfs-filesystem-name", names.filesystem, "--cephfs-metadata-pool-name", names.filesystemMeta, "--cephfs-data-pool-name", names.filesystemData)
 	}
-	result, err = o.runner.Run(ctx, o.kubectl, args...)
+	args := []string{"exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "sh", "-c",
+		"base64 -d /var/run/rook/external-cluster-script/script.py | python3 - " + strings.Join(scriptArgs, " ")}
+	result, err := o.runner.Run(ctx, o.kubectl, args...)
 	if err != nil {
 		return "", fmt.Errorf("run Rook external exporter: %w", err)
 	}
