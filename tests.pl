@@ -2,6 +2,7 @@
 
 # Run with a built binary on a clean Linux host with rootful Podman.
 # Examples: DFMICRO_BIN=$HOME/.local/bin/dfmicro perl tests.pl --upto 3
+#           DFMICRO_BIN=$HOME/.local/bin/dfmicro perl tests.pl --level 6
 #           DFMICRO_BIN=$HOME/.local/bin/dfmicro perl tests.pl --upto 2 --etcd
 
 use strict;
@@ -9,7 +10,8 @@ use warnings;
 use Getopt::Long qw(GetOptions);
 use Text::ParseWords qw(shellwords);
 
-my $upto = 0;
+my $upto;
+my $level;
 my $etcd = 0;
 my $list_mode;
 my $keep = 0;
@@ -23,6 +25,7 @@ my ($list_only, $timeout_seconds, $backend_option);
 sub usage {
     print "Usage:\tperl tests.pl [options]\n\n";
     printf "  %-16s\t%s\n", '--upto N', 'Run through level N (0-6) (default: 0)';
+    printf "  %-16s\t%s\n", '--level N', 'Run only level N (0-6) from a clean slate';
     printf "  %-16s\t%s\n", '--etcd', 'Create clusters with etcd';
     printf "  %-16s\t%s\n", '--list [MODE]', 'List "tests" or "cmds" (default: tests)';
     printf "  %-16s\t%s\n", '--keep', 'Leave resources for inspection';
@@ -45,6 +48,7 @@ sub duration_seconds {
 sub parse_options {
 	GetOptions(
 		'upto=i' => \$upto,
+		'level=i' => \$level,
 		'etcd' => \$etcd,
 		'list:s' => \$list_mode,
 		'keep' => \$keep,
@@ -62,10 +66,13 @@ sub parse_options {
 	die "--list must be tests or cmds\n"
 		if defined $list_mode && $list_mode ne 'tests' && $list_mode ne 'cmds';
 	$list_only = defined $list_mode;
+	die "--level must be between 0 and 6\n" if defined $level && ($level < 0 || $level > 6);
+	die "--level and --upto cannot be combined\n" if defined $level && defined $upto;
+	$upto //= 0;
     die "--upto must be between 0 and 6\n" unless $upto >= 0 && $upto <= 6;
 	die "--pause and --keep cannot be used together\n" if $pause && $keep;
 	die "--cleanup cannot be combined with test options\n"
-		if $cleanup_only && ($upto != 0 || $etcd || $list_only || $keep || $pause || $fail_fast);
+		if $cleanup_only && ($upto != 0 || defined $level || $etcd || $list_only || $keep || $pause || $fail_fast);
 	$timeout_seconds = duration_seconds($timeout);
 	$backend_option = $etcd ? '--etcd' : '';
 }
@@ -159,7 +166,7 @@ sub shell_quote {
 }
 
 sub load_test_config {
-	return if $upto <= 3 || $list_only;
+	return if selected_level() <= 3 || $list_only;
 	die "missing $test_conf, copy tests.conf.example and edit it\n" unless -f $test_conf;
 
 	my ($ok, $output) = capture('git', 'config', '--file', $test_conf, '--get', 'mounts.pull-secret');
@@ -189,10 +196,14 @@ sub load_test_config {
 }
 
 sub cluster_input_args {
-	return '' unless $upto > 3;
+	return '' unless selected_level() > 3;
 	my $secret = $list_only ? '<tests.conf:mounts.pull-secret>' : $pull_secret;
 	my @configured_idms = @idms ? @idms : ('<tests.conf:mounts.idms>');
 	return join(' ', '--pull-secret', shell_quote($secret), map { ('--idms', shell_quote($_)) } @configured_idms);
+}
+
+sub selected_level {
+	return defined $level ? $level : $upto;
 }
 
 sub odf_install_args {
@@ -223,15 +234,38 @@ sub command_args {
     return shellwords($_[0]);
 }
 
-sub run_program {
-    my ($program, $command, $max_lines) = @_;
-    my @args = command_args($command);
+sub run_process {
+    my ($program, $args, %options) = @_;
     if ($list_only) {
-        list_command($program, @args) if $list_mode eq 'cmds';
-        return 1;
+        list_command($program, @$args) if $list_mode eq 'cmds';
+        return (1, '');
     }
     local $ENV{DFMICRO_CMD_LOG} = $ENV{DFMICRO_CMD_LOG} || "$work_dir/cmds.log";
-    log_command($program, @args);
+    log_command($program, @$args);
+    my $command = shell_command($program, @$args);
+
+    if (exists $options{input}) {
+        open my $child, '|-', 'sh', '-c', $command . " >> " . shell_quote("$work_dir/tests.log") . " 2>&1"
+            or die "start $program: $!";
+        print {$child} $options{input};
+        close $child;
+        my $status = $?;
+        abort_if_interrupted();
+        return ($status == 0, '');
+    }
+
+    if ($options{capture}) {
+        open my $pipe, '-|', 'sh', '-c', $command . " 2>> " . shell_quote("$work_dir/tests.log")
+            or die "start $program: $!";
+        local $/;
+        my $output = <$pipe> // '';
+        close $pipe;
+        my $status = $?;
+        abort_if_interrupted();
+        return ($status == 0, $output);
+    }
+
+    my $max_lines = $options{max_lines};
     if (defined $max_lines) {
         open my $log, '>>', "$work_dir/tests.log" or die "open test log: $!";
         print {$log} "# output truncated to ${max_lines} lines\n";
@@ -240,9 +274,16 @@ sub run_program {
     my $output = defined $max_lines
         ? " 2>&1 | sed -n '1,${max_lines}p' >> " . shell_quote("$work_dir/tests.log")
         : " >> " . shell_quote("$work_dir/tests.log") . " 2>&1";
-    my $status = system('sh', '-c', shell_command($program, @args) . $output);
+    my $status = system('sh', '-c', $command . $output);
     abort_if_interrupted();
-    return $status == 0;
+    return ($status == 0, '');
+}
+
+sub run_program {
+    my ($program, $command, $max_lines) = @_;
+    my @args = command_args($command);
+    my ($passed) = run_process($program, \@args, max_lines => $max_lines);
+    return $passed;
 }
 
 sub run_command {
@@ -267,36 +308,13 @@ sub run_fail {
 sub run_with_input {
 	my ($name, $input, $command) = @_;
 	my @args = command_args($command);
-	if ($list_only) {
-		list_command($dfmicro, @args) if $list_mode eq 'cmds';
-		check(1, $name);
-		return;
-	}
-    local $ENV{DFMICRO_CMD_LOG} = $ENV{DFMICRO_CMD_LOG} || "$work_dir/cmds.log";
-    log_command($dfmicro, @args);
-    open my $child, '|-', 'sh', '-c', shell_command($dfmicro, @args) . " >> " . shell_quote("$work_dir/tests.log") . " 2>&1"
-        or die "start $dfmicro: $!";
-    print {$child} $input;
-    close $child;
-    abort_if_interrupted();
-    check($? == 0, $name);
+    my ($passed) = run_process($dfmicro, \@args, input => $input);
+    check($passed, $name);
 }
 
 sub capture {
 	my ($program, @args) = @_;
-	if ($list_only) {
-		list_command($program, @args) if $list_mode eq 'cmds';
-		return (1, '');
-    }
-    log_command($program, @args);
-    open my $pipe, '-|', 'sh', '-c', shell_command($program, @args) . " 2>> " . shell_quote("$work_dir/tests.log")
-        or die "start $program: $!";
-    local $/;
-    my $output = <$pipe> // '';
-    close $pipe;
-    my $status = $?;
-    abort_if_interrupted();
-    return ($status == 0, $output);
+    return run_process($program, \@args, capture => 1);
 }
 
 sub capture_ok {
@@ -318,19 +336,9 @@ sub kubectl_ok {
 
 sub kubectl_with_input {
 	my ($name, $kubeconfig, $input) = @_;
-	if ($list_only) {
-		list_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-') if $list_mode eq 'cmds';
-		check(1, $name);
-		return;
-	}
-    local $ENV{DFMICRO_CMD_LOG} = $ENV{DFMICRO_CMD_LOG} || "$work_dir/cmds.log";
-    log_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-');
-    open my $child, '|-', 'sh', '-c', shell_command('kubectl', '--kubeconfig', $kubeconfig, 'apply', '-f', '-')
-        . " >> " . shell_quote("$work_dir/tests.log") . " 2>&1"
-        or die "start kubectl: $!";
-    print {$child} $input;
-    close $child;
-    check($? == 0, $name);
+    my @args = ('--kubeconfig', $kubeconfig, 'apply', '-f', '-');
+    my ($passed) = run_process('kubectl', \@args, input => $input);
+    check($passed, $name);
 }
 
 sub run_netshoot {
@@ -496,7 +504,8 @@ sub remove_storage_workloads {
 		$first => [qw(dfmicro-storage-control dfmicro-storage-worker dfmicro-odf-single dfmicro-odf-provider dfmicro-test)],
 		$micro => [qw(dfmicro-odf-external dfmicro-odf-client)],
 	);
-	for my $cluster ($first, $micro) {
+	my @clusters = @_ ? @_ : ($first, $micro);
+	for my $cluster (@clusters) {
 		my $kubeconfig = $cluster eq $first ? $first_kubeconfig : $micro_kubeconfig;
 		next unless defined $kubeconfig;
 		for my $name (@{$workloads{$cluster}}) {
@@ -506,25 +515,10 @@ sub remove_storage_workloads {
 	}
 }
 
-sub cleanup_level_1 {
-    return if $list_only;
-    remove_cluster($micro);
-    check(config_is_empty(), 'level 1 cleanup removes cluster state');
-    $started = 0;
-}
-
 sub pause_before_cleanup {
 	return unless $pause && !$list_only;
 	print "Press Enter to clean up...\n";
 	<STDIN>;
-}
-
-sub cleanup_level_2 {
-    return if $list_only;
-    remove_cluster($first);
-    remove_cluster($micro);
-    check(config_is_empty(), 'level 2 cleanup removes cluster state');
-    $started = 0;
 }
 
 sub cleanup_network_state {
@@ -539,17 +533,33 @@ sub cleanup_on_exit {
 	my ($force) = @_;
 	return if $list_only || ($keep && !$force);
 	remove_storage_workloads();
-	run_command("addon odf --cluster $micro uninstall --attempt");
-	run_command("addon odf --cluster $first uninstall --attempt");
+	run_command("addon odf --cluster $micro uninstall --attempt") if cluster_config_exists($micro);
+	run_command("addon odf --cluster $first uninstall --attempt") if cluster_config_exists($first);
 	remove_cluster($first);
 	remove_cluster($micro);
 	remove_network();
 	$started = 0;
 }
 
+sub cluster_config_exists {
+	return -f "$config_dir/$_[0]/config.json";
+}
+
+sub cleanup_kubeconfig {
+	my ($name) = @_;
+	return unless cluster_config_exists($name);
+	my ($passed, $contents) = capture($dfmicro, 'cluster', 'kubeconfig', '--name', $name);
+	return unless $passed && $contents ne '';
+	my $path = "$work_dir/$name-kubeconfig";
+	open my $file, '>', $path or die "write $path: $!";
+	print {$file} $contents;
+	close $file or die "close $path: $!";
+	return $path;
+}
+
 sub cleanup_odf {
 	my ($cluster) = @_;
-	remove_storage_workloads();
+	remove_storage_workloads($cluster);
 	run_ok("uninstall ODF from $cluster", "addon odf --cluster $cluster uninstall --attempt");
 }
 
@@ -616,6 +626,49 @@ sub run_level_6 {
 	test_storage($micro_kubeconfig, 'dfmicro-odf-client', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
 }
 
+sub finish_level {
+	my ($target, $clusters, $odf_clusters) = @_;
+	$clusters //= [];
+	$odf_clusters //= [];
+	pause_before_cleanup();
+	unless ($keep) {
+		cleanup_network_state() if $target == 3;
+		for my $cluster (@$odf_clusters) {
+			cleanup_odf($cluster);
+		}
+		for my $cluster (@$clusters) {
+			remove_cluster($cluster);
+		}
+		if ($target == 3) {
+			check(!-d "$config_dir/,networks", 'network state directory is removed');
+		}
+		check(config_is_empty(), "level $target cleanup removes all test state") if $target > 0;
+	}
+	$started = 0;
+	finish();
+}
+
+sub run_selected_level {
+	prepare_level($level);
+	my @run_level = (\&run_level_0, \&run_level_1, \&run_level_2, \&run_level_3, \&run_level_4, \&run_level_5, \&run_level_6);
+	$run_level[$level]->();
+	my %clusters = (
+		0 => [],
+		1 => [$micro],
+		2 => [$first],
+		3 => [$first, $micro],
+		4 => [$first],
+		5 => [$first, $micro],
+		6 => [$first, $micro],
+	);
+	my %odf_clusters = (
+		4 => [$first],
+		5 => [$first, $micro],
+		6 => [$first, $micro],
+	);
+	finish_level($level, $clusters{$level}, $odf_clusters{$level});
+}
+
 sub install_signal_handlers {
 	$SIG{INT} = sub { $interrupted = 130 };
 	$SIG{TERM} = sub { $interrupted = 143 };
@@ -649,11 +702,45 @@ sub run_level_0 {
 	run_fail('node add requires an existing cluster', 'node add --cluster missing');
 }
 
+sub micro_cluster_command {
+	return "cluster create --no-topolvm --api-server-port $api_port $backend_option " . cluster_input_args();
+}
+
+sub first_cluster_command {
+	return "cluster create --name $first --api-server-port " . ($api_port + 1)
+		. " --cluster-cidr 10.52.0.0/16 --service-cidr 10.53.0.0/16 --lvm-volsize 2G $backend_option "
+		. cluster_input_args();
+}
+
+sub prepare_level {
+	my ($target) = @_;
+	return if $target < 3;
+
+	section("prepare level $target clusters");
+	run_ok("create $micro cluster for level $target", micro_cluster_command()) if $target != 4;
+	run_ok("create $first cluster for level $target", first_cluster_command());
+
+	if ($target >= 5) {
+		run_ok("add $micro worker for level $target", "node add --cluster $micro");
+	}
+	if ($target == 3 || $target == 4) {
+		run_ok("add $first worker for level $target", "node add --cluster $first");
+	} elsif ($target == 6) {
+		run_ok("add first worker for level $target", "node add --cluster $first");
+		run_ok("add second worker for level $target", "node add --cluster $first");
+	}
+	if ($target >= 5) {
+		run_ok("load ODF kernel modules for level $target", 'addon odf modules load');
+	}
+	$micro_kubeconfig = kubeconfig($micro) if $target != 4;
+	$first_kubeconfig = kubeconfig($first);
+}
+
 sub run_level_1 {
 
 level_section('level 1: default cluster');
 section('cluster start');
-run_ok('create default cluster', "cluster create --no-topolvm --api-server-port $api_port $backend_option " . cluster_input_args());
+run_ok('create default cluster', micro_cluster_command());
 run_fail('duplicate cluster creation is rejected', "cluster create --name $micro --no-topolvm --api-server-port $api_port");
 run_ok('cluster config', "cluster config --name $micro");
 $micro_kubeconfig = kubeconfig($micro);
@@ -671,7 +758,7 @@ run_ok('storage command', 'ops storage');
 sub run_level_2 {
 level_section('level 2: TopoLVM and worker');
 section('worker onboarding');
-run_ok('create TopoLVM cluster', "cluster create --name $first --api-server-port " . ($api_port + 1) . " --cluster-cidr 10.52.0.0/16 --service-cidr 10.53.0.0/16 --lvm-volsize 2G $backend_option " . cluster_input_args());
+run_ok('create TopoLVM cluster', first_cluster_command());
 run_ok('add worker', "node add --cluster $first");
 run_ok('worker node config', "node config --cluster $first");
 $first_kubeconfig = kubeconfig($first);
@@ -794,6 +881,8 @@ sub main {
 		mkdir $work_dir unless -d $work_dir;
 		unlink "$work_dir/cmds.log", "$work_dir/tests.log";
 		$started = 1;
+		$micro_kubeconfig = cleanup_kubeconfig($micro);
+		$first_kubeconfig = cleanup_kubeconfig($first);
 		cleanup_on_exit();
 		print "cleanup complete\n";
 		return;
@@ -808,73 +897,47 @@ sub main {
 	load_test_config();
 	exit 1 unless clean_slate();
 	$started = 1;
+	if (defined $level) {
+		run_selected_level();
+	}
 
 	run_level_0();
-	finish() if $upto == 0;
+	if ($upto == 0) {
+		$started = 0;
+		finish();
+	}
 
 	run_level_1();
 	if ($upto == 1) {
-		pause_before_cleanup();
-		cleanup_level_1() unless $keep;
-		$started = 0;
-		finish();
+		finish_level(1, [$micro], []);
 	}
 
 	run_level_2();
 	if ($upto == 2) {
-		pause_before_cleanup();
-		cleanup_level_2() unless $keep;
-		$started = 0;
-		finish();
+		finish_level(2, [$first, $micro], []);
 	}
 
 	run_level_3();
-	cleanup_network_state();
 	if ($upto == 3) {
-		pause_before_cleanup();
-		remove_cluster($first) unless $keep;
-		remove_cluster($micro) unless $keep;
-		check(!-d "$config_dir/,networks", 'network state directory is removed') unless $keep;
-		check(config_is_empty(), 'level 3 cleanup removes all test state') unless $keep;
-		$started = 0;
-		finish();
+		finish_level(3, [$first, $micro], []);
 	}
+	cleanup_network_state();
 
 	run_level_4();
 	if ($upto == 4) {
-		pause_before_cleanup();
-		cleanup_odf($first) unless $keep;
-		remove_cluster($first) unless $keep;
-		remove_cluster($micro) unless $keep;
-		check(config_is_empty(), 'level 4 cleanup removes all test state') unless $keep;
-		$started = 0;
-		finish();
+		finish_level(4, [$first, $micro], [$first]);
 	}
 	cleanup_odf($first);
 
 	run_level_5();
 	if ($upto == 5) {
-		pause_before_cleanup();
-		cleanup_odf($micro) unless $keep;
-		cleanup_odf($first) unless $keep;
-		remove_cluster($first) unless $keep;
-		remove_cluster($micro) unless $keep;
-		check(config_is_empty(), 'level 5 cleanup removes all test state') unless $keep;
-		$started = 0;
-		finish();
+		finish_level(5, [$first, $micro], [$micro, $first]);
 	}
 	cleanup_odf($micro);
 	cleanup_odf($first);
 
 	run_level_6();
-	pause_before_cleanup();
-	cleanup_odf($micro) unless $keep;
-	cleanup_odf($first) unless $keep;
-	remove_cluster($first) unless $keep;
-	remove_cluster($micro) unless $keep;
-	check(config_is_empty(), 'level 6 cleanup removes all test state') unless $keep;
-	$started = 0;
-	finish();
+	finish_level(6, [$first, $micro], [$micro, $first]);
 }
 
 main();
