@@ -212,11 +212,13 @@ Examples:
 					if !errors.Is(err, os.ErrNotExist) {
 						return err
 					}
+					// Rebuild the paths and node defaults needed for cleanup after the config file is gone.
 					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, cmd.String("name"))
 					if _, err := os.Stat(cfg.StateDir); errors.Is(err, os.ErrNotExist) {
-						cfg.Name = cmd.String("name")
 						return newManager(cfg, logger, runner).delete(ctx, true)
 					}
+					// A state directory without config can still contain TopoLVM resources from an interrupted delete.
+					// Enable their cleanup before removing the remaining cluster state.
 					cfg.EnableTopoLVM = true
 					return newManager(cfg, logger, runner).delete(ctx, false)
 				},

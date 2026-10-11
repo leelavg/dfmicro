@@ -377,7 +377,7 @@ spec:
                 path: secret.keyring
         - name: external-cluster-script
           configMap:
-            name: rook-ceph-external-cluster-script-config
+            name: {{.ExporterConfigMap}}
             optional: true
             items:
               - key: script

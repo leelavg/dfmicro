@@ -115,6 +115,7 @@ Example:
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
 					clusterCIDR := rootconfig.Load().ClusterCIDR
 					serviceCIDR := rootconfig.Load().ServiceCIDR
+					// TODO: Read the actual CIDRs from the cluster when --kubeconfig is supplied.
 					if cmd.String("kubeconfig") == "" {
 						clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("cluster"))
 						if err != nil {

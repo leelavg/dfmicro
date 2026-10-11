@@ -228,19 +228,15 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 			}
 			return err
 		}
-		var err error
-		for range 60 {
-			_, err = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
-			if err == nil {
-				_, err = RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
+		err := Retry(ctx, 60, time.Second, isTransientThinpoolError, func(ctx context.Context) error {
+			if _, err := RunUnprivileged(ctx, t.runner, "udevadm", "settle"); err != nil {
+				return err
 			}
-			if err == nil {
-				return nil
-			}
-			if !isTransientThinpoolError(err) {
-				break
-			}
-			time.Sleep(time.Second)
+			_, err := RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
+			return err
+		})
+		if err == nil {
+			return nil
 		}
 		if cleanupErr := t.deleteBackend(ctx, disk, vg); cleanupErr != nil {
 			return fmt.Errorf("%w (cleanup failed: %v)", err, cleanupErr)
@@ -251,14 +247,14 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 }
 
 func (t *TopoLVMMgr) waitForVolumeGroup(ctx context.Context, vg string) error {
-	for range 60 {
+	err := Poll(ctx, time.Second, time.Minute, func(ctx context.Context) (bool, error) {
 		result, err := RunPrivileged(ctx, t.runner, "vgs", "--noheadings", "-o", "vg_name", vg)
-		if err == nil && strings.TrimSpace(result.Stdout) == vg {
-			return nil
-		}
-		time.Sleep(time.Second)
+		return err == nil && strings.TrimSpace(result.Stdout) == vg, nil
+	})
+	if err != nil {
+		return fmt.Errorf("wait for volume group %s: %w", vg, err)
 	}
-	return fmt.Errorf("timed out waiting for volume group %s", vg)
+	return nil
 }
 
 func isTransientThinpoolError(err error) bool {
@@ -338,16 +334,16 @@ func (t *TopoLVMMgr) removeDeviceMappings(ctx context.Context, vg string) error 
 		return mappingDepth(devices[i]) < mappingDepth(devices[j])
 	})
 	for _, device := range devices {
-		var err error
-		for range 10 {
-			_, err = RunPrivileged(ctx, t.runner, "dmsetup", "remove", "--force", device)
-			if err == nil || isMissingLVMResource(err) {
-				break
+		err := Retry(ctx, 10, 200*time.Millisecond, func(err error) bool {
+			return !isMissingLVMResource(err)
+		}, func(ctx context.Context) error {
+			_, err := RunPrivileged(ctx, t.runner, "dmsetup", "remove", "--force", device)
+			if err != nil && !isMissingLVMResource(err) {
+				_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
 			}
-			_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
-			time.Sleep(200 * time.Millisecond)
-		}
-		if err != nil && !isMissingLVMResource(err) {
+			return err
+		})
+		if err != nil {
 			return fmt.Errorf("remove device mapping %s: %w", device, err)
 		}
 	}

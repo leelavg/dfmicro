@@ -166,37 +166,29 @@ func (n *NodeMgr) RemoveState(stateDir, name string) error {
 }
 
 func (n *NodeMgr) waitForDBus(ctx context.Context, name string) error {
-	for range 60 {
-		if _, err := RunPodmanPrivileged(ctx, n.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service"); err == nil {
-			return nil
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
+	err := Poll(ctx, time.Second, time.Minute, func(ctx context.Context) (bool, error) {
+		_, err := RunPodmanPrivileged(ctx, n.runner, "exec", "-i", name, "systemctl", "is-active", "-q", "dbus.service")
+		return err == nil, nil
+	})
+	if err != nil {
+		return fmt.Errorf("wait for dbus service: %w", err)
 	}
-	return fmt.Errorf("the container did not activate the dbus service within 60 seconds")
+	return nil
 }
 
 func (n *NodeMgr) WaitReady(ctx context.Context, name string) error {
-	for {
+	return Poll(ctx, 5*time.Second, 10*time.Minute, func(ctx context.Context) (bool, error) {
 		state := n.systemdSubState(ctx, name, "microshift.service")
 		if state == "running" {
 			if err := n.checkCNI(ctx, name); err == nil {
-				return nil
+				return true, nil
 			}
 			n.logger.Info("waiting for CNI/network", "container", name)
 		} else {
 			n.logger.Info("waiting for node readiness", "container", name, "state", state)
 		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(5 * time.Second):
-		}
-	}
+		return false, nil
+	})
 }
 
 func (n *NodeMgr) systemdSubState(ctx context.Context, name, unit string) string {
