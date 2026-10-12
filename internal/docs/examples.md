@@ -14,11 +14,11 @@ The examples below were verified with this build and configuration:
 
 ```console
 $ dfmicro -v
-dfmicro version dev (none, 2026-09-10T13:05:22Z)
+dfmicro version dev (none, 2026-10-11T07:14:30Z)
 $ dfmicro config
 {
   "name": "micro",
-  "image": "ghcr.io/leelavg/microshift:5.0.0_202609101142_gbec374559_5.0.0_okd_scos.ec.8",
+  "image": "ghcr.io/leelavg/microshift:5.0.0_202609201132_g4582bf673_5.0.0_okd_scos.ec.8",
   "powerTuning": true,
   "apiServerPort": 6443,
   "clusterCIDR": "10.42.0.0/16",
@@ -209,6 +209,90 @@ dfmicro network detach --cluster net-a:group1 --cluster net-b:group1 --from back
 dfmicro network disconnect --cluster net-a --cluster net-b --from backbone
 dfmicro network delete --name backbone
 ```
+
+## Configure ODF storage topologies
+
+These examples assume the clusters have already been created. Add workers to a
+provider before configuring it as a multi-node provider.
+
+Load the host kernel modules before installing ODF operators. The image below
+is an example tag. Replace it with an image available to your environment.
+
+```console
+dfmicro addon odf modules load
+```
+
+### Single-node ODF
+
+Install and configure ODF on an existing single-node cluster:
+
+```console
+dfmicro addon odf --cluster standalone install \
+  --catalog-image quay.io/example/odf-operator-catalog:v5.0 \
+  --channel stable-5.0 --version 5.0.0
+dfmicro addon odf --cluster standalone configure
+
+dfmicro cluster kubeconfig --name standalone >/tmp/standalone-kubeconfig
+kubectl --kubeconfig /tmp/standalone-kubeconfig get storagecluster -n openshift-storage
+kubectl --kubeconfig /tmp/standalone-kubeconfig get storageclass
+```
+
+### Rook Ceph provider with an external ODF consumer
+
+Install the Rook operator on `provider` and the ODF operator on `consumer`:
+
+```console
+dfmicro addon odf --cluster provider install \
+  --catalog-image quay.io/example/odf-operator-catalog:v5.0 \
+  --channel stable-5.0 --version 5.0.0 --sub-name rook-ceph-operator
+dfmicro addon odf --cluster consumer install \
+  --catalog-image quay.io/example/odf-operator-catalog:v5.0 \
+  --channel stable-5.0 --version 5.0.0 --sub-name odf-operator
+```
+
+Configure Rook on `provider`, then connect `consumer` to it:
+
+```console
+dfmicro addon odf --cluster provider configure --external-ceph
+dfmicro addon odf --cluster consumer configure --connect-to provider
+
+dfmicro cluster kubeconfig --name provider >/tmp/provider-kubeconfig
+dfmicro cluster kubeconfig --name consumer >/tmp/consumer-kubeconfig
+kubectl --kubeconfig /tmp/provider-kubeconfig get cephcluster -n openshift-storage
+kubectl --kubeconfig /tmp/consumer-kubeconfig get storagecluster -n openshift-storage
+```
+
+### ODF provider with a client-only consumer
+
+Install the ODF operator on `provider` and the client operator on `consumer`:
+
+```console
+dfmicro addon odf --cluster provider install \
+  --catalog-image quay.io/example/odf-operator-catalog:v5.0 \
+  --channel stable-5.0 --version 5.0.0 --sub-name odf-operator
+dfmicro addon odf --cluster consumer install \
+  --catalog-image quay.io/example/odf-operator-catalog:v5.0 \
+  --channel stable-5.0 --version 5.0.0 --sub-name ocs-client-operator
+```
+
+Configure the provider for host networking and multiple nodes, then onboard the
+client-only consumer:
+
+```console
+# Host-networked Ceph MONs need separate nodes, so use at least three nodes.
+dfmicro addon odf --cluster provider configure --hostnetwork --multi-node
+dfmicro addon odf --cluster consumer configure --client --connect-to provider
+
+dfmicro cluster kubeconfig --name provider >/tmp/provider-kubeconfig
+dfmicro cluster kubeconfig --name consumer >/tmp/consumer-kubeconfig
+kubectl --kubeconfig /tmp/provider-kubeconfig patch storageconsumer consumer \
+  -n openshift-storage --type=json \
+  -p '[{"op":"add","path":"/spec/storageClasses","value":[{"name":"ocs-storagecluster-ceph-rbd"}]}]'
+kubectl --kubeconfig /tmp/consumer-kubeconfig get storageclass
+```
+
+Create workloads in `consumer` using the published `ocs-storagecluster-ceph-rbd`
+StorageClass to verify client-side provisioning and access.
 
 ## Clean up
 

@@ -30,8 +30,10 @@ The CI workflow checks that committed docs match the source.
 Run the Perl suite on a clean Linux host with rootful Podman:
 
 ```
-DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 3
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
 ```
+
+Levels 4-6 require a local `tests.conf`, copied from `tests.conf.example`.
 
 Run `./tests.pl -h` for the available levels, filters, cleanup, and timeout
 options. Test output and executed commands are written to `/tmp/dfmicro-test`.
@@ -44,7 +46,7 @@ Commands are grouped into top-level domains, each in its own package under `inte
 
 **Addon mechanism**
 
-An addon is a package under `internal/addon/<name>/` that exposes a `*cli.Command`. It manages its own install, configure, and uninstall lifecycle independently of the cluster package. Addons talk to the cluster through `oc` or `kubectl` (resolved at runtime via `--kubectl` flag), with the kubeconfig sourced either from a cluster name lookup or a direct path. Shim resources (CRDs, RBAC, catalog sources) are numbered and embedded so they apply in a deterministic order without depending on server-side ordering. The `--attempt` flag on destructive operations defaults to dry-run so the user can review what will be deleted before anything runs.
+An addon is a package under `internal/addon/<name>/` that exposes a `*cli.Command`. It manages its own install, configure, and uninstall lifecycle independently of the cluster package. Addons talk to the cluster through `oc` or `kubectl` (resolved at runtime via `--kubectl` flag), with the kubeconfig sourced either from a cluster name lookup or a direct path. Shim resources are numbered and embedded so they apply in a deterministic order without depending on server-side ordering. The `--attempt` flag on destructive operations defaults to dry-run so the user can review what will be deleted before anything runs.
 
 **Why podman exec only**
 
@@ -56,7 +58,18 @@ All cluster operations (kubectl, crictl, oc) go through `podman exec` into the r
 
 ## Release
 
-Releases are cut by pushing a version tag. GoReleaser builds cross-platform binaries, signs checksums with cosign, and publishes to GitHub Releases.
+Before tagging, regenerate and build the CLI, check the diff, and run the full
+suite on a clean Linux host with the local test configuration:
+
+```
+make build
+git diff --check
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
+```
+
+After committing the release changes, push a version tag. GoReleaser builds
+cross-platform binaries, signs checksums with cosign, and publishes to GitHub
+Releases.
 
 ```
 git tag v0.x.0

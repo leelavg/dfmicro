@@ -60,8 +60,10 @@ dfmicro docs --examples             # samples for specific scenarios
 Run the suite on a clean Linux host with rootful Podman and sudoers created against the built binary:
 
 ```
-DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 3
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
 ```
+
+Levels 4-6 require a local `tests.conf`, copied from `tests.conf.example`.
 
 Run one level from a clean slate, including only that level's setup:
 

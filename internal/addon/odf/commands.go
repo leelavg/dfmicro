@@ -63,7 +63,7 @@ Note: --cluster and --kubeconfig apply to all subcommands and must come before t
 				UsageText: `Requires rbd, ceph, nbd kernel modules loaded on the host. Run 'dfmicro addon odf modules load' first.
 
 Example:
-  dfmicro addon odf install --catalog-image quay.io/example/catalog:v4.16 --channel stable-4.16 --version 4.16.0`,
+  dfmicro addon odf install --catalog-image quay.io/example/odf-operator-catalog:v5.0 --channel stable-5.0 --version 5.0.0`,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "shims",
@@ -75,7 +75,7 @@ Example:
 					},
 					&cli.StringFlag{
 						Name:  "channel",
-						Usage: "Subscription channel (e.g. stable-4.16)",
+						Usage: "Subscription channel (e.g. stable-5.0)",
 					},
 					&cli.StringSliceFlag{
 						Name:  "sub-name",
@@ -84,7 +84,7 @@ Example:
 					},
 					&cli.StringFlag{
 						Name:  "version",
-						Usage: "OCP version in X.Y.Z format (e.g. 4.16.0)",
+						Usage: "OCP version in X.Y.Z format (e.g. 5.0.0)",
 						Validator: func(v string) error {
 							if v == "" {
 								return nil

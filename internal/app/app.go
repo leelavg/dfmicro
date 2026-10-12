@@ -21,30 +21,39 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func devlogCommand() *cli.Command {
-	return &cli.Command{
-		Name:   "devlog",
-		Usage:  "Print development log",
-		Hidden: true,
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			_, err := os.Stdout.WriteString(devlog.Content)
-			return err
-		},
-	}
-}
-
 func docsCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "docs",
 		Usage:     "Print full command reference as markdown",
 		UsageText: "dfmicro docs > cli.md",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "examples",
-				Usage: "Print command examples",
+		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
+			{
+				Flags: [][]cli.Flag{
+					{&cli.BoolFlag{
+						Name:  "examples",
+						Usage: "Print command examples",
+					}},
+					{&cli.BoolFlag{
+						Name:  "skill",
+						Usage: "Print agent guidance for operating dfmicro",
+					}},
+					{&cli.BoolFlag{
+						Name:   "devlog",
+						Usage:  "Print development log",
+						Hidden: true,
+					}},
+				},
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.Bool("devlog") {
+				_, err := os.Stdout.WriteString(devlog.Content)
+				return err
+			}
+			if cmd.Bool("skill") {
+				_, err := os.Stdout.WriteString(docs.Skill)
+				return err
+			}
 			if cmd.Bool("examples") {
 				_, err := os.Stdout.WriteString(docs.Examples)
 				return err
@@ -80,7 +89,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Name:    support.BinaryName,
 		Usage:   "Run MicroShift clusters in rootful Podman containers",
 		Version: buildinfo.String(),
-		Description: `dfmicro creates and manages single-node MicroShift clusters inside rootful Podman containers.
+		Description: `dfmicro creates and manages single- and multi-node MicroShift clusters inside rootful Podman containers.
 Each cluster gets its own Podman network and a loop-device backed LVM thin pool for TopoLVM storage.
 
 Verified on: Linux (Fedora / RHEL)
@@ -103,7 +112,6 @@ Quick start:
 			node.Command(logger, runner),
 			configCommand(),
 			docsCommand(),
-			devlogCommand(),
 			network.Command(logger, runner),
 			ops.Command(logger, runner),
 		},

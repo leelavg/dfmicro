@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -48,6 +49,7 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 
 	m.logger.Info("creating bridge", "name", cfg.name, "subnet", cfg.subnet)
 	args := []string{"network", "create",
+		"--label", "created-by=dfmicro",
 		"--subnet", cfg.subnet,
 		"--ip-range", reservedEnd,
 	}
@@ -78,6 +80,20 @@ func (m *bridgeManager) create(ctx context.Context, cfg bridgeConfig) error {
 func (m *bridgeManager) exists(ctx context.Context, name string) bool {
 	_, err := support.RunPodmanPrivileged(ctx, m.runner, "network", "exists", name)
 	return err == nil
+}
+
+func (m *bridgeManager) list(ctx context.Context) error {
+	result, err := support.RunPodmanPrivileged(ctx, m.runner,
+		"network", "ls", "--filter", "label=created-by=dfmicro", "--format", "{{.Name}}",
+	)
+	if err != nil {
+		return fmt.Errorf("failed to list dfmicro networks: %w", err)
+	}
+
+	for name := range strings.FieldsSeq(result.Stdout) {
+		m.logger.Info("found network", "name", name)
+	}
+	return nil
 }
 
 func (m *bridgeManager) delete(ctx context.Context, name, stateDir string) error {

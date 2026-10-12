@@ -9,3 +9,6 @@ var CLI string
 
 //go:embed examples.md
 var Examples string
+
+//go:embed SKILL.md
+var Skill string

@@ -8,7 +8,7 @@ dfmicro
 
 # DESCRIPTION
 
-dfmicro creates and manages single-node MicroShift clusters inside rootful Podman containers.
+dfmicro creates and manages single- and multi-node MicroShift clusters inside rootful Podman containers.
 Each cluster gets its own Podman network and a loop-device backed LVM thin pool for TopoLVM storage.
 
 Verified on: Linux (Fedora / RHEL)
@@ -72,17 +72,17 @@ Install ODF and required shim resources
     Requires rbd, ceph, nbd kernel modules loaded on the host. Run 'dfmicro addon odf modules load' first.
 
     Example:
-      dfmicro addon odf install --catalog-image quay.io/example/catalog:v4.16 --channel stable-4.16 --version 4.16.0
+      dfmicro addon odf install --catalog-image quay.io/example/odf-operator-catalog:v5.0 --channel stable-5.0 --version 5.0.0
 
 **--catalog-image**="": Catalog source image
 
-**--channel**="": Subscription channel (e.g. stable-4.16)
+**--channel**="": Subscription channel (e.g. stable-5.0)
 
 **--shims**: Apply only the shim CRDs
 
 **--sub-name**="": Subscription name (repeatable) (default: "odf-operator")
 
-**--version**="": OCP version in X.Y.Z format (e.g. 4.16.0)
+**--version**="": OCP version in X.Y.Z format (e.g. 5.0.0)
 
 #### modules
 
@@ -232,6 +232,8 @@ Print full command reference as markdown
 
 **--examples**: Print command examples
 
+**--skill**: Print agent guidance for operating dfmicro
+
 ## network
 
 Manage multi-cluster networks
@@ -332,6 +334,10 @@ Disconnect clusters from a bridge network
 **--cluster**="": Cluster name (repeatable)
 
 **--from**="": Network name to disconnect from
+
+### list, ls
+
+List dfmicro networks
 
 ### peer
 

@@ -22,6 +22,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Usage:  "Manage multi-cluster networks",
 		Action: support.UnknownSubcommand,
 		Commands: []*cli.Command{
+			listCommand(logger, runner),
 			createCommand(logger, runner),
 			connectCommand(logger, runner),
 			disconnectCommand(logger, runner),
@@ -31,6 +32,17 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			configCommand(),
 			peerCommand(logger, runner),
 			unpeerCommand(logger, runner),
+		},
+	}
+}
+
+func listCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+	return &cli.Command{
+		Name:    "list",
+		Aliases: []string{"ls"},
+		Usage:   "List dfmicro networks",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			return newBridgeManager(logger, runner).list(ctx)
 		},
 	}
 }

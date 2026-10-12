@@ -715,7 +715,8 @@ sub run_level_0 {
 	run_ok('config', 'config');
 	run_ok_limited('docs', 'docs');
 	run_ok_limited('examples', 'docs --examples');
-	run_ok_limited('devlog', 'devlog');
+	run_ok_limited('skill', 'docs --skill');
+	run_ok_limited('devlog', 'docs --devlog');
 	run_ok_limited('help', '--help');
 
 	section('resource reporting');
@@ -806,6 +807,7 @@ sub run_level_3 {
 level_section('level 3: multi-cluster network', "$first,$micro");
 section('bridge connection and IPAM attachment', "$first,$micro");
 run_ok('create bridge network', "network create --name $network --subnet 172.31.0.0/16", '');
+run_ok('list bridge networks', 'network ls');
 run_fail('network connect rejects an unknown network', "network connect --cluster $first --to missing", $first);
 run_ok('connect clusters with comma syntax', "network connect --cluster $first,$micro --to $network");
 run_ok('connect already connected clusters', "network connect --cluster $first,$micro --to $network");
