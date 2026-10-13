@@ -60,7 +60,7 @@ dfmicro docs --examples             # samples for specific scenarios
 Run the suite on a clean Linux host with rootful Podman and sudoers created against the built binary:
 
 ```
-DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 7
 ```
 
 Levels 4-6 require a local `tests.conf`, copied from `tests.conf.example`.
@@ -80,8 +80,8 @@ See all test options with:
 ```
 Usage:	perl tests.pl [options]
 
-  --upto N        	Run through level N (0-6) (default: 0)
-  --level N       	Run only level N (0-6) from a clean slate
+  --upto N        	Run through level N (0-7) (default: 0)
+  --level N       	Run only level N (0-7) from a clean slate
   --etcd          	Create clusters with etcd
   --list [MODE]   	List "tests" or "cmds" (default: tests)
   --keep          	Leave resources for inspection

@@ -284,7 +284,7 @@ func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) 
 		return nil
 	}
 	m.logger.Info("creating podman network", "network", name, "subnet", subnet)
-	args := []string{"network", "create"}
+	args := []string{"network", "create", "--label", "created-by=dfmicro"}
 	if subnet != "" {
 		args = append(args, "--subnet", subnet)
 	}

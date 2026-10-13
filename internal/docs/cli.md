@@ -35,6 +35,42 @@ Manage cluster addons
 
 **--list**: List available addons
 
+### local-s3
+
+Manage the standalone local S3 service
+
+#### configure
+
+Publish local-s3 in a cluster
+
+    --attach-to creates s3.default.svc pointing to local-s3 on the cluster's Podman network.
+    --detach-from removes that Service and EndpointSlice.
+
+**--attach-to**="": Attach S3 Services to this dfmicro cluster
+
+**--detach-from**="": Remove local-s3 Services from this dfmicro cluster
+
+#### install
+
+Start the standalone local-s3 service
+
+    Starts a standalone container on dfmicro's default bridge network without publishing a host port. Data is kept in a named volume.
+    Requires a cluster-created default bridge network.
+
+    Use configure to publish a Service in a cluster.
+    The service allows anonymous access until accounts are configured.
+
+**--image**="": Container image for local-s3 (default: "ghcr.io/shyim/local-s3:0.1.1")
+
+#### uninstall
+
+Remove local-s3 and its cluster Services
+
+    Configured clusters must be reachable so their Services can be removed.
+    The data volume is preserved unless --cleanup is passed.
+
+**--cleanup**: Also delete the local-s3 data volume
+
 ### odf
 
 Manage OpenShift Data Foundation on a MicroShift cluster

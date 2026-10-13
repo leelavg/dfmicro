@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"dfmicro/internal/addon/locals3"
 	"dfmicro/internal/addon/odf"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -35,6 +36,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			return support.UnknownSubcommand(ctx, cmd)
 		},
 		Commands: []*cli.Command{
+			locals3.Command(logger, runner),
 			odf.Command(logger, runner),
 		},
 	}

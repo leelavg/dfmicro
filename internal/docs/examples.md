@@ -65,6 +65,35 @@ dfmicro cluster stop --name demo
 dfmicro cluster start --name demo
 ```
 
+## Use a shared local S3 service
+
+Start the standalone service on dfmicro's default bridge network. It does not
+publish a host port.
+
+```console
+dfmicro addon local-s3 install
+dfmicro addon local-s3 configure --attach-to demo
+
+dfmicro cluster kubeconfig --name demo >/tmp/demo-kubeconfig
+kubectl --kubeconfig /tmp/demo-kubeconfig get service s3 -n default
+```
+
+The endpoint inside the cluster is `http://s3.default.svc:9000`. No
+accounts are configured, so requests are anonymous. dfmicro does not create an
+access key or secret. If a client requires a region, use `us-east-1`. For the
+AWS CLI, use `--no-sign-request`:
+
+```console
+aws --no-sign-request --endpoint-url http://s3.default.svc:9000 s3 ls
+```
+
+Uninstalling preserves the data volume. Pass `--cleanup` to delete it.
+
+```console
+dfmicro addon local-s3 uninstall
+dfmicro addon local-s3 uninstall --cleanup
+```
+
 ## Add and remove a worker
 
 Add a worker after the control plane is ready. The command checks control-plane readiness before onboarding the worker.
