@@ -19,7 +19,6 @@ internal/
 ├── devlog
 ├── docs
 ├── execx
-├── lore
 ├── network
 ├── ops
 └── support
@@ -28,7 +27,7 @@ internal/
 Some examples:
 - `execx`: all process execution. Never shell out directly, always use `execx.Runner`.
 - `support`: shared utilities only. No domain logic.
-- `cluster`, `network`, `addon`, `lore`: domain packages, each owns its full subdomain. `lore` is used by the separate `cmd/fetch` binary.
+- `cluster`, `network`, `addon`: domain packages, each owns its full subdomain.
 - `internal/config`: shared configuration types and defaults via `sync.OnceValue`. Never hardcode values in the flag defaults and source them from here.
 
 ## Conventions
