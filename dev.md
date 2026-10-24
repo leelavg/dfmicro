@@ -25,6 +25,13 @@ make generate
 
 The CI workflow checks that committed docs match the source.
 
+Build and serve the versioned documentation site with mdBook installed under `bin/` by Make:
+
+```
+make docs
+make docs-serve
+```
+
 ## Tests
 
 Run the Perl suite on a clean Linux host with rootful Podman:

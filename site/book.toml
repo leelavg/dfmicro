@@ -1,0 +1,13 @@
+[book]
+title = "dfmicro"
+language = "en"
+src = "."
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["site.css"]
+additional-js = ["version.js"]
+site-url = "__SITE_URL__"
+edit-url-template = "https://github.com/leelavg/dfmicro/edit/__SOURCE_REF__/{path}"
+git-repository-url = "https://github.com/leelavg/dfmicro"

@@ -1,21 +1,16 @@
-# dfmicro
+<h1><img src="internal/docs/assets/dfmicro.svg" alt="" width="32" height="32"> dfmicro</h1>
 
 Run [MicroShift](https://github.com/openshift/microshift) clusters inside rootful Podman containers.
 Each cluster gets its own network, loop-device backed LVM storage, and a kubeconfig. Workers can be added when multi-node operation is needed.
+
+Read the [dfmicro documentation](https://dfmicro.thoughtexpo.com/) for versioned guides and examples.
 
 Verified on Linux (Fedora / RHEL). Best-effort support on macOS via rootful Podman machine.
 
 ## Installation
 
-Download the latest release for your platform from the [releases page](https://github.com/leelavg/dfmicro/releases),
-extract, and place the binary on your PATH.
-
-```
-tar -xzf dfmicro_linux_amd64.tar.gz
-install -m 0755 dfmicro ~/.local/bin/dfmicro
-```
-
-Or use the installer:
+The installer detects Linux or macOS and the amd64 or arm64 architecture, then
+downloads and verifies the matching release archive:
 
 ```
 curl -fsSL https://raw.githubusercontent.com/leelavg/dfmicro/main/install.sh | sh

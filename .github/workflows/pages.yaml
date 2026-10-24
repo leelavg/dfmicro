@@ -1,0 +1,37 @@
+name: pages
+
+on:
+  push:
+    branches: [main, forge]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.ref_type != 'tag' || (!contains(github.ref_name, '-') && !contains(github.ref_name, '+'))
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 1
+      - run: git fetch --depth=1 origin '+refs/heads/main:refs/remotes/origin/main' '+refs/heads/forge:refs/remotes/origin/forge' 'refs/tags/v*:refs/tags/v*'
+      - run: make docs
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site/public
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

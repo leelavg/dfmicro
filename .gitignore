@@ -1,2 +1,4 @@
 bin
 tests.conf
+site/public
+site/.build.*

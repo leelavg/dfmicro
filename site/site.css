@@ -1,0 +1,48 @@
+#dfmicro-version {
+    display: none;
+    margin-right: 0.75rem;
+    white-space: nowrap;
+}
+
+#dfmicro-version.dfmicro-ready {
+    display: inline-block;
+}
+
+#dfmicro-version details {
+    position: relative;
+}
+
+#dfmicro-version summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--theme-popup-border);
+    border-radius: 0.35rem;
+    background: var(--theme-popup-bg);
+}
+
+#dfmicro-version ul {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: 200;
+    max-height: 70vh;
+    overflow: auto;
+    margin: 0.3rem 0 0;
+    padding: 0.4rem 0;
+    min-width: 9rem;
+    list-style: none;
+    border: 1px solid var(--theme-popup-border);
+    border-radius: 0.35rem;
+    background: var(--theme-popup-bg);
+}
+
+#dfmicro-version li a,
+#dfmicro-version li span {
+    display: block;
+    padding: 0.25rem 0.75rem;
+}
+
+#dfmicro-version [aria-current="page"] {
+    font-weight: 700;
+}
