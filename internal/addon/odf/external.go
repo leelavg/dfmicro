@@ -161,7 +161,7 @@ func (o *odf) configureRookClient(ctx context.Context, providerName string, incl
 	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, externalStorageClusterTmpl)
 }
 
-func (o *odf) configureOdfClient(ctx context.Context, providerName string) error {
+func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR string) error {
 	providerKubeconfig, err := rootconfig.Kubeconfig(providerName)
 	if err != nil {
 		return fmt.Errorf("could not load provider kubeconfig for %q: %w", providerName, err)
@@ -178,6 +178,17 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName string) error
 		return err
 	}
 	o.logger.Info("client CRD established", "cluster", o.clusterName, "name", crd)
+	networkPolicy, err := support.Render(odfClientNetworkPolicyTmpl, map[string]string{
+		"ClientCluster": o.clusterName,
+		"ClientCIDR":    clusterCIDR,
+	})
+	if err != nil {
+		return err
+	}
+	o.logger.Info("applying provider network policy", "provider", providerName, "client", o.clusterName)
+	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, providerKubeconfig, networkPolicy); err != nil {
+		return err
+	}
 	ready, err := o.odfClientReady(ctx, providerKubeconfig, providerName)
 	if err != nil {
 		return err
@@ -214,6 +225,7 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName string) error
 	}
 
 	o.logger.Info("waiting for StorageClient", "name", providerName)
+	o.logger.Info("ODF provider must use host networking or be peered with the client cluster", "provider", providerName, "client", o.clusterName)
 	if _, err := o.runner.Run(ctx, o.kubectl,
 		"wait", "--for=jsonpath={.status.phase}=Connected", "--timeout=10m",
 		"storageclient/"+providerName, "--kubeconfig", o.kubeconfig,

@@ -175,14 +175,22 @@ Example:
 					return ctx, nil
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
-					return o.configure(ctx, configureConfig{
+					cfg := configureConfig{
 						clientOnly:    cmd.Bool("client"),
 						includeCephFS: cmd.Bool("include-cephfs"),
 						multiNode:     cmd.Bool("multi-node"),
 						hostNetwork:   cmd.Bool("hostnetwork"),
 						externalCeph:  cmd.Bool("external-ceph"),
 						connectTo:     cmd.String("connect-to"),
-					})
+					}
+					if cfg.clientOnly && cfg.connectTo != "" {
+						clusterConfig, err := rootconfig.ReadClusterConfig(o.clusterName)
+						if err != nil {
+							return fmt.Errorf("could not load cluster config for %q: %w", o.clusterName, err)
+						}
+						cfg.clusterCIDR = clusterConfig.ClusterCIDR
+					}
+					return o.configure(ctx, cfg)
 				}),
 			},
 			{

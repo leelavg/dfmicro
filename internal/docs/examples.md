@@ -304,12 +304,26 @@ dfmicro addon odf --cluster consumer install \
   --channel stable-5.0 --version 5.0.0 --sub-name ocs-client-operator
 ```
 
-Configure the provider for host networking and multiple nodes, then onboard the
-client-only consumer:
+Choose one provider network mode. For a single-node provider without host
+networking, peer the clusters before onboarding the client:
+
+```console
+dfmicro addon odf --cluster provider configure
+dfmicro network peer --cluster provider --cluster consumer
+```
+
+For a host-networked provider, add workers before configuring it:
 
 ```console
 # Host-networked Ceph MONs need separate nodes, so use at least three nodes.
+dfmicro node add --cluster provider
+dfmicro node add --cluster provider
 dfmicro addon odf --cluster provider configure --hostnetwork --multi-node
+```
+
+With either mode configured, onboard the client-only consumer:
+
+```console
 dfmicro addon odf --cluster consumer configure --client --connect-to provider
 
 dfmicro cluster kubeconfig --name provider >/tmp/provider-kubeconfig

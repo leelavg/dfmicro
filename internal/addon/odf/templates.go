@@ -462,6 +462,28 @@ metadata:
     app.kubernetes.io/created-by: dfmicro
 `
 
+const odfClientNetworkPolicyTmpl = `apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dfmicro-allow-{{.ClientCluster}}-ingress
+  namespace: openshift-storage
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+spec:
+  podSelector:
+    matchLabels:
+      app: ocsProviderApiServer
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: {{.ClientCIDR}}
+      ports:
+        - protocol: TCP
+          port: 50051
+`
+
 const storageClientTmpl = `apiVersion: ocs.openshift.io/v1alpha1
 kind: StorageClient
 metadata:

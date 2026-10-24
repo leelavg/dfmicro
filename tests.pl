@@ -21,7 +21,7 @@ my $cleanup_only = 0;
 my $timeout;
 my $show_help = 0;
 my ($list_only, $timeout_seconds, $backend_option);
-my $level_end = 7;
+my $level_end = 8;
 
 sub usage {
     print "Usage:\tperl tests.pl [options]\n\n";
@@ -221,7 +221,7 @@ sub selected_level {
 }
 
 sub test_config_required {
-	return defined $level ? ($level >= 4 && $level <= 6) : $upto >= 4;
+	return defined $level ? ($level >= 4 && $level <= 7) : $upto >= 4;
 }
 
 sub odf_install_args {
@@ -457,6 +457,9 @@ metadata:
 spec:
   serviceName: $name
   replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Retain
   selector:
     matchLabels:
       app: $name
@@ -497,7 +500,7 @@ sub test_storage {
 	kubectl_ok("${prefix}read from $name volume", $kubeconfig, "exec -n default $name-0 -- sh -c 'test \$(cat /data/check) = dfmicro'");
 	unless ($keep) {
 		kubectl_ok("${prefix}delete $name StatefulSet", $kubeconfig, "delete statefulset $name -n default --wait=true --timeout=60s");
-		kubectl_ok("${prefix}delete $name PVC", $kubeconfig, "delete pvc data-$name-0 -n default --wait=true --timeout=60s");
+		kubectl_ok("${prefix}wait for $name PVC deletion", $kubeconfig, "wait --for=delete pvc/data-$name-0 -n default --timeout=60s");
 	}
 }
 
@@ -552,7 +555,7 @@ sub remove_netshoots {
 
 sub remove_storage_workloads {
 	my %workloads = (
-		$first => [qw(dfmicro-storage-control dfmicro-storage-worker dfmicro-odf-single dfmicro-odf-provider dfmicro-test)],
+		$first => [qw(dfmicro-storage-control dfmicro-storage-worker dfmicro-odf-single dfmicro-odf-provider dfmicro-odf-provider-single dfmicro-test)],
 		$micro => [qw(dfmicro-odf-external dfmicro-odf-client)],
 	);
 	my @clusters = @_ ? @_ : ($first, $micro);
@@ -688,8 +691,35 @@ sub run_level_5 {
 }
 
 sub run_level_6 {
-	level_section('level 6: ODF provider and client-only consumer', "$first,$micro");
+	level_section('level 6: single-node ODF provider and client-only consumer', "$first,$micro");
+	if (!defined $level) {
+		section('remove provider workers', $first);
+		run_ok('remove second provider worker', "node rm --cluster $first --name $first-2");
+		run_ok('remove first provider worker', "node rm --cluster $first --name $first-1");
+	}
+
+	section('peer provider and client clusters', "$first,$micro");
+	run_ok('peer ODF provider and client clusters', "network peer --cluster $first,$micro", "$first,$micro");
+
+	section('single-node ODF provider', $first);
+	run_ok('install ODF provider on first', "addon odf --cluster $first install " . odf_install_args('odf-operator'));
+	run_ok('configure single-node ODF provider', "addon odf --cluster $first configure");
+	wait_storage_cluster('single-node ODF provider', $first_kubeconfig);
+	test_storage($first_kubeconfig, 'dfmicro-odf-provider-single', "$first-0", 'ocs-storagecluster-ceph-rbd', 300);
+
+	section('client-only ODF consumer', $micro);
+	run_ok('install ODF client operator on micro', "addon odf --cluster $micro install " . odf_install_args('ocs-client-operator'));
+	run_ok('configure ODF client on micro', "addon odf --cluster $micro configure --client --connect-to $first");
+	kubectl_ok('set client StorageClass', $first_kubeconfig,
+		"patch storageconsumer $micro -n openshift-storage --type=json -p '[{\"op\":\"add\",\"path\":\"/spec/storageClasses\",\"value\":[{\"name\":\"ocs-storagecluster-ceph-rbd\"}]}]'");
+	test_storage($micro_kubeconfig, 'dfmicro-odf-client', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
+}
+
+sub run_level_7 {
+	level_section('level 7: multi-node ODF provider and client-only consumer', "$first,$micro");
 	section('multi-node ODF provider', $first);
+	run_ok('add first provider worker', "node add --cluster $first");
+	run_ok('add second provider worker', "node add --cluster $first");
 	run_ok('install ODF provider on first', "addon odf --cluster $first install " . odf_install_args('odf-operator'));
 	run_ok('configure multi-node ODF provider', "addon odf --cluster $first configure --hostnetwork --multi-node");
 	wait_storage_cluster('multi-node ODF provider', $first_kubeconfig);
@@ -703,8 +733,8 @@ sub run_level_6 {
 	test_storage($micro_kubeconfig, 'dfmicro-odf-client', "$micro-0", 'ocs-storagecluster-ceph-rbd', 300);
 }
 
-sub run_level_7 {
-	level_section('level 7: shared local S3 service', "$micro,$first");
+sub run_level_8 {
+	level_section('level 8: shared local S3 service', "$micro,$first");
 	section('publish S3 in both clusters', "$micro,$first");
 	return unless run_ok("publish S3 in $micro", "addon local-s3 configure --attach-to $micro", $micro);
 	return unless run_ok("publish S3 in $first", "addon local-s3 configure --attach-to $first", $first);
@@ -770,7 +800,7 @@ sub finish_level {
 	$odf_clusters //= [];
 	pause_before_cleanup();
 	unless ($keep) {
-		cleanup_local_s3() if $target == 7;
+		cleanup_local_s3() if $target == 8;
 		cleanup_network_state() if $target == 3;
 		for my $cluster (@$odf_clusters) {
 			cleanup_odf($cluster);
@@ -790,15 +820,15 @@ sub finish_level {
 
 sub run_selected_level {
 	prepare_level($level);
-	if ($level == 7) {
+	if ($level == 8) {
 		section('install local S3 on the dfmicro bridge', $micro);
 		mark_local_s3_installed(1);
 		unless (run_ok('install local-s3', 'addon local-s3 install --image ghcr.io/shyim/local-s3:0.1.1')) {
-			finish_level(7, [$micro, $first], []);
+			finish_level(8, [$micro, $first], []);
 			return;
 		}
 	}
-	my @run_level = (\&run_level_0, \&run_level_1, \&run_level_2, \&run_level_3, \&run_level_4, \&run_level_5, \&run_level_6, \&run_level_7);
+	my @run_level = (\&run_level_0, \&run_level_1, \&run_level_2, \&run_level_3, \&run_level_4, \&run_level_5, \&run_level_6, \&run_level_7, \&run_level_8);
 	$run_level[$level]->();
 	my %clusters = (
 		0 => [],
@@ -809,11 +839,13 @@ sub run_selected_level {
 		5 => [$first, $micro],
 		6 => [$first, $micro],
 		7 => [$first, $micro],
+		8 => [$first, $micro],
 	);
 	my %odf_clusters = (
 		4 => [$first],
 		5 => [$first, $micro],
 		6 => [$first, $micro],
+		7 => [$first, $micro],
 	);
 	finish_level($level, $clusters{$level}, $odf_clusters{$level});
 }
@@ -873,18 +905,15 @@ sub prepare_level {
 
 	section("prepare level $target clusters");
 	run_ok("[$micro] create cluster for level $target", micro_cluster_command()) if $target != 4;
-	run_ok("[$first] create cluster for level $target", first_cluster_command($target == 7));
+	run_ok("[$first] create cluster for level $target", first_cluster_command($target == 8));
 
-	if ($target == 5 || $target == 6) {
+	if ($target == 7) {
 		run_ok("[$micro] add worker for level $target", "node add --cluster $micro");
 	}
 	if ($target == 3 || $target == 4) {
 		run_ok("[$first] add worker for level $target", "node add --cluster $first");
-	} elsif ($target == 6) {
-		run_ok("[$first] add first worker for level $target", "node add --cluster $first");
-		run_ok("[$first] add second worker for level $target", "node add --cluster $first");
 	}
-	if ($target >= 4 && $target <= 6) {
+	if ($target >= 4 && $target <= 7) {
 		run_ok("load ODF kernel modules for level $target", 'addon odf modules load');
 	}
 	$micro_kubeconfig = kubeconfig($micro) if $target != 4;
@@ -1058,11 +1087,11 @@ sub main {
 	if (defined $level) {
 		run_selected_level();
 	}
-	if ($upto == 7) {
+	if ($upto == 8) {
 		section('install local S3 on the dfmicro bridge', $micro);
 		mark_local_s3_installed(1);
 		unless (run_ok('install local-s3', 'addon local-s3 install')) {
-			finish_level(7, [$micro, $first], []);
+			finish_level(8, [$micro, $first], []);
 			return;
 		}
 	}
@@ -1108,14 +1137,21 @@ sub main {
 	}
 	cleanup_odf($micro);
 	cleanup_odf($first);
+	run_ok('unpeer ODF provider and client clusters', "network unpeer --cluster $first,$micro", "$first,$micro");
+	run_level_7();
+	if ($upto == 7) {
+		finish_level(7, [$first, $micro], [$micro, $first]);
+	}
+	cleanup_odf($micro);
+	cleanup_odf($first);
 	section('install local S3 on the dfmicro bridge', $micro);
 	mark_local_s3_installed(1);
 	unless (run_ok('install local-s3', 'addon local-s3 install')) {
-		finish_level(7, [$micro, $first], []);
+		finish_level(8, [$micro, $first], []);
 		return;
 	}
-	run_level_7();
-	finish_level(7, [$first, $micro], []);
+	run_level_8();
+	finish_level(8, [$first, $micro], []);
 }
 
 main();

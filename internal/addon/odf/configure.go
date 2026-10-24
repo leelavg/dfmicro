@@ -16,6 +16,7 @@ type configureConfig struct {
 	hostNetwork   bool
 	externalCeph  bool
 	connectTo     string
+	clusterCIDR   string
 }
 
 const odfPoll = 2 * time.Second
@@ -32,13 +33,13 @@ func (o *odf) configure(ctx context.Context, cfg configureConfig) error {
 	case cfg.connectTo != "" && !cfg.clientOnly:
 		return o.configureRookClient(ctx, cfg.connectTo, cfg.includeCephFS)
 	case cfg.clientOnly:
-		return o.configureClient(ctx, cfg.connectTo, cfg.includeCephFS)
+		return o.configureClient(ctx, cfg)
 	default:
 		return o.configureStorage(ctx, cfg)
 	}
 }
 
-func (o *odf) configureClient(ctx context.Context, connectTo string, includeCephFS bool) error {
+func (o *odf) configureClient(ctx context.Context, cfg configureConfig) error {
 	o.logger.Info("patching external-snapshotter-operator CSV")
 	if err := o.patchSnapshotCSV(ctx); err != nil {
 		return err
@@ -49,11 +50,11 @@ func (o *odf) configureClient(ctx context.Context, connectTo string, includeCeph
 		return err
 	}
 
-	if err := o.applyDrivers(ctx, includeCephFS); err != nil {
+	if err := o.applyDrivers(ctx, cfg.includeCephFS); err != nil {
 		return err
 	}
-	if connectTo != "" {
-		return o.configureOdfClient(ctx, connectTo)
+	if cfg.connectTo != "" {
+		return o.configureOdfClient(ctx, cfg.connectTo, cfg.clusterCIDR)
 	}
 	return nil
 }

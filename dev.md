@@ -30,10 +30,10 @@ The CI workflow checks that committed docs match the source.
 Run the Perl suite on a clean Linux host with rootful Podman:
 
 ```
-DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 8
 ```
 
-Levels 4-6 require a local `tests.conf`, copied from `tests.conf.example`.
+Levels 4-7 require a local `tests.conf`, copied from `tests.conf.example`.
 
 Run `./tests.pl -h` for the available levels, filters, cleanup, and timeout
 options. Test output and executed commands are written to `/tmp/dfmicro-test`.
@@ -64,7 +64,7 @@ suite on a clean Linux host with the local test configuration:
 ```
 make build
 git diff --check
-DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 6
+DFMICRO_BIN=./bin/dfmicro perl tests.pl --upto 8
 ```
 
 After committing the release changes, push a version tag. GoReleaser builds
