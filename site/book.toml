@@ -6,8 +6,15 @@ src = "."
 [output.html]
 default-theme = "light"
 preferred-dark-theme = "navy"
+smart-punctuation = false
+definition-lists = false
+no-section-label = true
+admonitions = false
 additional-css = ["site.css"]
 additional-js = ["version.js"]
 site-url = "__SITE_URL__"
-edit-url-template = "https://github.com/leelavg/dfmicro/edit/__SOURCE_REF__/{path}"
+edit-url-template = "https://github.com/leelavg/dfmicro/blob/__SOURCE_REF__/{path}"
 git-repository-url = "https://github.com/leelavg/dfmicro"
+
+[output.html.print]
+enable = false

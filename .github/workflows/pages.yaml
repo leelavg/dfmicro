@@ -2,7 +2,6 @@ name: pages
 
 on:
   push:
-    branches: [main, forge]
     tags: ["v*"]
   workflow_dispatch:
 
