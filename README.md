@@ -40,8 +40,30 @@ make build
 
 ## Quick start
 
+### One-time setup
+
+**Linux:** Configure the required privileged commands once:
+
+```console
+dfmicro ops sudoers create
 ```
-dfmicro ops sudoers create          # one-time: passwordless sudo for cluster tools on linux only
+
+**macOS:** Initialize a rootful Podman machine once. If you do not already have
+one, run:
+
+```console
+podman machine init --rootful
+```
+
+Start the machine whenever you use dfmicro:
+
+```console
+podman machine start
+```
+
+### Create a cluster
+
+```
 dfmicro cluster create              # create cluster with default name
 dfmicro cluster kubeconfig          # outputs the cluster kubeconfig to stdout
 kubectl get nodes                   # save above config and run cluster operations
