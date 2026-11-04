@@ -10,7 +10,6 @@ import (
 	"dfmicro/internal/buildinfo"
 	"dfmicro/internal/cluster"
 	rootconfig "dfmicro/internal/config"
-	"dfmicro/internal/devlog"
 	"dfmicro/internal/docs"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/network"
@@ -47,7 +46,7 @@ func docsCommand() *cli.Command {
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			if cmd.Bool("devlog") {
-				_, err := os.Stdout.WriteString(devlog.Content)
+				_, err := os.Stdout.WriteString(docs.Devlog)
 				return err
 			}
 			if cmd.Bool("skill") {

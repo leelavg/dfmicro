@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/stolostron/multicloud-operators-foundation.git/deploy/foundation/hub/overlays/ocm-controller?ref=e061ff98030b73aec8e76dd26cbfbb849d0da19b&timeout=300s
+images:
+  - name: quay.io/stolostron/multicloud-manager
+    newTag: latest
+patches:
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: ocm-controller
+      namespace: open-cluster-management
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args/2
+        value: --agent-addon-image=quay.io/stolostron/multicloud-manager:latest
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 50m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 128Mi

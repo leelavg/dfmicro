@@ -1,0 +1,2054 @@
+# Generated from clusteradm v0.11.2, default bundle (Application Manager v0.16.0). Changed 100m to 50m cpu requests. DO NOT EDIT.
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: channels.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: Channel
+    listKind: ChannelList
+    plural: channels
+    singular: channel
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: type of the channel
+      jsonPath: .spec.type
+      name: Type
+      type: string
+    - description: pathname of the channel
+      jsonPath: .spec.pathname
+      name: Pathname
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Channel is the Schema for the channels API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ChannelSpec defines the desired state of Channel
+            properties:
+              configMapRef:
+                description: Reference to a ConfigMap which contains additional settings
+                  for accessing the channel. For example, the `insecureSkipVerify`
+                  option for accessing HTTPS endpoints can be set in the ConfigMap
+                  to indicate a insecure connection.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: 'If referring to a piece of an object instead of
+                      an entire object, this string should contain a valid JSON/Go
+                      field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within
+                      a pod, this would take on a value like: "spec.containers{name}"
+                      (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]"
+                      (container with index 2 in this pod). This syntax is chosen
+                      only to have some well-defined way of referencing a part of
+                      an object. TODO: this design is not final and this field is
+                      subject to change in the future.'
+                    type: string
+                  kind:
+                    description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                  namespace:
+                    description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                    type: string
+                  resourceVersion:
+                    description: 'Specific resourceVersion to which this reference
+                      is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                    type: string
+                  uid:
+                    description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                    type: string
+                type: object
+              gates:
+                description: Criteria for promoting a Deployable from the sourceNamespaces
+                  to Channel.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: The annotations which must present on a Deployable
+                      for it to be eligible for promotion.
+                    type: object
+                  labelSelector:
+                    description: A label selector for selecting the Deployables.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: A label selector requirement is a selector
+                            that contains values, a key, and an operator that relates
+                            the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: operator represents a key's relationship
+                                to a set of values. Valid operators are In, NotIn,
+                                Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: values is an array of string values. If
+                                the operator is In or NotIn, the values array must
+                                be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced
+                                during a strategic merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: matchLabels is a map of {key,value} pairs. A
+                          single {key,value} in the matchLabels map is equivalent
+                          to an element of matchExpressions, whose key field is "key",
+                          the operator is "In", and the values array contains only
+                          "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                  name:
+                    type: string
+                type: object
+              insecureSkipVerify:
+                description: Skip server TLS certificate verification for Git or Helm
+                  channel.
+                type: boolean
+              pathname:
+                description: For a `namespace` channel, pathname is the name of the
+                  namespace; For a `helmrepo` or `github` channel, pathname is the
+                  remote URL for the channel contents; For a `objectbucket` channel,
+                  pathname is the URL and name of the bucket.
+                type: string
+              secretRef:
+                description: For a `github` channel or a `helmrepo` channel on github,
+                  this can be used to reference a Secret which contains the credentials
+                  for authentication, i.e. `user` and `accessToken`. For a `objectbucket`
+                  channel, this can be used to reference a Secret which contains the
+                  AWS credentials, i.e. `AccessKeyID` and `SecretAccessKey`.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: 'If referring to a piece of an object instead of
+                      an entire object, this string should contain a valid JSON/Go
+                      field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within
+                      a pod, this would take on a value like: "spec.containers{name}"
+                      (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]"
+                      (container with index 2 in this pod). This syntax is chosen
+                      only to have some well-defined way of referencing a part of
+                      an object. TODO: this design is not final and this field is
+                      subject to change in the future.'
+                    type: string
+                  kind:
+                    description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                  namespace:
+                    description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                    type: string
+                  resourceVersion:
+                    description: 'Specific resourceVersion to which this reference
+                      is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                    type: string
+                  uid:
+                    description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                    type: string
+                type: object
+              sourceNamespaces:
+                description: A list of namespace names from which Deployables can
+                  be promoted.
+                items:
+                  type: string
+                type: array
+              type:
+                description: ChannelType defines types of channel
+                enum:
+                - Namespace
+                - HelmRepo
+                - ObjectBucket
+                - GitHub
+                - Git
+                - namespace
+                - helmrepo
+                - objectbucket
+                - github
+                - git
+                type: string
+            required:
+            - pathname
+            - type
+            type: object
+          status:
+            description: The most recent observed status of the Channel.
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: helmreleases.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: HelmRelease
+    listKind: HelmReleaseList
+    plural: helmreleases
+    singular: helmrelease
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: HelmRelease is the Schema for the subscriptionreleases API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          repo:
+            description: HelmReleaseRepo defines the repository of HelmRelease
+            properties:
+              chartName:
+                description: ChartName is the name of the chart within the repo
+                type: string
+              configMapRef:
+                description: Configuration parameters to access the helm-repo defined
+                  in the CatalogSource
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: 'If referring to a piece of an object instead of
+                      an entire object, this string should contain a valid JSON/Go
+                      field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within
+                      a pod, this would take on a value like: "spec.containers{name}"
+                      (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]"
+                      (container with index 2 in this pod). This syntax is chosen
+                      only to have some well-defined way of referencing a part of
+                      an object. TODO: this design is not final and this field is
+                      subject to change in the future.'
+                    type: string
+                  kind:
+                    description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                  namespace:
+                    description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                    type: string
+                  resourceVersion:
+                    description: 'Specific resourceVersion to which this reference
+                      is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                    type: string
+                  uid:
+                    description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                    type: string
+                type: object
+              digest:
+                description: Digest is the helm repo chart digest
+                type: string
+              insecureSkipVerify:
+                description: InsecureSkipVerify is used to skip repo server's TLS
+                  certificate verification
+                type: boolean
+              watchNamespaceScopedResources:
+                description: WatchNamespaceScopedResources is used to enable watching namespace scope Helm chart resources
+                type: boolean
+              secretRef:
+                description: Secret to use to access the helm-repo defined in the
+                  CatalogSource.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: 'If referring to a piece of an object instead of
+                      an entire object, this string should contain a valid JSON/Go
+                      field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within
+                      a pod, this would take on a value like: "spec.containers{name}"
+                      (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]"
+                      (container with index 2 in this pod). This syntax is chosen
+                      only to have some well-defined way of referencing a part of
+                      an object. TODO: this design is not final and this field is
+                      subject to change in the future.'
+                    type: string
+                  kind:
+                    description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                  namespace:
+                    description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                    type: string
+                  resourceVersion:
+                    description: 'Specific resourceVersion to which this reference
+                      is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                    type: string
+                  uid:
+                    description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                    type: string
+                type: object
+              source:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "operator-sdk generate k8s" to regenerate code after
+                  modifying this file Add custom validation using kubebuilder tags:
+                  https://book-v1.book.kubebuilder.io/beyond_basics/generating_crd.html
+                  Source holds the url toward the helm-chart'
+                properties:
+                  github:
+                    description: GitHub provides the parameters to access the helm-chart
+                      located in a github repo
+                    properties:
+                      branch:
+                        type: string
+                      chartPath:
+                        type: string
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  git:
+                    description: Git provides the parameters to access the helm-chart
+                      located in a git repo
+                    properties:
+                      branch:
+                        type: string
+                      chartPath:
+                        type: string
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  helmRepo:
+                    description: HelmRepo provides the urls to retrieve the helm-chart
+                    properties:
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  type:
+                    description: SourceTypeEnum types of sources
+                    type: string
+                type: object
+              altSource:
+                description: AltSource holds the url toward the helm-chart
+                properties:
+                  configMapRef:
+                    description: Configuration parameters to access the helm-repo defined
+                      in the CatalogSource
+                    properties:
+                      apiVersion:
+                        description: API version of the referent.
+                        type: string
+                      fieldPath:
+                        description: 'If referring to a piece of an object instead of
+                          an entire object, this string should contain a valid JSON/Go
+                          field access statement, such as desiredState.manifest.containers[2].
+                          For example, if the object reference is to a container within
+                          a pod, this would take on a value like: "spec.containers{name}"
+                          (where "name" refers to the name of the container that triggered
+                          the event) or if no container name is specified "spec.containers[2]"
+                          (container with index 2 in this pod). This syntax is chosen
+                          only to have some well-defined way of referencing a part of
+                          an object. TODO: this design is not final and this field is
+                          subject to change in the future.'
+                        type: string
+                      kind:
+                        description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                        type: string
+                      namespace:
+                        description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                        type: string
+                      resourceVersion:
+                        description: 'Specific resourceVersion to which this reference
+                          is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                        type: string
+                      uid:
+                        description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                        type: string
+                    type: object
+                  insecureSkipVerify:
+                    description: InsecureSkipVerify is used to skip repo server's TLS
+                      certificate verification
+                    type: boolean
+                  secretRef:
+                    description: Secret to use to access the helm-repo defined in the
+                      CatalogSource.
+                    properties:
+                      apiVersion:
+                        description: API version of the referent.
+                        type: string
+                      fieldPath:
+                        description: 'If referring to a piece of an object instead of
+                          an entire object, this string should contain a valid JSON/Go
+                          field access statement, such as desiredState.manifest.containers[2].
+                          For example, if the object reference is to a container within
+                          a pod, this would take on a value like: "spec.containers{name}"
+                          (where "name" refers to the name of the container that triggered
+                          the event) or if no container name is specified "spec.containers[2]"
+                          (container with index 2 in this pod). This syntax is chosen
+                          only to have some well-defined way of referencing a part of
+                          an object. TODO: this design is not final and this field is
+                          subject to change in the future.'
+                        type: string
+                      kind:
+                        description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                        type: string
+                      namespace:
+                        description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                        type: string
+                      resourceVersion:
+                        description: 'Specific resourceVersion to which this reference
+                          is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                        type: string
+                      uid:
+                        description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                        type: string
+                    type: object
+                  github:
+                    description: GitHub provides the parameters to access the helm-chart
+                      located in a github repo
+                    properties:
+                      branch:
+                        type: string
+                      chartPath:
+                        type: string
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  git:
+                    description: Git provides the parameters to access the helm-chart
+                      located in a git repo
+                    properties:
+                      branch:
+                        type: string
+                      chartPath:
+                        type: string
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  helmRepo:
+                    description: HelmRepo provides the urls to retrieve the helm-chart
+                    properties:
+                      urls:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  type:
+                    description: SourceTypeEnum types of sources
+                    type: string
+                type: object
+              version:
+                description: Version is the chart version
+                type: string
+            type: object
+          spec:
+            x-kubernetes-preserve-unknown-fields: true
+          status:
+            properties:
+              conditions:
+                items:
+                  properties:
+                    lastTransitionTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    reason:
+                      type: string
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              deployedRelease:
+                properties:
+                  manifest:
+                    type: string
+                  name:
+                    type: string
+                type: object
+            required:
+            - conditions
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: placementrules.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: PlacementRule
+    listKind: PlacementRuleList
+    plural: placementrules
+    singular: placementrule
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .spec.clusterReplicas
+      name: Replicas
+      type: integer
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: PlacementRule is the Schema for the placementrules API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PlacementRuleSpec defines the desired state of PlacementRule
+            properties:
+              clusterConditions:
+                items:
+                  description: ClusterConditionFilter defines filter to filter cluster
+                    condition
+                  properties:
+                    status:
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              clusterReplicas:
+                description: number of replicas Application wants to
+                format: int32
+                type: integer
+              clusterSelector:
+                description: A label selector is a label query over a set of resources.
+                  The result of matchLabels and matchExpressions are ANDed. An empty
+                  label selector matches all objects. A null label selector matches
+                  no objects.
+                properties:
+                  matchExpressions:
+                    description: matchExpressions is a list of label selector requirements.
+                      The requirements are ANDed.
+                    items:
+                      description: A label selector requirement is a selector that
+                        contains values, a key, and an operator that relates the key
+                        and values.
+                      properties:
+                        key:
+                          description: key is the label key that the selector applies
+                            to.
+                          type: string
+                        operator:
+                          description: operator represents a key's relationship to
+                            a set of values. Valid operators are In, NotIn, Exists
+                            and DoesNotExist.
+                          type: string
+                        values:
+                          description: values is an array of string values. If the
+                            operator is In or NotIn, the values array must be non-empty.
+                            If the operator is Exists or DoesNotExist, the values
+                            array must be empty. This array is replaced during a strategic
+                            merge patch.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - key
+                      - operator
+                      type: object
+                    type: array
+                  matchLabels:
+                    additionalProperties:
+                      type: string
+                    description: matchLabels is a map of {key,value} pairs. A single
+                      {key,value} in the matchLabels map is equivalent to an element
+                      of matchExpressions, whose key field is "key", the operator
+                      is "In", and the values array contains only "value". The requirements
+                      are ANDed.
+                    type: object
+                type: object
+              clusters:
+                items:
+                  description: GenericClusterReference - in alignment with kubefed
+                  properties:
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              policies:
+                description: Set Policy Filters
+                items:
+                  description: 'ObjectReference contains enough information to let
+                    you inspect or modify the referred object. --- New uses of this
+                    type are discouraged because of difficulty describing its usage
+                    when embedded in APIs.  1. Ignored fields.  It includes many fields
+                    which are not generally honored.  For instance, ResourceVersion
+                    and FieldPath are both very rarely valid in actual usage.  2.
+                    Invalid usage help.  It is impossible to add specific help for
+                    individual usage.  In most embedded usages, there are particular     restrictions
+                    like, "must refer only to types A and B" or "UID not honored"
+                    or "name must be restricted".     Those cannot be well described
+                    when embedded.  3. Inconsistent validation.  Because the usages
+                    are different, the validation rules are different by usage, which
+                    makes it hard for users to predict what will happen.  4. The fields
+                    are both imprecise and overly precise.  Kind is not a precise
+                    mapping to a URL. This can produce ambiguity     during interpretation
+                    and require a REST mapping.  In most cases, the dependency is
+                    on the group,resource tuple     and the version of the actual
+                    struct is irrelevant.  5. We cannot easily change it.  Because
+                    this type is embedded in many locations, updates to this type     will
+                    affect numerous schemas.  Don''t make new APIs embed an underspecified
+                    API type they do not control. Instead of using this type, create
+                    a locally provided and used type that is well-focused on your
+                    reference. For example, ServiceReferences for admission registration:
+                    https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                    .'
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: 'If referring to a piece of an object instead of
+                        an entire object, this string should contain a valid JSON/Go
+                        field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within
+                        a pod, this would take on a value like: "spec.containers{name}"
+                        (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]"
+                        (container with index 2 in this pod). This syntax is chosen
+                        only to have some well-defined way of referencing a part of
+                        an object. TODO: this design is not final and this field is
+                        subject to change in the future.'
+                      type: string
+                    kind:
+                      description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                      type: string
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                    namespace:
+                      description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                      type: string
+                    resourceVersion:
+                      description: 'Specific resourceVersion to which this reference
+                        is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                      type: string
+                    uid:
+                      description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                      type: string
+                  type: object
+                type: array
+              resourceHint:
+                description: Select Resource
+                properties:
+                  order:
+                    description: SelectionOrder is the type for Nodes
+                    type: string
+                  type:
+                    description: ResourceType defines types can be sorted
+                    type: string
+                type: object
+              schedulerName:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                  schedulerName, default to use mcm controller'
+                type: string
+            type: object
+          status:
+            description: PlacementRuleStatus defines the observed state of PlacementRule
+            properties:
+              decisions:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                items:
+                  description: PlacementDecision defines the decision made by controller
+                  properties:
+                    clusterName:
+                      type: string
+                    clusterNamespace:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: subscriptions.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: Subscription
+    listKind: SubscriptionList
+    plural: subscriptions
+    shortNames:
+    - appsub
+    singular: subscription
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: subscription status
+      jsonPath: .status.phase
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - jsonPath: .spec.placement.local
+      name: Local placement
+      type: boolean
+    - jsonPath: .spec.timewindow.windowtype
+      name: Time window
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Subscription is the Schema for the subscriptions API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SubscriptionSpec defines the desired state of Subscription
+            properties:
+              channel:
+                type: string
+              secondaryChannel:
+                type: string
+              hooksecretref:
+                description: 'ObjectReference contains enough information to let you
+                  inspect or modify the referred object. --- New uses of this type
+                  are discouraged because of difficulty describing its usage when
+                  embedded in APIs.  1. Ignored fields.  It includes many fields which
+                  are not generally honored.  For instance, ResourceVersion and FieldPath
+                  are both very rarely valid in actual usage.  2. Invalid usage help.  It
+                  is impossible to add specific help for individual usage.  In most
+                  embedded usages, there are particular     restrictions like, "must
+                  refer only to types A and B" or "UID not honored" or "name must
+                  be restricted".     Those cannot be well described when embedded.  3.
+                  Inconsistent validation.  Because the usages are different, the
+                  validation rules are different by usage, which makes it hard for
+                  users to predict what will happen.  4. The fields are both imprecise
+                  and overly precise.  Kind is not a precise mapping to a URL. This
+                  can produce ambiguity     during interpretation and require a REST
+                  mapping.  In most cases, the dependency is on the group,resource
+                  tuple     and the version of the actual struct is irrelevant.  5.
+                  We cannot easily change it.  Because this type is embedded in many
+                  locations, updates to this type     will affect numerous schemas.  Don''t
+                  make new APIs embed an underspecified API type they do not control.
+                  Instead of using this type, create a locally provided and used type
+                  that is well-focused on your reference. For example, ServiceReferences
+                  for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                  .'
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: 'If referring to a piece of an object instead of
+                      an entire object, this string should contain a valid JSON/Go
+                      field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within
+                      a pod, this would take on a value like: "spec.containers{name}"
+                      (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]"
+                      (container with index 2 in this pod). This syntax is chosen
+                      only to have some well-defined way of referencing a part of
+                      an object. TODO: this design is not final and this field is
+                      subject to change in the future.'
+                    type: string
+                  kind:
+                    description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                    type: string
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                    type: string
+                  namespace:
+                    description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                    type: string
+                  resourceVersion:
+                    description: 'Specific resourceVersion to which this reference
+                      is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                    type: string
+                  uid:
+                    description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                    type: string
+                type: object
+              name:
+                description: To specify 1 package in channel
+                type: string
+              overrides:
+                description: for hub use only to specify the overrides when apply
+                  to clusters
+                items:
+                  description: Overrides field in deployable
+                  properties:
+                    clusterName:
+                      type: string
+                    clusterOverrides:
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      minItems: 1
+                      type: array
+                  required:
+                  - clusterName
+                  - clusterOverrides
+                  type: object
+                type: array
+              packageFilter:
+                description: To specify more than 1 package in channel
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  filterRef:
+                    description: LocalObjectReference contains enough information
+                      to let you locate the referenced object inside the same namespace.
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
+                  labelSelector:
+                    description: A label selector is a label query over a set of resources.
+                      The result of matchLabels and matchExpressions are ANDed. An
+                      empty label selector matches all objects. A null label selector
+                      matches no objects.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: A label selector requirement is a selector
+                            that contains values, a key, and an operator that relates
+                            the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: operator represents a key's relationship
+                                to a set of values. Valid operators are In, NotIn,
+                                Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: values is an array of string values. If
+                                the operator is In or NotIn, the values array must
+                                be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced
+                                during a strategic merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: matchLabels is a map of {key,value} pairs. A
+                          single {key,value} in the matchLabels map is equivalent
+                          to an element of matchExpressions, whose key field is "key",
+                          the operator is "In", and the values array contains only
+                          "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                  version:
+                    pattern: ([0-9]+)((\.[0-9]+)(\.[0-9]+)|(\.[0-9]+)?(\.[xX]))$
+                    type: string
+                type: object
+              packageOverrides:
+                description: To provide flexibility to override package in channel
+                  with local input
+                items:
+                  description: Overrides field in deployable
+                  properties:
+                    packageAlias:
+                      type: string
+                    packageName:
+                      type: string
+                    packageOverrides:
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                      type: array
+                  required:
+                  - packageName
+                  type: object
+                type: array
+              allow:
+                description: To allow deployment of listed resources
+                items:
+                  description: Set of kubernetes group resources allowed to be deployed
+                  properties:
+                    apiVersion:
+                      type: string
+                    kinds:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - apiVersion
+                  - kinds
+                  type: object
+                type: array
+              deny:
+                description: To deny deployment of listed resources
+                items:
+                  description: Set of kubernetes group resources not allowed to be deployed
+                  properties:
+                    apiVersion:
+                      type: string
+                    kinds:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - apiVersion
+                  - kinds
+                  type: object
+                type: array
+              watchHelmNamespaceScopedResources:
+                description: WatchHelmNamespaceScopedResources is used to enable watching namespace scope Helm chart resources
+                type: boolean
+              placement:
+                description: For hub use only, to specify which clusters to go to
+                properties:
+                  clusterSelector:
+                    description: A label selector is a label query over a set of resources.
+                      The result of matchLabels and matchExpressions are ANDed. An
+                      empty label selector matches all objects. A null label selector
+                      matches no objects.
+                    properties:
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: A label selector requirement is a selector
+                            that contains values, a key, and an operator that relates
+                            the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: operator represents a key's relationship
+                                to a set of values. Valid operators are In, NotIn,
+                                Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: values is an array of string values. If
+                                the operator is In or NotIn, the values array must
+                                be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced
+                                during a strategic merge patch.
+                              items:
+                                type: string
+                              type: array
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: matchLabels is a map of {key,value} pairs. A
+                          single {key,value} in the matchLabels map is equivalent
+                          to an element of matchExpressions, whose key field is "key",
+                          the operator is "In", and the values array contains only
+                          "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                  clusters:
+                    items:
+                      description: GenericClusterReference - in alignment with kubefed
+                      properties:
+                        name:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  local:
+                    type: boolean
+                  placementRef:
+                    description: 'ObjectReference contains enough information to let
+                      you inspect or modify the referred object. --- New uses of this
+                      type are discouraged because of difficulty describing its usage
+                      when embedded in APIs.  1. Ignored fields.  It includes many
+                      fields which are not generally honored.  For instance, ResourceVersion
+                      and FieldPath are both very rarely valid in actual usage.  2.
+                      Invalid usage help.  It is impossible to add specific help for
+                      individual usage.  In most embedded usages, there are particular     restrictions
+                      like, "must refer only to types A and B" or "UID not honored"
+                      or "name must be restricted".     Those cannot be well described
+                      when embedded.  3. Inconsistent validation.  Because the usages
+                      are different, the validation rules are different by usage,
+                      which makes it hard for users to predict what will happen.  4.
+                      The fields are both imprecise and overly precise.  Kind is not
+                      a precise mapping to a URL. This can produce ambiguity     during
+                      interpretation and require a REST mapping.  In most cases, the
+                      dependency is on the group,resource tuple     and the version
+                      of the actual struct is irrelevant.  5. We cannot easily change
+                      it.  Because this type is embedded in many locations, updates
+                      to this type     will affect numerous schemas.  Don''t make
+                      new APIs embed an underspecified API type they do not control.
+                      Instead of using this type, create a locally provided and used
+                      type that is well-focused on your reference. For example, ServiceReferences
+                      for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533
+                      .'
+                    properties:
+                      apiVersion:
+                        description: API version of the referent.
+                        type: string
+                      fieldPath:
+                        description: 'If referring to a piece of an object instead
+                          of an entire object, this string should contain a valid
+                          JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                          For example, if the object reference is to a container within
+                          a pod, this would take on a value like: "spec.containers{name}"
+                          (where "name" refers to the name of the container that triggered
+                          the event) or if no container name is specified "spec.containers[2]"
+                          (container with index 2 in this pod). This syntax is chosen
+                          only to have some well-defined way of referencing a part
+                          of an object. TODO: this design is not final and this field
+                          is subject to change in the future.'
+                        type: string
+                      kind:
+                        description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                        type: string
+                      namespace:
+                        description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                        type: string
+                      resourceVersion:
+                        description: 'Specific resourceVersion to which this reference
+                          is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                        type: string
+                      uid:
+                        description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                        type: string
+                    type: object
+                type: object
+              timewindow:
+                description: help user control when the subscription will take affect
+                properties:
+                  daysofweek:
+                    description: weekdays defined the day of the week for this time
+                      window https://golang.org/pkg/time/#Weekday
+                    items:
+                      type: string
+                    type: array
+                  hours:
+                    items:
+                      description: HourRange time format for each time will be Kitchen
+                        format, defined at https://golang.org/pkg/time/#pkg-constants
+                      properties:
+                        end:
+                          type: string
+                        start:
+                          type: string
+                      type: object
+                    type: array
+                  location:
+                    description: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+                    type: string
+                  windowtype:
+                    description: 'active time window or not, if timewindow is active,
+                      then deploy will only applies during these windows Note, if
+                      you want to generation crd with operator-sdk v0.10.0, then the
+                      following line should be: <+kubebuilder:validation:Enum=active,blocked,Active,Blocked>'
+                    enum:
+                    - active
+                    - blocked
+                    - Active
+                    - Blocked
+                    type: string
+                type: object
+            required:
+            - channel
+            type: object
+          status:
+            description: "SubscriptionStatus defines the observed state of Subscription
+              Examples - status of a subscription on hub Status: \tphase: Propagated
+              \tstatuses: \t  washdc: \t\tpackages: \t\t  nginx: \t\t\tphase: Subscribed
+              \t\t  mongodb: \t\t\tphase: Failed \t\t\tReason: \"not authorized\"
+              \t\t\tMessage: \"user xxx does not have permission to start pod\" \t\t\tresourceStatus:
+              {}    toronto: \t\tpackages: \t\t  nginx: \t\t\tphase: Subscribed \t\t
+              \ mongodb: \t\t\tphase: Subscribed Status of a subscription on managed
+              cluster will only have 1 cluster in the map."
+            properties:
+              ansiblejobs:
+                properties:
+                  lastposthookjob:
+                    type: string
+                  lastprehookjob:
+                    type: string
+                  posthookjobshistory:
+                    items:
+                      type: string
+                    type: array
+                  prehookjobshistory:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              lastUpdateTime:
+                format: date-time
+                type: string
+              message:
+                type: string
+              phase:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: string
+              reason:
+                type: string
+              statuses:
+                additionalProperties:
+                  description: SubscriptionPerClusterStatus defines status for subscription
+                    in each cluster, key is package name
+                  properties:
+                    packages:
+                      additionalProperties:
+                        description: SubscriptionUnitStatus defines status of a unit
+                          (subscription or package)
+                        properties:
+                          lastUpdateTime:
+                            format: date-time
+                            type: string
+                          message:
+                            type: string
+                          phase:
+                            description: Phase are Propagated if it is in hub or Subscribed
+                              if it is in endpoint
+                            type: string
+                          reason:
+                            type: string
+                          resourceStatus:
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        required:
+                        - lastUpdateTime
+                        type: object
+                      type: object
+                  type: object
+                description: For endpoint, it is the status of subscription, key is
+                  packagename, For hub, it aggregates all status, key is cluster name
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: subscriptionstatuses.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: SubscriptionStatus
+    listKind: SubscriptionStatusList
+    plural: subscriptionstatuses
+    shortNames:
+    - appsubstatus
+    singular: subscriptionstatus
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SubscriptionStatus defines the status of package deployments
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          statuses:
+            description: Statuses represents all the resources deployed by the subscription per cluster
+            properties:
+              packages:
+                items:
+                  description: SubscriptionUnitStatus defines status of a package deployment.
+                  properties:
+                    apiVersion:
+                      type: string
+                    kind:
+                      type: string
+                    lastUpdateTime:
+                      format: date-time
+                      type: string
+                    message:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    phase:
+                      description: PackagePhase defines the phasing of a Package
+                      type: string
+                  required:
+                  - lastUpdateTime
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: subscriptionreports.apps.open-cluster-management.io
+spec:
+  group: apps.open-cluster-management.io
+  names:
+    kind: SubscriptionReport
+    listKind: SubscriptionReportList
+    plural: subscriptionreports
+    shortNames:
+    - appsubreport
+    singular: subscriptionreport
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .reportType
+      name: ReportType
+      type: string
+    - jsonPath: .summary.deployed
+      name: Deployed
+      type: string
+    - jsonPath: .summary.inProgress
+      name: InProgress
+      type: string
+    - jsonPath: .summary.failed
+      name: Failed
+      type: string
+    - jsonPath: .summary.propagationFailed
+      name: PropagationFailed
+      type: string
+    - jsonPath: .summary.clusters
+      name: Clusters
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SubscriptionReport is the Schema for the subscriptionreports API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          reportType:
+            description: ReportType is the name or identifier of the type of report
+            enum:
+            - Application
+            - Cluster
+            type: string
+          resources:
+            description: Resources is an optional reference to the subscription resources
+            items:
+              description: 'ObjectReference contains enough information to let you inspect or modify the referred object. --- New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.  1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.  2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular     restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".     Those cannot be well described when embedded.  3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.  4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity     during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple     and the version of the actual struct is irrelevant.  5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type     will affect numerous schemas.  Don''t make new APIs embed an underspecified API type they do not control. Instead of using this type, create a locally provided and used type that is well-focused on your reference. For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .'
+              properties:
+                apiVersion:
+                  description: API version of the referent.
+                  type: string
+                fieldPath:
+                  description: 'If referring to a piece of an object instead of an entire object, this string should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2]. For example, if the object reference is to a container within a pod, this would take on a value like: "spec.containers{name}" (where "name" refers to the name of the container that triggered the event) or if no container name is specified "spec.containers[2]" (container with index 2 in this pod). This syntax is chosen only to have some well-defined way of referencing a part of an object. TODO: this design is not final and this field is subject to change in the future.'
+                  type: string
+                kind:
+                  description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                  type: string
+                name:
+                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                  type: string
+                namespace:
+                  description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                  type: string
+                resourceVersion:
+                  description: 'Specific resourceVersion to which this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                  type: string
+                uid:
+                  description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                  type: string
+              type: object
+            type: array
+          results:
+            description: SubscriptionReportResult provides result details
+            items:
+              description: SubscriptionReportResult provides the result for an individual subscription
+              properties:
+                result:
+                  description: Result indicates the outcome of the subscription deployment
+                  enum:
+                  - deployed
+                  - failed
+                  - propagationFailed
+                  type: string
+                source:
+                  description: Source is an identifier for the subscription
+                  type: string
+                timestamp:
+                  description: Timestamp indicates the time the result was found
+                  properties:
+                    nanos:
+                      description: Non-negative fractions of a second at nanosecond resolution. Negative second values with fractions must still have non-negative nanos values that count forward in time. Must be from 0 to 999,999,999 inclusive. This field may be limited in precision depending on context.
+                      format: int32
+                      type: integer
+                    seconds:
+                      description: Represents seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive.
+                      format: int64
+                      type: integer
+                  required:
+                  - nanos
+                  - seconds
+                  type: object
+              type: object
+            type: array
+          summary:
+            description: SubscriptionReportSummary provides a summary of results
+            properties:
+              clusters:
+                description: Clusters provides the count of all managed clusters the subscription is deployed to
+                type: string
+              deployed:
+                description: Deployed provides the count of subscriptions that deployed successfully
+                type: string
+              failed:
+                description: Failed provides the count of subscriptions that failed to deploy
+                type: string
+              inProgress:
+                description: InProgress provides the count of subscriptions that are in the process of being deployed
+                type: string
+              propagationFailed:
+                description: PropagationFailed provides the count of subscriptions that failed to propagate to a managed cluster
+                type: string
+            type: object
+        required:
+        - reportType
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.5.0
+  creationTimestamp: null
+  name: clusterpolicyreports.wgpolicyk8s.io
+spec:
+  group: wgpolicyk8s.io
+  names:
+    kind: ClusterPolicyReport
+    listKind: ClusterPolicyReportList
+    plural: clusterpolicyreports
+    shortNames:
+    - cpolr
+    singular: clusterpolicyreport
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .scope.kind
+      name: Kind
+      priority: 1
+      type: string
+    - jsonPath: .scope.name
+      name: Name
+      priority: 1
+      type: string
+    - jsonPath: .summary.pass
+      name: Pass
+      type: integer
+    - jsonPath: .summary.fail
+      name: Fail
+      type: integer
+    - jsonPath: .summary.warn
+      name: Warn
+      type: integer
+    - jsonPath: .summary.error
+      name: Error
+      type: integer
+    - jsonPath: .summary.skip
+      name: Skip
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        description: ClusterPolicyReport is the Schema for the clusterpolicyreports API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          results:
+            description: PolicyReportResult provides result details
+            items:
+              description: PolicyReportResult provides the result for an individual policy
+              properties:
+                category:
+                  description: Category indicates policy category
+                  type: string
+                message:
+                  description: Description is a short user friendly message for the policy rule
+                  type: string
+                policy:
+                  description: Policy is the name or identifier of the policy
+                  type: string
+                properties:
+                  additionalProperties:
+                    type: string
+                  description: Properties provides additional information for the policy rule
+                  type: object
+                resourceSelector:
+                  description: SubjectSelector is an optional label selector for checked Kubernetes resources. For example, a policy result may apply to all pods that match a label. Either a Subject or a SubjectSelector can be specified. If neither are provided, the result is assumed to be for the policy report scope.
+                  properties:
+                    matchExpressions:
+                      description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                      items:
+                        description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                        properties:
+                          key:
+                            description: key is the label key that the selector applies to.
+                            type: string
+                          operator:
+                            description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                            type: string
+                          values:
+                            description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                            items:
+                              type: string
+                            type: array
+                        required:
+                        - key
+                        - operator
+                        type: object
+                      type: array
+                    matchLabels:
+                      additionalProperties:
+                        type: string
+                      description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                      type: object
+                  type: object
+                resources:
+                  description: Subjects is an optional reference to the checked Kubernetes resources
+                  items:
+                    description: 'ObjectReference contains enough information to let you inspect or modify the referred object. --- New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.  1. Ignored fields.  It includes many fields which are not generally honored.  For instance, ResourceVersion and FieldPath are both very rarely valid in actual usage.  2. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular     restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".     Those cannot be well described when embedded.  3. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.  4. The fields are both imprecise and overly precise.  Kind is not a precise mapping to a URL. This can produce ambiguity     during interpretation and require a REST mapping.  In most cases, the dependency is on the group,resource tuple     and the version of the actual struct is irrelevant.  5. We cannot easily change it.  Because this type is embedded in many locations, updates to this type     will affect numerous schemas.  Don''t make new APIs embed an underspecified API type they do not control. Instead of using this type, create a locally provided and used type that is well-focused on your reference. For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .'
+                    properties:
+                      apiVersion:
+                        description: API version of the referent.
+                        type: string
+                      fieldPath:
+                        description: 'If referring to a piece of an object instead of an entire object, this string should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2]. For example, if the object reference is to a container within a pod, this would take on a value like: "spec.containers{name}" (where "name" refers to the name of the container that triggered the event) or if no container name is specified "spec.containers[2]" (container with index 2 in this pod). This syntax is chosen only to have some well-defined way of referencing a part of an object. TODO: this design is not final and this field is subject to change in the future.'
+                        type: string
+                      kind:
+                        description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                        type: string
+                      namespace:
+                        description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                        type: string
+                      resourceVersion:
+                        description: 'Specific resourceVersion to which this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                        type: string
+                      uid:
+                        description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                        type: string
+                    type: object
+                  type: array
+                result:
+                  description: Result indicates the outcome of the policy rule execution
+                  enum:
+                  - pass
+                  - fail
+                  - warn
+                  - error
+                  - skip
+                  type: string
+                rule:
+                  description: Rule is the name or identifier of the rule within the policy
+                  type: string
+                scored:
+                  description: Scored indicates if this result is scored
+                  type: boolean
+                severity:
+                  description: Severity indicates policy check result criticality
+                  enum:
+                  - high
+                  - low
+                  - medium
+                  type: string
+                source:
+                  description: Source is an identifier for the policy engine that manages this report
+                  type: string
+                timestamp:
+                  description: Timestamp indicates the time the result was found
+                  properties:
+                    nanos:
+                      description: Non-negative fractions of a second at nanosecond resolution. Negative second values with fractions must still have non-negative nanos values that count forward in time. Must be from 0 to 999,999,999 inclusive. This field may be limited in precision depending on context.
+                      format: int32
+                      type: integer
+                    seconds:
+                      description: Represents seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z. Must be from 0001-01-01T00:00:00Z to 9999-12-31T23:59:59Z inclusive.
+                      format: int64
+                      type: integer
+                  required:
+                  - nanos
+                  - seconds
+                  type: object
+              required:
+              - policy
+              type: object
+            type: array
+          scope:
+            description: Scope is an optional reference to the report scope (e.g. a Deployment, Namespace, or Node)
+            properties:
+              apiVersion:
+                description: API version of the referent.
+                type: string
+              fieldPath:
+                description: 'If referring to a piece of an object instead of an entire object, this string should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2]. For example, if the object reference is to a container within a pod, this would take on a value like: "spec.containers{name}" (where "name" refers to the name of the container that triggered the event) or if no container name is specified "spec.containers[2]" (container with index 2 in this pod). This syntax is chosen only to have some well-defined way of referencing a part of an object. TODO: this design is not final and this field is subject to change in the future.'
+                type: string
+              kind:
+                description: 'Kind of the referent. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                type: string
+              name:
+                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                type: string
+              namespace:
+                description: 'Namespace of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/'
+                type: string
+              resourceVersion:
+                description: 'Specific resourceVersion to which this reference is made, if any. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency'
+                type: string
+              uid:
+                description: 'UID of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids'
+                type: string
+            type: object
+          scopeSelector:
+            description: ScopeSelector is an optional selector for multiple scopes (e.g. Pods). Either one of, or none of, but not both of, Scope or ScopeSelector should be specified.
+            properties:
+              matchExpressions:
+                description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                items:
+                  description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                  properties:
+                    key:
+                      description: key is the label key that the selector applies to.
+                      type: string
+                    operator:
+                      description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                      type: string
+                    values:
+                      description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - key
+                  - operator
+                  type: object
+                type: array
+              matchLabels:
+                additionalProperties:
+                  type: string
+                description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                type: object
+            type: object
+          summary:
+            description: PolicyReportSummary provides a summary of results
+            properties:
+              error:
+                description: Error provides the count of policies that could not be evaluated
+                type: integer
+              fail:
+                description: Fail provides the count of policies whose requirements were not met
+                type: integer
+              pass:
+                description: Pass provides the count of policies whose requirements were met
+                type: integer
+              skip:
+                description: Skip indicates the count of policies that were not selected for evaluation
+                type: integer
+              warn:
+                description: Warn provides the count of non-scored policies whose requirements were not met
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ClusterManagementAddOn
+metadata:
+  annotations:
+    addon.open-cluster-management.io/lifecycle: addon-manager
+  name: application-manager
+spec:
+  addOnMeta:
+    description: Synchronizes applications on the managed clusters from the hub.
+    displayName: Application Manager
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: application-manager-agent
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps.open-cluster-management.io"]
+  resources: ["subscriptionstatuses", "subscriptionreports"]
+  verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
+
+---
+# Copyright Contributors to the Open Cluster Management project
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: multicluster-operators-subscription
+subjects:
+- kind: ServiceAccount
+  name: multicluster-operators-subscription
+  namespace: open-cluster-management
+roleRef:
+  kind: ClusterRole
+  name: multicluster-operators-subscription
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multicluster-operators-subscription
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - '*'
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: multicluster-operators-subscription
+  namespace: open-cluster-management
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: hub-subscription-metrics
+  name: hub-subscription-metrics
+  namespace: open-cluster-management
+spec:
+  ports:
+    - name: metrics
+      port: 8381
+      protocol: TCP
+      targetPort: 8381
+  selector:
+    app: multicluster-operators-hub-subscription
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: multicluster-operators-subscription
+  name: multicluster-operators-subscription
+  namespace: open-cluster-management
+spec:
+  ports:
+  - port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: multicluster-operators-hub-subscription
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: ocm-mutating-webhook
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multicluster-operators-channel
+  namespace: open-cluster-management
+  labels:
+    name: multicluster-operators-channel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: multicluster-operators-channel
+  template:
+    metadata:
+      labels:
+        name: multicluster-operators-channel
+    spec:
+      serviceAccountName: multicluster-operators-subscription
+      containers:
+        - name: multicluster-operators-channel
+          image: quay.io/open-cluster-management/multicloud-operators-channel:v0.16.0
+          ports:
+          - containerPort: 7443
+          command:
+          - /usr/local/bin/multicluster-operators-channel
+          - --alsologtostderr
+          - --debug=true
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "multicluster-operators-channel"
+          resources:
+              requests:
+                # -- Changed from 100m to 50m
+                cpu: 50m
+                memory: 128Mi
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multicluster-operators-subscription
+  namespace: open-cluster-management
+  labels:
+    name: multicluster-operators-subscription
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multicluster-operators-hub-subscription
+  template:
+    metadata:
+      labels:
+        app: multicluster-operators-hub-subscription
+    spec:
+      serviceAccountName: multicluster-operators-subscription
+      containers:
+        - name: multicluster-operators-subscription
+          image: quay.io/open-cluster-management/multicloud-operators-subscription:v0.16.0
+          ports:
+          - containerPort: 8443
+          command:
+          - /usr/local/bin/multicluster-operators-subscription
+          - --sync-interval=60
+          - --agent-image=quay.io/open-cluster-management/multicloud-operators-subscription:v0.16.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WATCH_NAMESPACE
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "multicluster-operators-subscription"
+            - name: DEPLOYMENT_LABEL
+              value: "multicluster-operators-subscription"
+          resources:
+              requests:
+                # -- Changed from 100m to 50m
+                cpu: 50m
+                memory: 128Mi
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multicluster-operators-placementrule
+  namespace: open-cluster-management
+  labels:
+    name: multicluster-operators-placementrule
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: multicluster-operators-placementrule
+  template:
+    metadata:
+      labels:
+        name: multicluster-operators-placementrule
+    spec:
+      serviceAccountName: multicluster-operators-subscription
+      containers:
+        - name: multicluster-operators-placementrule
+          image: quay.io/open-cluster-management/multicloud-operators-subscription:v0.16.0
+          ports:
+          - containerPort: 6443
+          command:
+          - /usr/local/bin/multicluster-operators-placementrule
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "multicluster-operators-placementrule"
+          resources:
+              requests:
+                # -- Changed from 100m to 50m
+                cpu: 50m
+                memory: 128Mi
+
+---
+# Copyright Contributors to the Open Cluster Management project
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multicluster-operators-appsub-summary
+  namespace: open-cluster-management
+  labels:
+    name: multicluster-operators-appsub-summary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: multicluster-operators-appsub-summary
+  template:
+    metadata:
+      labels:
+        name: multicluster-operators-appsub-summary
+    spec:
+      serviceAccountName: multicluster-operators-subscription
+      containers:
+        - name: multicluster-operators-appsub-summary
+          image: quay.io/open-cluster-management/multicloud-operators-subscription:v0.16.0
+          ports:
+          - containerPort: 9443
+          command:
+          - /usr/local/bin/appsubsummary
+          - --v=1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WATCH_NAMESPACE
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "multicluster-operators-appsub-summary"
+          resources:
+              requests:
+                # -- Changed from 100m to 50m
+                cpu: 50m
+                memory: 128Mi
+
+---

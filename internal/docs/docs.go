@@ -12,3 +12,6 @@ var Examples string
 
 //go:embed SKILL.md
 var Skill string
+
+//go:embed devlog.txt
+var Devlog string

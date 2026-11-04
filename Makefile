@@ -13,7 +13,7 @@ TOPOLVM_VERSION ?= 17.2.0
 MDBOOK_VERSION ?= 0.5.4
 MDBOOK := $(BIN_DIR)/mdbook
 
-.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze lint install-mdbook docs docs-serve
+.PHONY: vet fmt generate generate-topolvm generate-ocm-controller build build-cross build-release build-analyze lint install-mdbook docs docs-serve
 
 vet:
 	go vet ./...
@@ -48,11 +48,14 @@ docs-serve: docs
 fmt:
 	go fmt ./...
 
-generate: generate-topolvm
+generate: generate-topolvm generate-ocm-controller
 	go generate ./internal/docs
 
 generate-topolvm:
 	TOPOLVM_VERSION=$(TOPOLVM_VERSION) ./hack/generate-topolvm.sh
+
+generate-ocm-controller:
+	./hack/generate-ocm-controller.sh
 
 fix:
 	go fix ./...
