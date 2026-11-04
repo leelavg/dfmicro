@@ -53,7 +53,7 @@ Commands are grouped into top-level domains, each in its own package under `inte
 
 **Addon mechanism**
 
-An addon is a package under `internal/addon/<name>/` that exposes a `*cli.Command`. It manages its own install, configure, and uninstall lifecycle independently of the cluster package. Addons talk to the cluster through `oc` or `kubectl` (resolved at runtime via `--kubectl` flag), with the kubeconfig sourced either from a cluster name lookup or a direct path. Shim resources are numbered and embedded so they apply in a deterministic order without depending on server-side ordering. The `--attempt` flag on destructive operations defaults to dry-run so the user can review what will be deleted before anything runs.
+An addon is a package under `internal/addon/<name>/` that exposes a `*cli.Command`. It manages its own install, configure, and uninstall lifecycle independently of the cluster package. Addons use `oc` when available and fall back to `kubectl`, selected at startup. The kubeconfig comes from a cluster name lookup. Shim resources are numbered and embedded so they apply in a deterministic order without depending on server-side ordering. The `--attempt` flag on destructive operations defaults to dry-run so the user can review what will be deleted before anything runs.
 
 **Why podman exec only**
 

@@ -161,14 +161,14 @@ func (r *resources) podman(ctx context.Context, container string, args ...string
 	return support.RunPodmanPrivileged(ctx, r.runner, append([]string{"exec", container}, args...)...)
 }
 
-func (r *resources) kubectl(ctx context.Context, container string, args ...string) (execx.Result, error) {
-	return r.podman(ctx, container, append([]string{"kubectl", "--kubeconfig", internalKubeconfig}, args...)...)
+func (r *resources) oc(ctx context.Context, container string, args ...string) (execx.Result, error) {
+	return r.podman(ctx, container, append([]string{"oc", "--kubeconfig", internalKubeconfig}, args...)...)
 }
 
 func (r *resources) nodes(ctx context.Context, container string) (nodeListOutput, error) {
-	result, err := r.kubectl(ctx, container, "get", "nodes", "-o", "json")
+	result, err := r.oc(ctx, container, "get", "nodes", "-o", "json")
 	if err != nil {
-		return nodeListOutput{}, fmt.Errorf("kubectl get nodes: %w", err)
+		return nodeListOutput{}, fmt.Errorf("oc get nodes: %w", err)
 	}
 	var out nodeListOutput
 	if err := json.Unmarshal([]byte(result.Stdout), &out); err != nil {
@@ -193,9 +193,9 @@ func (r *resources) podRows(ctx context.Context, container, ns string) ([]podRow
 	if r.node != "" {
 		args = append(args, "--field-selector", "spec.nodeName="+r.node)
 	}
-	result, err := r.kubectl(ctx, container, args...)
+	result, err := r.oc(ctx, container, args...)
 	if err != nil {
-		return nil, fmt.Errorf("kubectl get pods: %w", err)
+		return nil, fmt.Errorf("oc get pods: %w", err)
 	}
 	var rows []podRow
 	for line := range strings.SplitSeq(strings.TrimRight(result.Stdout, "\n"), "\n") {

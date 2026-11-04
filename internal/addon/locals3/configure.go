@@ -40,7 +40,7 @@ func (m *manager) attach(ctx context.Context, cluster string) error {
 	if err != nil {
 		return err
 	}
-	if err := support.ApplyYAML(ctx, m.runner, "kubectl", clusterConfig.Kubeconfig, manifest); err != nil {
+	if err := support.ApplyYAML(ctx, m.runner, support.KubeClient, clusterConfig.Kubeconfig, manifest); err != nil {
 		return fmt.Errorf("publish local-s3 in cluster %q: %w", cluster, err)
 	}
 	m.logger.Info("published local-s3 service", "cluster", cluster, "address", address)
@@ -52,7 +52,7 @@ func (m *manager) detach(ctx context.Context, cluster string) error {
 	if err != nil {
 		return fmt.Errorf("read kubeconfig for cluster %q: %w", cluster, err)
 	}
-	if _, err := m.runner.Run(ctx, "kubectl", "delete", "services,endpointslices", "s3",
+	if _, err := m.runner.Run(ctx, support.KubeClient, "delete", "services,endpointslices", "s3",
 		"-n", "default", "--ignore-not-found", "--kubeconfig", kubeconfig); err != nil {
 		return fmt.Errorf("remove local-s3 Service from cluster %q: %w", cluster, err)
 	}

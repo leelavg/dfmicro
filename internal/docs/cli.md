@@ -33,8 +33,6 @@ dfmicro [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 
 Manage cluster addons
 
-**--kubectl**: Use kubectl instead of oc for cluster operations
-
 **--list**: List available addons
 
 ### local-s3

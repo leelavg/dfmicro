@@ -46,13 +46,13 @@ type externalResource struct {
 func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) error {
 	crd := "cephclusters.ceph.rook.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, o.kubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
 	name := "rook-ceph-operator"
 	o.logger.Info("waiting for CSV", "name", name)
-	csvName, err := waitForCSV(ctx, o.runner, o.kubectl, o.kubeconfig, name,
+	csvName, err := waitForCSV(ctx, o.runner, support.KubeClient, o.kubeconfig, name,
 		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/rook-ceph-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) err
 		if err != nil {
 			return err
 		}
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, rendered); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, rendered); err != nil {
 			return err
 		}
 	}
@@ -105,7 +105,7 @@ func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) err
 }
 
 func (o *odf) rookOperatorImage(ctx context.Context) (string, error) {
-	result, err := o.runner.Run(ctx, o.kubectl, "get", "csv", "-n", providerNamespace,
+	result, err := o.runner.Run(ctx, support.KubeClient, "get", "csv", "-n", providerNamespace,
 		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/rook-ceph-operator\.openshift-storage)].spec.install.spec.deployments[0].spec.template.spec.containers[0].image}`, "--kubeconfig", o.kubeconfig)
 	if err != nil {
 		return "", fmt.Errorf("read Rook operator image: %w", err)
@@ -120,7 +120,7 @@ func (o *odf) rookOperatorImage(ctx context.Context) (string, error) {
 func (o *odf) configureRookClient(ctx context.Context, providerName string, includeCephFS bool) error {
 	crd := "storageclusters.ocs.openshift.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, o.kubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -149,12 +149,12 @@ func (o *odf) configureRookClient(ctx context.Context, providerName string, incl
 		return err
 	}
 	o.logger.Info("applying external Ceph details")
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, secret); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, secret); err != nil {
 		return err
 	}
 
 	o.logger.Info("applying external StorageCluster")
-	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, externalStorageClusterTmpl)
+	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, externalStorageClusterTmpl)
 }
 
 func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR string) error {
@@ -164,13 +164,13 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 	}
 	crd := "storageconsumers.ocs.openshift.io"
 	o.logger.Info("waiting for provider CRD", "cluster", providerName, "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, providerKubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, providerKubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("provider CRD established", "cluster", providerName, "name", crd)
 	crd = "storageclients.ocs.openshift.io"
 	o.logger.Info("waiting for client CRD", "cluster", o.clusterName, "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, o.kubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("client CRD established", "cluster", o.clusterName, "name", crd)
@@ -182,7 +182,7 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 		return err
 	}
 	o.logger.Info("applying provider network policy", "provider", providerName, "client", o.clusterName)
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, providerKubeconfig, networkPolicy); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, providerKubeconfig, networkPolicy); err != nil {
 		return err
 	}
 	ready, err := o.odfClientReady(ctx, providerKubeconfig, providerName)
@@ -199,7 +199,7 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 		return err
 	}
 	o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.clusterName)
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, providerKubeconfig, consumer); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, providerKubeconfig, consumer); err != nil {
 		return err
 	}
 
@@ -216,13 +216,13 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 		return err
 	}
 	o.logger.Info("applying StorageClient", "name", providerName)
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, client); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, client); err != nil {
 		return err
 	}
 
 	o.logger.Info("waiting for StorageClient", "name", providerName)
 	o.logger.Info("ODF provider must use host networking or be peered with the client cluster", "provider", providerName, "client", o.clusterName)
-	if _, err := o.runner.Run(ctx, o.kubectl,
+	if _, err := o.runner.Run(ctx, support.KubeClient,
 		"wait", "--for=jsonpath={.status.phase}=Connected", "--timeout=10m",
 		"storageclient/"+providerName, "--kubeconfig", o.kubeconfig,
 	); err != nil {
@@ -233,14 +233,14 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 }
 
 func (o *odf) odfClientReady(ctx context.Context, providerKubeconfig, providerName string) (bool, error) {
-	consumer, err := o.runner.Run(ctx, o.kubectl,
+	consumer, err := o.runner.Run(ctx, support.KubeClient,
 		"get", "storageconsumer", o.clusterName, "-n", providerNamespace,
 		"-o", "jsonpath={.status.state}", "--kubeconfig", providerKubeconfig,
 	)
 	if err != nil {
 		return false, nil
 	}
-	client, err := o.runner.Run(ctx, o.kubectl,
+	client, err := o.runner.Run(ctx, support.KubeClient,
 		"get", "storageclient", providerName,
 		"-o", "jsonpath={.status.phase}", "--kubeconfig", o.kubeconfig,
 	)
@@ -254,7 +254,7 @@ func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) 
 	var ticket, endpoint string
 	o.logger.Info("waiting for StorageConsumer onboarding data")
 	err := support.Poll(ctx, odfPoll, odfTimeout, func(ctx context.Context) (bool, error) {
-		result, err := o.runner.Run(ctx, o.kubectl,
+		result, err := o.runner.Run(ctx, support.KubeClient,
 			"get", "storageconsumer", o.clusterName, "-n", providerNamespace,
 			"-o", "jsonpath={.status.onboardingTicketSecret.name}",
 			"--kubeconfig", providerKubeconfig,
@@ -267,7 +267,7 @@ func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) 
 			return false, nil
 		}
 
-		result, err = o.runner.Run(ctx, o.kubectl,
+		result, err = o.runner.Run(ctx, support.KubeClient,
 			"get", "secret", secretName, "-n", providerNamespace,
 			"-o", "jsonpath={.data.onboarding-token}", "--kubeconfig", providerKubeconfig,
 		)
@@ -279,7 +279,7 @@ func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) 
 			return false, fmt.Errorf("decode onboarding Secret %s: %w", secretName, err)
 		}
 
-		result, err = o.runner.Run(ctx, o.kubectl,
+		result, err = o.runner.Run(ctx, support.KubeClient,
 			"get", "storagecluster", "ocs-storagecluster", "-n", providerNamespace,
 			"-o", "jsonpath={.status.storageProviderEndpoint}", "--kubeconfig", providerKubeconfig,
 		)
@@ -300,7 +300,7 @@ func (o *odf) odfOnboardingData(ctx context.Context, providerKubeconfig string) 
 }
 
 func (o *odf) rookCephImage(ctx context.Context) (string, error) {
-	result, err := o.runner.Run(ctx, o.kubectl, "get", "csv", "-n", providerNamespace,
+	result, err := o.runner.Run(ctx, support.KubeClient, "get", "csv", "-n", providerNamespace,
 		"-o", `jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/rook-ceph-operator\.openshift-storage)].metadata.annotations.alm-examples}`,
 		"--kubeconfig", o.kubeconfig)
 	if err != nil {
@@ -336,15 +336,15 @@ func (o *odf) rookCephImage(ctx context.Context) (string, error) {
 func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig, providerName string, includeCephFS bool) (string, error) {
 	names := newProviderNames(providerName)
 	o.logger.Info("waiting for Rook CephCluster", "name", names.cephCluster)
-	if _, err := o.runner.Run(ctx, o.kubectl, "wait", "--for=condition=Ready", "--timeout=10m",
+	if _, err := o.runner.Run(ctx, support.KubeClient, "wait", "--for=condition=Ready", "--timeout=10m",
 		"cephcluster/"+names.cephCluster, "-n", providerNamespace, "--kubeconfig", kubeconfig); err != nil {
 		return "", fmt.Errorf("wait for Rook CephCluster: %w", err)
 	}
-	if _, err := o.runner.Run(ctx, o.kubectl, "get", "configmap", rookExporterConfigMap, "-n", providerNamespace, "--kubeconfig", kubeconfig); err != nil {
+	if _, err := o.runner.Run(ctx, support.KubeClient, "get", "configmap", rookExporterConfigMap, "-n", providerNamespace, "--kubeconfig", kubeconfig); err != nil {
 		return "", fmt.Errorf("find Rook external exporter: %w", err)
 	}
 
-	pod, err := o.runner.Run(ctx, o.kubectl, "get", "pods", "-n", providerNamespace, "-l", "app=rook-ceph-tools", "-o", "jsonpath={.items[0].metadata.name}", "--kubeconfig", kubeconfig)
+	pod, err := o.runner.Run(ctx, support.KubeClient, "get", "pods", "-n", providerNamespace, "-l", "app=rook-ceph-tools", "-o", "jsonpath={.items[0].metadata.name}", "--kubeconfig", kubeconfig)
 	if err != nil {
 		return "", fmt.Errorf("find Rook toolbox: %w", err)
 	}
@@ -359,7 +359,7 @@ func (o *odf) exportExternalDetails(ctx context.Context, kubeconfig, providerNam
 	}
 	args := []string{"exec", "-n", providerNamespace, toolbox, "--kubeconfig", kubeconfig, "--", "sh", "-c",
 		"base64 -d /var/run/rook/external-cluster-script/script.py | python3 - " + strings.Join(scriptArgs, " ")}
-	result, err := o.runner.Run(ctx, o.kubectl, args...)
+	result, err := o.runner.Run(ctx, support.KubeClient, args...)
 	if err != nil {
 		return "", fmt.Errorf("run Rook external exporter: %w", err)
 	}

@@ -24,7 +24,7 @@ type installConfig struct {
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	o.logger.Info("applying shim CRDs")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/crd"); err != nil {
+	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, o.kubeconfig, odfFS, "shims/crd"); err != nil {
 		return err
 	}
 	if cfg.shims {
@@ -40,12 +40,12 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, cv); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, cv); err != nil {
 		return err
 	}
 
 	o.logger.Info("applying namespace")
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, namespaceTmpl); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, namespaceTmpl); err != nil {
 		return err
 	}
 
@@ -54,12 +54,12 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, catsrc); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, catsrc); err != nil {
 		return err
 	}
 
 	o.logger.Info("applying operator group")
-	if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, operatorGroupTmpl); err != nil {
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, operatorGroupTmpl); err != nil {
 		return err
 	}
 
@@ -73,18 +73,18 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying OCP implicit RBAC")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/rbac"); err != nil {
+	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, o.kubeconfig, odfFS, "shims/rbac"); err != nil {
 		return err
 	}
 
 	o.logger.Info("applying OAuth shims")
-	if err := support.ApplyDir(ctx, o.runner, o.kubectl, o.kubeconfig, odfFS, "shims/oauth"); err != nil {
+	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, o.kubeconfig, odfFS, "shims/oauth"); err != nil {
 		return err
 	}
 
 	if slices.Contains(cfg.subNames, "rook-ceph-operator") {
 		o.logger.Info("applying OCS operator config")
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, ocsOperatorConfigTmpl); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, ocsOperatorConfigTmpl); err != nil {
 			return err
 		}
 	}
@@ -95,7 +95,7 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 		if err != nil {
 			return err
 		}
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, s); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, s); err != nil {
 			return err
 		}
 	}
@@ -112,7 +112,7 @@ func (o *odf) applyClusterResources(ctx context.Context, vars map[string]string)
 		if err != nil {
 			return err
 		}
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, resource); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, resource); err != nil {
 			return err
 		}
 	}

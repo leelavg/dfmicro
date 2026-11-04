@@ -21,16 +21,14 @@ type nadConfig struct {
 }
 
 type nadManager struct {
-	logger  *slog.Logger
-	runner  execx.Runner
-	kubectl string
+	logger *slog.Logger
+	runner execx.Runner
 }
 
-func newNADManager(logger *slog.Logger, runner execx.Runner, kubectl string) *nadManager {
+func newNADManager(logger *slog.Logger, runner execx.Runner) *nadManager {
 	return &nadManager{
-		logger:  logger,
-		runner:  runner,
-		kubectl: kubectl,
+		logger: logger,
+		runner: runner,
 	}
 }
 
@@ -41,7 +39,7 @@ func (m *nadManager) create(ctx context.Context, cfg nadConfig) error {
 	if err != nil {
 		return err
 	}
-	return support.ApplyYAML(ctx, m.runner, m.kubectl, cfg.kubeconfig, nadYAML)
+	return support.ApplyYAML(ctx, m.runner, support.KubeClient, cfg.kubeconfig, nadYAML)
 }
 
 func (m *nadManager) delete(ctx context.Context, name, namespace, kubeconfig string) error {
@@ -50,7 +48,7 @@ func (m *nadManager) delete(ctx context.Context, name, namespace, kubeconfig str
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig", kubeconfig)
 	}
-	_, err := m.runner.Run(ctx, m.kubectl, args...)
+	_, err := m.runner.Run(ctx, support.KubeClient, args...)
 	return err
 }
 

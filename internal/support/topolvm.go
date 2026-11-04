@@ -112,7 +112,7 @@ func (t *TopoLVMMgr) DeleteNodeResources(ctx context.Context, controlNode, nodeN
 	if !t.Enabled() {
 		return nil
 	}
-	_, err := RunPodmanPrivileged(ctx, t.runner, "exec", controlNode, "kubectl", "-n", "topolvm-system", "delete", "daemonset,configmap", "-l", "dfmicro.io/topolvm-node="+nodeName, "--ignore-not-found")
+	_, err := RunPodmanPrivileged(ctx, t.runner, "exec", controlNode, "oc", "-n", "topolvm-system", "delete", "daemonset,configmap", "-l", "dfmicro.io/topolvm-node="+nodeName, "--ignore-not-found")
 	return err
 }
 

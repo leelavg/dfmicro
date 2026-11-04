@@ -267,7 +267,7 @@ Example:
 				connectOps: &connectOps{logger: logger, runner: runner},
 				logger:     logger,
 				runner:     runner,
-				nad:        newNADManager(logger, runner, "kubectl"),
+				nad:        newNADManager(logger, runner),
 				ipam:       ipam,
 			}
 
@@ -340,7 +340,7 @@ Example:
 				connectOps: &connectOps{logger: logger, runner: runner},
 				logger:     logger,
 				runner:     runner,
-				nad:        newNADManager(logger, runner, "kubectl"),
+				nad:        newNADManager(logger, runner),
 				ipam:       ipam,
 			}
 

@@ -20,12 +20,11 @@ var defaultCluster = rootconfig.Load().Name
 
 func odfAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *cli.Command, *odf) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
-		useKubectl := cmd.Bool("kubectl")
 		kubeconfig, err := rootconfig.Kubeconfig(cmd.String("cluster"))
 		if err != nil {
 			return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("cluster"), err)
 		}
-		o := newOdf(logger, runner, useKubectl, kubeconfig, cmd.String("cluster"))
+		o := newOdf(logger, runner, kubeconfig, cmd.String("cluster"))
 		return fn(ctx, cmd, o)
 	}
 }
@@ -33,16 +32,12 @@ func odfAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context
 func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "odf",
-		Usage: "Manage OpenShift Data Foundation on a MicroShift cluster",
+		Usage: "Manage OpenShift Data Foundation",
 		UsageText: `Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
 
 Note: --cluster applies to all subcommands and must come before the subcommand name.`,
 		Action: support.UnknownSubcommand,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:  "kubectl",
-				Usage: "Use kubectl instead of oc for cluster operations",
-			},
 			&cli.StringFlag{Name: "cluster", Usage: "Cluster name to resolve kubeconfig from", Value: defaultCluster},
 		},
 		Commands: []*cli.Command{

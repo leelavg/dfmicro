@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"dfmicro/internal/support"
 )
 
 var uninstallCmds = []string{
@@ -45,22 +47,22 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 	if !attempt {
 		fmt.Println("# Run the following to uninstall and cleanup commands if you ran single/{odf,rook}-provider configurations:")
 		for _, c := range uninstallCmds {
-			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+			fmt.Println(support.KubeClient + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
-		fmt.Println(o.kubectl + " " + cleanupPolicyCmd + " --kubeconfig " + o.kubeconfig)
-		fmt.Println(o.kubectl + " " + deleteCephClusterCmd + " --kubeconfig " + o.kubeconfig)
+		fmt.Println(support.KubeClient + " " + cleanupPolicyCmd + " --kubeconfig " + o.kubeconfig)
+		fmt.Println(support.KubeClient + " " + deleteCephClusterCmd + " --kubeconfig " + o.kubeconfig)
 		for _, c := range cleanupJobCmds {
-			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+			fmt.Println(support.KubeClient + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
 		for _, c := range uninstallPostCleanupCmds {
-			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+			fmt.Println(support.KubeClient + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
 		fmt.Println("# for each csiaddonsnodes.csiaddons.openshift.io in openshift-storage:")
-		fmt.Println(o.kubectl + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
+		fmt.Println(support.KubeClient + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
 		fmt.Println("# for each clientprofiles.ocs.openshift.io in openshift-storage:")
-		fmt.Println(o.kubectl + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
+		fmt.Println(support.KubeClient + " patch <name> -n openshift-storage --type=merge -p '{\"metadata\":{\"finalizers\":null}}' --kubeconfig " + o.kubeconfig)
 		for _, c := range uninstallFinalCmds {
-			fmt.Println(o.kubectl + " " + c + " --kubeconfig " + o.kubeconfig)
+			fmt.Println(support.KubeClient + " " + c + " --kubeconfig " + o.kubeconfig)
 		}
 		return nil
 	}
@@ -96,27 +98,27 @@ func (o *odf) uninstall(ctx context.Context, attempt bool) error {
 func (o *odf) hasResource(ctx context.Context, resource string, extra ...string) bool {
 	args := append([]string{"get", resource}, extra...)
 	args = append(args, "-n", "openshift-storage", "--ignore-not-found", "-o", "name", "--kubeconfig", o.kubeconfig)
-	result, err := o.runner.Run(ctx, o.kubectl, args...)
+	result, err := o.runner.Run(ctx, support.KubeClient, args...)
 	return err == nil && strings.TrimSpace(result.Stdout) != ""
 }
 
 func (o *odf) runUninstallCommand(ctx context.Context, command string) {
 	args := append(strings.Fields(command), "--kubeconfig", o.kubeconfig)
-	o.logger.Info("running", "cmd", o.kubectl, "args", args)
-	if _, err := o.runner.Run(ctx, o.kubectl, args...); err != nil {
+	o.logger.Info("running", "cmd", support.KubeClient, "args", args)
+	if _, err := o.runner.Run(ctx, support.KubeClient, args...); err != nil {
 		o.logger.Warn("failed", "cmd", command, "error", err)
 	}
 }
 
 func (o *odf) removeFinalizers(ctx context.Context, resource string) {
-	result, err := o.runner.Run(ctx, o.kubectl, "get", resource,
+	result, err := o.runner.Run(ctx, support.KubeClient, "get", resource,
 		"-n", "openshift-storage", "-o", "name", "--kubeconfig", o.kubeconfig)
 	if err != nil {
 		return
 	}
 	for name := range strings.FieldsSeq(result.Stdout) {
 		o.logger.Info("removing finalizers", "resource", name)
-		if _, err := o.runner.Run(ctx, o.kubectl, "patch", name, "-n", "openshift-storage",
+		if _, err := o.runner.Run(ctx, support.KubeClient, "patch", name, "-n", "openshift-storage",
 			"--type=merge", "-p", `{"metadata":{"finalizers":null}}`,
 			"--kubeconfig", o.kubeconfig); err != nil {
 			o.logger.Warn("failed to remove finalizers", "resource", name, "error", err)

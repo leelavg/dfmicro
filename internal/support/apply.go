@@ -11,7 +11,7 @@ import (
 	"dfmicro/internal/execx"
 )
 
-func ApplyDir(ctx context.Context, runner execx.Runner, kubectl, kubeconfig string, fsys embed.FS, dir string) error {
+func ApplyDir(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig string, fsys embed.FS, dir string) error {
 	return fs.WalkDir(fsys, dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -20,11 +20,11 @@ func ApplyDir(ctx context.Context, runner execx.Runner, kubectl, kubeconfig stri
 		if err != nil {
 			return err
 		}
-		return ApplyYAML(ctx, runner, kubectl, kubeconfig, string(data))
+		return ApplyYAML(ctx, runner, kubeClient, kubeconfig, string(data))
 	})
 }
 
-func ApplyYAML(ctx context.Context, runner execx.Runner, kubectl, kubeconfig, yaml string) error {
+func ApplyYAML(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig, yaml string) error {
 	f, err := os.CreateTemp("", "dfmicro-*.yaml")
 	if err != nil {
 		return err
@@ -40,12 +40,12 @@ func ApplyYAML(ctx context.Context, runner execx.Runner, kubectl, kubeconfig, ya
 	if kubeconfig != "" {
 		args = append(args, "--kubeconfig", kubeconfig)
 	}
-	_, err = runner.Run(ctx, kubectl, args...)
+	_, err = runner.Run(ctx, kubeClient, args...)
 	return err
 }
 
 func ApplyKustomization(ctx context.Context, runner execx.Runner, container, path string) error {
-	_, err := RunPodmanPrivileged(ctx, runner, "exec", container, "kubectl", "apply", "-k", path)
+	_, err := RunPodmanPrivileged(ctx, runner, "exec", container, "oc", "apply", "-k", path)
 	return err
 }
 

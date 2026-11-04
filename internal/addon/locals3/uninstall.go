@@ -30,7 +30,7 @@ func (m *manager) uninstall(ctx context.Context, cleanup bool) error {
 			return fmt.Errorf("read kubeconfig for configured cluster %q: %w", cluster, err)
 		}
 		m.logger.Info("removing local-s3 Services", "cluster", cluster)
-		if _, err := m.runner.Run(ctx, "kubectl", "delete", "services,endpointslices",
+		if _, err := m.runner.Run(ctx, support.KubeClient, "delete", "services,endpointslices",
 			"s3", "-n", "default", "--ignore-not-found", "--kubeconfig", kubeconfig); err != nil {
 			return fmt.Errorf("remove local-s3 Services from cluster %q before uninstall: %w", cluster, err)
 		}

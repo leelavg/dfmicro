@@ -11,17 +11,12 @@ import (
 type odf struct {
 	logger      *slog.Logger
 	runner      execx.Runner
-	kubectl     string
 	kubeconfig  string
 	clusterName string
 }
 
-func newOdf(logger *slog.Logger, runner execx.Runner, useKubectl bool, kubeconfig, clusterName string) *odf {
-	kt := "oc"
-	if useKubectl {
-		kt = "kubectl"
-	}
-	return &odf{logger: logger, runner: runner, kubectl: kt, kubeconfig: kubeconfig, clusterName: clusterName}
+func newOdf(logger *slog.Logger, runner execx.Runner, kubeconfig, clusterName string) *odf {
+	return &odf{logger: logger, runner: runner, kubeconfig: kubeconfig, clusterName: clusterName}
 }
 
 func clusterID(clusterName string) string {

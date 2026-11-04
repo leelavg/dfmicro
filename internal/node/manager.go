@@ -138,10 +138,10 @@ func (m *manager) reconcileWorker(ctx context.Context, w worker) error {
 	if !multiNode {
 		return nil
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "oc", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
 		return fmt.Errorf("wait for worker node before labeling: %w", err)
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "label", "node", w.name, "dfmicro.io/whereabouts=enabled", "--overwrite"); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "oc", "label", "node", w.name, "dfmicro.io/whereabouts=enabled", "--overwrite"); err != nil {
 		return fmt.Errorf("label worker node for whereabouts: %w", err)
 	}
 	return nil
@@ -182,13 +182,13 @@ func (m *manager) waitForControlPlane(ctx context.Context, controlNodeName strin
 	for _, resource := range resources {
 		var args []string
 		if resource.kind == "daemonset" {
-			args = []string{"exec", controlNodeName, "kubectl", "rollout", "status", "--timeout=120s", "-n", resource.namespace, resource.kind + "/" + resource.name}
+			args = []string{"exec", controlNodeName, "oc", "rollout", "status", "--timeout=120s", "-n", resource.namespace, resource.kind + "/" + resource.name}
 		} else {
 			condition := "--for=condition=Ready"
 			if resource.kind == "deployment" {
 				condition = "--for=condition=Available"
 			}
-			args = []string{"exec", controlNodeName, "kubectl", "wait", condition, "--timeout=120s"}
+			args = []string{"exec", controlNodeName, "oc", "wait", condition, "--timeout=120s"}
 			if resource.namespace != "" {
 				args = append(args, "-n", resource.namespace)
 			}
@@ -393,10 +393,10 @@ func (m *manager) configureWorkerNetwork(ctx context.Context, w worker) error {
 
 func (m *manager) waitForWorker(ctx context.Context, w worker) error {
 	m.logger.Info("waiting for worker readiness", "node", w.name)
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "oc", "wait", "--for=create", "--timeout=120s", "node/"+w.name); err != nil {
 		return fmt.Errorf("wait for worker registration: %w", err)
 	}
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "kubectl", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+w.name); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", w.controlNodeName, "oc", "wait", "--for=condition=Ready", "--timeout=120s", "node/"+w.name); err != nil {
 		return fmt.Errorf("wait for worker readiness: %w", err)
 	}
 	if err := m.node.WaitReady(ctx, w.name); err != nil {
@@ -444,7 +444,7 @@ func (m *manager) remove(ctx context.Context, nodeName string) error {
 
 func (m *manager) removeWorkerResources(ctx context.Context, controlNodeName, nodeName string) error {
 	var errs []error
-	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "kubectl", "delete", "node", nodeName, "--ignore-not-found", "--wait=false"); err != nil {
+	if _, err := support.RunPodmanPrivileged(ctx, m.runner, "exec", controlNodeName, "oc", "delete", "node", nodeName, "--ignore-not-found", "--wait=false"); err != nil {
 		errs = append(errs, fmt.Errorf("delete Kubernetes node: %w", err))
 	}
 	if err := m.topolvm.DeleteNodeResources(ctx, controlNodeName, nodeName); err != nil {

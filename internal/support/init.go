@@ -2,12 +2,14 @@ package support
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 )
 
 var BinaryName string
 var IsMacOS bool
+var KubeClient string
 
 func init() {
 	exe, err := os.Executable()
@@ -18,6 +20,11 @@ func init() {
 	}
 
 	IsMacOS = runtime.GOOS == "darwin"
+	if _, err := exec.LookPath("oc"); err == nil {
+		KubeClient = "oc"
+	} else {
+		KubeClient = "kubectl"
+	}
 }
 
 func Must[T any](value T, err error) T {

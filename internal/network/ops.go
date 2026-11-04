@@ -300,7 +300,7 @@ func (o *multusOps) labelClusterNodes(ctx context.Context, clusterName string, e
 	if enabled {
 		label = "dfmicro.io/whereabouts=enabled"
 	}
-	if _, err := o.runner.Run(ctx, "kubectl", "label", "nodes", "--all", label, "--overwrite", "--kubeconfig", kubeconfig); err != nil {
+	if _, err := o.runner.Run(ctx, support.KubeClient, "label", "nodes", "--all", label, "--overwrite", "--kubeconfig", kubeconfig); err != nil {
 		return fmt.Errorf("label nodes for cluster %s: %w", clusterName, err)
 	}
 	return nil

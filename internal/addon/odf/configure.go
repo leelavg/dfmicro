@@ -62,7 +62,7 @@ func (o *odf) configureClient(ctx context.Context, cfg configureConfig) error {
 func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 	crd := "storageclusters.ocs.openshift.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, o.kubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -101,12 +101,12 @@ func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 	if err != nil {
 		return err
 	}
-	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, sc)
+	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, sc)
 }
 
 func (o *odf) labelStorageNodes(ctx context.Context) error {
 	o.logger.Info("labeling nodes")
-	_, err := o.runner.Run(ctx, o.kubectl, "label", "nodes", "--all",
+	_, err := o.runner.Run(ctx, support.KubeClient, "label", "nodes", "--all",
 		"cluster.ocs.openshift.io/openshift-storage=", "--overwrite", "--kubeconfig", o.kubeconfig)
 	return err
 }
@@ -114,7 +114,7 @@ func (o *odf) labelStorageNodes(ctx context.Context) error {
 func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 	crd := "drivers.csi.ceph.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, o.kubectl, o.kubeconfig, crd); err != nil {
+	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -124,7 +124,7 @@ func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 		if err != nil {
 			return err
 		}
-		if err := support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(cephfs)); err != nil {
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, string(cephfs)); err != nil {
 			return err
 		}
 	}
@@ -134,12 +134,12 @@ func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 	if err != nil {
 		return err
 	}
-	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, string(rbd))
+	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, string(rbd))
 }
 
 func (o *odf) patchOCSSubscription(ctx context.Context) error {
 	o.logger.Info("waiting for subscription", "name", "ocs-operator")
-	name, err := waitForSub(ctx, o.runner, o.kubectl, o.kubeconfig,
+	name, err := waitForSub(ctx, o.runner, support.KubeClient, o.kubeconfig,
 		`jsonpath={.items[?(@.spec.name=="ocs-operator")].metadata.name}`,
 		func(name string) bool { return name != "" },
 	)
@@ -147,7 +147,7 @@ func (o *odf) patchOCSSubscription(ctx context.Context) error {
 		return err
 	}
 	o.logger.Info("subscription created", "name", name)
-	_, err = o.runner.Run(ctx, o.kubectl,
+	_, err = o.runner.Run(ctx, support.KubeClient,
 		"patch", "subscription", name, "-n", "openshift-storage",
 		"--type=merge", "-p", `{"spec":{"config":{"env":[{"name":"SINGLE_NODE","value":"true"}]}}}`,
 		"--kubeconfig", o.kubeconfig,
@@ -157,7 +157,7 @@ func (o *odf) patchOCSSubscription(ctx context.Context) error {
 
 func (o *odf) applyPackageManifest(ctx context.Context) error {
 	o.logger.Info("waiting for ocs-operator subscription readiness")
-	output, err := waitForSub(ctx, o.runner, o.kubectl, o.kubeconfig,
+	output, err := waitForSub(ctx, o.runner, support.KubeClient, o.kubeconfig,
 		`jsonpath={.items[?(@.spec.name=="ocs-operator")].metadata.name},{.items[?(@.spec.name=="ocs-operator")].spec.channel},{.items[?(@.spec.name=="ocs-operator")].spec.name},{.items[?(@.spec.name=="ocs-operator")].status.installedCSV}`,
 		func(output string) bool {
 			parts := strings.SplitN(output, ",", 4)
@@ -179,20 +179,20 @@ func (o *odf) applyPackageManifest(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return support.ApplyYAML(ctx, o.runner, o.kubectl, o.kubeconfig, pm)
+	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, pm)
 }
 
 func (o *odf) patchSnapshotCSV(ctx context.Context) error {
 	name := "external-snapshotter-operator"
 	o.logger.Info("waiting for CSV", "name", name)
-	csvName, err := waitForCSV(ctx, o.runner, o.kubectl, o.kubeconfig, name,
+	csvName, err := waitForCSV(ctx, o.runner, support.KubeClient, o.kubeconfig, name,
 		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-external-snapshotter-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
 		return err
 	}
 	o.logger.Info("CSV found", "name", name, "csv", csvName)
 
-	_, err = o.runner.Run(ctx, o.kubectl,
+	_, err = o.runner.Run(ctx, support.KubeClient,
 		"patch", "csv", csvName, "-n", "openshift-storage",
 		"--type=json", "-p", `[{"op":"replace","path":"/spec/install/spec/deployments/0/spec/replicas","value":1}]`,
 		"--kubeconfig", o.kubeconfig,
@@ -203,14 +203,14 @@ func (o *odf) patchSnapshotCSV(ctx context.Context) error {
 func (o *odf) patchClientConsoleCSV(ctx context.Context) error {
 	name := "ocs-client-operator"
 	o.logger.Info("waiting for CSV", "name", name)
-	csvName, err := waitForCSV(ctx, o.runner, o.kubectl, o.kubeconfig, name,
+	csvName, err := waitForCSV(ctx, o.runner, support.KubeClient, o.kubeconfig, name,
 		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/ocs-client-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
 		return err
 	}
 	o.logger.Info("CSV found", "name", name, "csv", csvName)
 
-	_, err = o.runner.Run(ctx, o.kubectl,
+	_, err = o.runner.Run(ctx, support.KubeClient,
 		"patch", "csv", csvName, "-n", "openshift-storage",
 		"--type=json", "-p", `[{"op":"replace","path":"/spec/install/spec/deployments/1/spec/replicas","value":0}]`,
 		"--kubeconfig", o.kubeconfig,
@@ -221,14 +221,14 @@ func (o *odf) patchClientConsoleCSV(ctx context.Context) error {
 func (o *odf) patchODFConsoleCSV(ctx context.Context) error {
 	name := "odf-operator"
 	o.logger.Info("waiting for CSV", "name", name)
-	csvName, err := waitForCSV(ctx, o.runner, o.kubectl, o.kubeconfig, name,
+	csvName, err := waitForCSV(ctx, o.runner, support.KubeClient, o.kubeconfig, name,
 		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-operator\.openshift-storage)].metadata.name}`)
 	if err != nil {
 		return err
 	}
 	o.logger.Info("CSV found", "name", name, "csv", csvName)
 
-	_, err = o.runner.Run(ctx, o.kubectl,
+	_, err = o.runner.Run(ctx, support.KubeClient,
 		"patch", "csv", csvName, "-n", "openshift-storage",
 		"--type=json", "-p", `[{"op":"replace","path":"/spec/install/spec/deployments/1/spec/replicas","value":0}]`,
 		"--kubeconfig", o.kubeconfig,
