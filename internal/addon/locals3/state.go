@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 
 	rootconfig "dfmicro/internal/config"
 )
@@ -44,4 +45,20 @@ func saveState(clusters []string) error {
 
 func statePath() string {
 	return filepath.Join(rootconfig.ConfigDir(), "local-s3.json")
+}
+
+func addCluster(clusters []string, cluster string) []string {
+	if slices.Contains(clusters, cluster) {
+		return clusters
+	}
+	return append(clusters, cluster)
+}
+
+func removeCluster(clusters []string, cluster string) []string {
+	for i, existing := range clusters {
+		if existing == cluster {
+			return append(clusters[:i], clusters[i+1:]...)
+		}
+	}
+	return clusters
 }

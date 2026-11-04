@@ -115,7 +115,7 @@ and `/tmp/dfmicro-test/cmds.log`.
 See [internal/docs/cli.md](internal/docs/cli.md) for the full command reference,
 or run `dfmicro docs` to print it.
 
-For development setup and design notes, see [dev.md](dev.md). For what is planned and what is done, see the [devlog](internal/devlog/devlog.txt).
+For development setup and design notes, see [dev.md](dev.md). For what is planned and what is done, see the [devlog](internal/docs/devlog.txt).
 
 ## FAQ
 

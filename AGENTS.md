@@ -16,7 +16,6 @@ internal/
 ├── buildinfo
 ├── cluster
 ├── config
-├── devlog
 ├── docs
 ├── execx
 ├── network
@@ -56,4 +55,4 @@ Cluster settings are stored in the cluster directory. Control-node settings are 
 
 ## References
 
-Longer form references are at ./README.md and ./dev.md, reading them is not mandatory. A changelog is maintained at ./internal/devlog/devlog.txt with single line items.
+Longer form references are at ./README.md and ./dev.md, reading them is not mandatory. A changelog is maintained at ./internal/docs/devlog.txt with single line items.

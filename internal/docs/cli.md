@@ -33,6 +33,8 @@ dfmicro [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 
 Manage cluster addons
 
+**--kubectl**: Use kubectl instead of oc for cluster operations
+
 **--list**: List available addons
 
 ### local-s3
@@ -71,17 +73,30 @@ Remove local-s3 and its cluster Services
 
 **--cleanup**: Also delete the local-s3 data volume
 
+### ocm
+
+Manage Open Cluster Management
+
+    Use --cluster before the subcommand to select its kubeconfig.
+
+    Example:
+      dfmicro addon ocm --cluster ocm install
+
+**--cluster**="": Cluster to install OCM on (default: "micro")
+
+#### install
+
+Install OCM hub components
+
 ### odf
 
-Manage OpenShift Data Foundation on a MicroShift cluster
+Manage OpenShift Data Foundation
 
     Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
 
     Note: --cluster applies to all subcommands and must come before the subcommand name.
 
 **--cluster**="": Cluster name to resolve kubeconfig from (default: "micro")
-
-**--kubectl**: Use kubectl instead of oc for cluster operations
 
 #### configure
 
