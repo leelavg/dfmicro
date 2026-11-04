@@ -36,8 +36,14 @@ mkdir -p "$public"
             continue
         fi
 
-        printf '%s|%s\n' "$branch" "$ref" >> "$branches"
-        printf '%s|%s|/%s/\n' "$branch" "$branch" "$branch"
+        if [[ "$ref" == working-tree ]]; then
+            commit=$(git rev-parse --short=7 HEAD)
+        else
+            commit=$(git rev-parse --short=7 "$ref^{commit}")
+        fi
+        label="$branch ($commit)"
+        printf '%s|%s|%s\n' "$branch" "$ref" "$label" >> "$branches"
+        printf '%s|%s|/%s/\n' "$branch" "$label" "$branch"
     done
     while IFS= read -r tag; do
         printf 'tag:%s|%s|/%s/\n' "$tag" "$tag" "$tag"
@@ -58,8 +64,8 @@ while IFS= read -r tag; do
     books+=("$public/$tag")
 done <<< "$tags"
 
-while IFS='|' read -r branch ref; do
-    build_ref "$ref" "$public/$branch" "$branch" "$branch" "/$branch/"
+while IFS='|' read -r branch ref label; do
+    build_ref "$ref" "$public/$branch" "$branch" "$label" "/$branch/"
     books+=("$public/$branch")
 done < "$branches"
 

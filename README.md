@@ -3,8 +3,6 @@
 Run [MicroShift](https://github.com/openshift/microshift) clusters inside rootful Podman containers.
 Each cluster gets its own network, loop-device backed LVM storage, and a kubeconfig. Workers can be added when multi-node operation is needed.
 
-Read the [dfmicro documentation](https://dfmicro.thoughtexpo.com/) for versioned guides and examples.
-
 Verified on Linux (Fedora / RHEL). Best-effort support on macOS via rootful Podman machine.
 
 ## Installation

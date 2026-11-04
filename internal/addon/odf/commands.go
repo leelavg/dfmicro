@@ -21,13 +21,9 @@ var defaultCluster = rootconfig.Load().Name
 func odfAction(logger *slog.Logger, runner execx.Runner, fn func(context.Context, *cli.Command, *odf) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) error {
 		useKubectl := cmd.Bool("kubectl")
-		kubeconfig := cmd.String("kubeconfig")
-		if kubeconfig == "" {
-			kc, err := rootconfig.Kubeconfig(cmd.String("cluster"))
-			if err != nil {
-				return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("cluster"), err)
-			}
-			kubeconfig = kc
+		kubeconfig, err := rootconfig.Kubeconfig(cmd.String("cluster"))
+		if err != nil {
+			return fmt.Errorf("could not load kubeconfig for cluster %q: %w", cmd.String("cluster"), err)
 		}
 		o := newOdf(logger, runner, useKubectl, kubeconfig, cmd.String("cluster"))
 		return fn(ctx, cmd, o)
@@ -40,21 +36,14 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		Usage: "Manage OpenShift Data Foundation on a MicroShift cluster",
 		UsageText: `Manage ODF lifecycle on MicroShift. Verified on Linux, not tested on macOS.
 
-Note: --cluster and --kubeconfig apply to all subcommands and must come before the subcommand name.`,
+Note: --cluster applies to all subcommands and must come before the subcommand name.`,
 		Action: support.UnknownSubcommand,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "kubectl",
 				Usage: "Use kubectl instead of oc for cluster operations",
 			},
-		},
-		MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
-			{
-				Flags: [][]cli.Flag{
-					{&cli.StringFlag{Name: "cluster", Usage: "Cluster name to resolve kubeconfig from", Value: defaultCluster}},
-					{&cli.StringFlag{Name: "kubeconfig", Usage: "Path to an existing kubeconfig file"}},
-				},
-			},
+			&cli.StringFlag{Name: "cluster", Usage: "Cluster name to resolve kubeconfig from", Value: defaultCluster},
 		},
 		Commands: []*cli.Command{
 			{
@@ -113,16 +102,9 @@ Example:
 					return ctx, nil
 				},
 				Action: odfAction(logger, runner, func(ctx context.Context, cmd *cli.Command, o *odf) error {
-					clusterCIDR := rootconfig.Load().ClusterCIDR
-					serviceCIDR := rootconfig.Load().ServiceCIDR
-					// TODO: Read the actual CIDRs from the cluster when --kubeconfig is supplied.
-					if cmd.String("kubeconfig") == "" {
-						clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("cluster"))
-						if err != nil {
-							return fmt.Errorf("could not load cluster config for %q: %w", cmd.String("cluster"), err)
-						}
-						clusterCIDR = clusterConfig.ClusterCIDR
-						serviceCIDR = clusterConfig.ServiceCIDR
+					clusterConfig, err := rootconfig.ReadClusterConfig(cmd.String("cluster"))
+					if err != nil {
+						return fmt.Errorf("could not load cluster config for %q: %w", cmd.String("cluster"), err)
 					}
 					return o.install(ctx, installConfig{
 						catalogImage: cmd.String("catalog-image"),
@@ -131,8 +113,8 @@ Example:
 						version:      cmd.String("version"),
 						shims:        cmd.Bool("shims"),
 						baseDomain:   rootconfig.BaseDomain(cmd.String("cluster")),
-						clusterCIDR:  clusterCIDR,
-						serviceCIDR:  serviceCIDR,
+						clusterCIDR:  clusterConfig.ClusterCIDR,
+						serviceCIDR:  clusterConfig.ServiceCIDR,
 					})
 				}),
 			},

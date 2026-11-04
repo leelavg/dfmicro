@@ -26,16 +26,12 @@ type providerNames struct {
 }
 
 func newProviderNames(cluster string) providerNames {
-	prefix := "rook-prov"
-	if cluster != "" {
-		prefix = cluster
-	}
 	return providerNames{
-		cephCluster:    prefix + "-cephcluster",
-		blockPool:      prefix + "-rbd",
-		filesystem:     prefix + "-cephfs",
-		filesystemMeta: prefix + "-cephfs-metadata",
-		filesystemData: prefix + "-cephfs-data0",
+		cephCluster:    cluster + "-cephcluster",
+		blockPool:      cluster + "-rbd",
+		filesystem:     cluster + "-cephfs",
+		filesystemMeta: cluster + "-cephfs-metadata",
+		filesystemData: cluster + "-cephfs-data0",
 	}
 }
 

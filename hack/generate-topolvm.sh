@@ -58,7 +58,7 @@ helm template topolvm "${chart}" \
 	--set controller.replicaCount=1 \
 	>"${rendered}/02-topolvm.yaml"
 
-yq -i 'with(select(.kind == "StorageClass" and .metadata.name == "topolvm-provisioner"); .metadata.annotations."storageclass.kubernetes.io/is-default-class" = "true")' \
+yq -i 'with(select(.kind == "StorageClass" and .metadata.name == "topolvm-provisioner"); .metadata.annotations."storageclass.kubernetes.io/is-default-class" = "true" | .volumeBindingMode = "Immediate")' \
 	"${rendered}/02-topolvm.yaml"
 
 cat >"${rendered}/01-namespace.yaml" <<'EOF'

@@ -13,10 +13,10 @@ TOPOLVM_VERSION ?= 17.2.0
 MDBOOK_VERSION ?= 0.5.4
 MDBOOK := $(BIN_DIR)/mdbook
 
-.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze build-fetch lint install-mdbook docs docs-serve
+.PHONY: vet fmt generate generate-topolvm build build-cross build-release build-analyze lint install-mdbook docs docs-serve
 
 vet:
-	go vet -tags fetch ./...
+	go vet ./...
 
 lint:
 	golangci-lint run
@@ -55,11 +55,7 @@ generate-topolvm:
 	TOPOLVM_VERSION=$(TOPOLVM_VERSION) ./hack/generate-topolvm.sh
 
 fix:
-	go fix -tags fetch ./...
-
-build-fetch: fmt vet
-	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -tags fetch -o $(BIN_DIR)/fetch ./cmd/fetch
+	go fix ./...
 
 build: fmt vet generate fix
 	$(MAKE) -s build-cross
@@ -69,12 +65,12 @@ install: build
 
 build-release: fmt vet generate
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="-s -w $(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w $(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-analyze: fmt vet generate
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -trimpath -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -trimpath -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
 
 build-cross:
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -tags '!fetch' -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BINARY) ./cmd/dfmicro
