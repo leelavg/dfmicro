@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"dfmicro/internal/addon/ocp"
 	"dfmicro/internal/support"
 )
 
@@ -62,7 +63,7 @@ func (o *odf) configureClient(ctx context.Context, cfg configureConfig) error {
 func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 	crd := "storageclusters.ocs.openshift.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -114,7 +115,7 @@ func (o *odf) labelStorageNodes(ctx context.Context) error {
 func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 	crd := "drivers.csi.ceph.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)

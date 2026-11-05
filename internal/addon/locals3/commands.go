@@ -2,7 +2,9 @@ package locals3
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -37,24 +39,27 @@ The service allows anonymous access until accounts are configured.`,
 				},
 			},
 			{
-				Name:  "configure",
-				Usage: "Publish local-s3 in a cluster",
-				UsageText: `--attach-to creates s3.default.svc pointing to local-s3 on the cluster's Podman network.
---detach-from removes that Service and EndpointSlice.`,
+				Name:      "configure",
+				Usage:     "Publish or remove local-s3 in clusters",
+				UsageText: `Cluster names can be repeated or comma-separated.`,
 				MutuallyExclusiveFlags: []cli.MutuallyExclusiveFlags{
 					{
 						Flags: [][]cli.Flag{
-							{&cli.StringFlag{Name: "attach-to", Usage: "Attach S3 Services to this dfmicro cluster"}},
-							{&cli.StringFlag{Name: "detach-from", Usage: "Remove local-s3 Services from this dfmicro cluster"}},
+							{&cli.StringSliceFlag{Name: "attach-to", Usage: "Attach local-s3 to these dfmicro clusters"}},
+							{&cli.StringSliceFlag{Name: "detach-from", Usage: "Remove local-s3 from these dfmicro clusters"}},
 						},
 						Required: true,
 					},
 				},
-				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cluster := cmd.String("attach-to"); cluster != "" {
-						return m.attach(ctx, cluster)
+				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+					clusters := cmd.StringSlice("attach-to")
+					if len(clusters) == 0 {
+						clusters = cmd.StringSlice("detach-from")
 					}
-					return m.detach(ctx, cmd.String("detach-from"))
+					return ctx, validateClusterNames(clusters)
+				},
+				Action: func(ctx context.Context, cmd *cli.Command) error {
+					return m.configure(ctx, cmd.StringSlice("attach-to"), cmd.StringSlice("detach-from"))
 				},
 			},
 			{
@@ -74,4 +79,22 @@ The data volume is preserved unless --cleanup is passed.`,
 			},
 		},
 	}
+}
+
+func validateClusterNames(clusters []string) error {
+	seen := make(map[string]struct{}, len(clusters))
+	for _, cluster := range clusters {
+		cluster = strings.TrimSpace(cluster)
+		if cluster == "" {
+			return fmt.Errorf("cluster name cannot be empty")
+		}
+		if _, ok := seen[cluster]; ok {
+			return fmt.Errorf("duplicate cluster name: %s", cluster)
+		}
+		seen[cluster] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return fmt.Errorf("at least one cluster name is required")
+	}
+	return nil
 }

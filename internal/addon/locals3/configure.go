@@ -3,10 +3,25 @@ package locals3
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/support"
 )
+
+func (m *manager) configure(ctx context.Context, attachTo, detachFrom []string) error {
+	for _, cluster := range attachTo {
+		if err := m.attach(ctx, strings.TrimSpace(cluster)); err != nil {
+			return err
+		}
+	}
+	for _, cluster := range detachFrom {
+		if err := m.detach(ctx, strings.TrimSpace(cluster)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (m *manager) attach(ctx context.Context, cluster string) error {
 	clusterConfig, err := rootconfig.ReadClusterConfig(cluster)
@@ -43,7 +58,7 @@ func (m *manager) attach(ctx context.Context, cluster string) error {
 	if err := support.ApplyYAML(ctx, m.runner, support.KubeClient, clusterConfig.Kubeconfig, manifest); err != nil {
 		return fmt.Errorf("publish local-s3 in cluster %q: %w", cluster, err)
 	}
-	m.logger.Info("published local-s3 service", "cluster", cluster, "address", address)
+	m.logger.Info("created s3.default.svc Service and EndpointSlice", "cluster", cluster, "address", address)
 	return nil
 }
 

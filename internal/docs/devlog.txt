@@ -41,3 +41,4 @@
 - ODF storage topologies: Rook Ceph provider with external consumer, and ODF provider with client-only consumer
 - Test suite levels 4-6: single-node ODF, external storage, and multi-node provider/client PVC read-write coverage
 - OCM configuration: join named spokes and install supported addons on the hub and spokes
+- ODR addon: install the ODF Multicluster Orchestrator and configure local-S3 for managed clusters

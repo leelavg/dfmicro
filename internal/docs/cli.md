@@ -41,14 +41,13 @@ Manage the standalone local S3 service
 
 #### configure
 
-Publish local-s3 in a cluster
+Publish or remove local-s3 in clusters
 
-    --attach-to creates s3.default.svc pointing to local-s3 on the cluster's Podman network.
-    --detach-from removes that Service and EndpointSlice.
+>Cluster names can be repeated or comma-separated.
 
-**--attach-to**="": Attach S3 Services to this dfmicro cluster
+**--attach-to**="": Attach local-s3 to these dfmicro clusters
 
-**--detach-from**="": Remove local-s3 Services from this dfmicro cluster
+**--detach-from**="": Remove local-s3 from these dfmicro clusters
 
 #### install
 
@@ -175,6 +174,36 @@ Uninstall ODF and all associated resources
       dfmicro addon odf uninstall --attempt  # execute cleanup
 
 **--attempt**: Execute the delete commands instead of printing them (best-effort)
+
+### odr
+
+Manage OpenShift Data Foundation disaster recovery
+
+    Manage ODF disaster recovery on MicroShift.
+
+    Note: --cluster applies to all subcommands and must come before the subcommand name.
+
+**--cluster**="": Cluster name to resolve kubeconfig from (default: "micro")
+
+#### configure
+
+Configure S3 and managed clusters for ODR
+
+>Requires local-s3 attached to the hub and both managed clusters. Creates the shared dfmicro-odr bucket.
+
+**--managed-cluster**="": ManagedCluster name (repeatable or comma separated)
+
+**--type**="": MirrorPeer type: async (RDR) or sync (MDR)
+
+#### install
+
+Install the ODF Multicluster Orchestrator
+
+**--catalog-image**="": ODF catalog source image
+
+**--channel**="": Subscription channel (e.g. stable-5.0)
+
+**--version**="": OCP version in X.Y.Z format (e.g. 5.0.0)
 
 ## cluster
 

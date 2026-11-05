@@ -2,10 +2,10 @@ package ocp
 
 import (
 	"context"
-	"crypto/sha1"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -26,10 +26,22 @@ func (c *ClusterVersion) ApplyCRD(ctx context.Context, kubeconfig string) error 
 	return support.ApplyYAML(ctx, c.runner, support.KubeClient, kubeconfig, clusterVersionCRD)
 }
 
-func (c *ClusterVersion) Apply(ctx context.Context, kubeconfig, clusterName, channel string) error {
+func (c *ClusterVersion) Apply(ctx context.Context, kubeconfig, channel string) error {
+	result, err := execx.Run(ctx, c.runner, support.KubeClient,
+		"get", "namespace", "kube-system", "-o=jsonpath={.metadata.uid}",
+		"--kubeconfig="+kubeconfig,
+	)
+	if err != nil {
+		return fmt.Errorf("get kube-system namespace UID: %w", err)
+	}
+	clusterID := strings.TrimSpace(result.Stdout)
+	if clusterID == "" {
+		return fmt.Errorf("kube-system namespace UID is empty")
+	}
+
 	clusterVersion, err := support.Render(clusterVersionTmpl, map[string]string{
 		"Channel":   channel,
-		"ClusterID": clusterID(clusterName),
+		"ClusterID": clusterID,
 	})
 	if err != nil {
 		return err
@@ -54,14 +66,6 @@ func (c *ClusterVersion) PatchStatus(ctx context.Context, kubeconfig, version st
 		return fmt.Errorf("patch ClusterVersion status: %w", err)
 	}
 	return nil
-}
-
-func clusterID(clusterName string) string {
-	hash := sha1.Sum([]byte("dfmicro:" + clusterName))
-	hash[6] = (hash[6] & 0x0f) | 0x50
-	hash[8] = (hash[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		hash[0:4], hash[4:6], hash[6:8], hash[8:10], hash[10:16])
 }
 
 const clusterVersionTmpl = `apiVersion: config.openshift.io/v1

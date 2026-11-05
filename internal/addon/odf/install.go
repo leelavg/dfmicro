@@ -37,7 +37,7 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying ClusterVersion")
-	if err := clusterVersion.Apply(ctx, o.kubeconfig, o.clusterName, cfg.channel); err != nil {
+	if err := clusterVersion.Apply(ctx, o.kubeconfig, cfg.channel); err != nil {
 		return err
 	}
 	if err := clusterVersion.PatchStatus(ctx, o.kubeconfig, cfg.version); err != nil {

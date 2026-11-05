@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"dfmicro/internal/addon/ocp"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/support"
 )
@@ -46,7 +47,7 @@ type externalResource struct {
 func (o *odf) configureRookProvider(ctx context.Context, includeCephFS bool) error {
 	crd := "cephclusters.ceph.rook.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -120,7 +121,7 @@ func (o *odf) rookOperatorImage(ctx context.Context) (string, error) {
 func (o *odf) configureRookClient(ctx context.Context, providerName string, includeCephFS bool) error {
 	crd := "storageclusters.ocs.openshift.io"
 	o.logger.Info("waiting for CRD", "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("CRD established", "name", crd)
@@ -164,13 +165,13 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 	}
 	crd := "storageconsumers.ocs.openshift.io"
 	o.logger.Info("waiting for provider CRD", "cluster", providerName, "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, providerKubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, providerKubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("provider CRD established", "cluster", providerName, "name", crd)
 	crd = "storageclients.ocs.openshift.io"
 	o.logger.Info("waiting for client CRD", "cluster", o.clusterName, "name", crd)
-	if err := waitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
+	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, o.kubeconfig, crd); err != nil {
 		return err
 	}
 	o.logger.Info("client CRD established", "cluster", o.clusterName, "name", crd)

@@ -2,7 +2,7 @@ package ocm
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
 	"log/slog"
 	"net"
@@ -19,6 +19,9 @@ import (
 
 //go:embed assets/ocm-controller.yaml
 var ocmControllerManifest string
+
+//go:embed shims/crd/*.yaml shims/cr/*.yaml
+var ocmShims embed.FS
 
 type ocm struct {
 	logger *slog.Logger
@@ -69,15 +72,24 @@ func (o *ocm) install(ctx context.Context, clusterName, version string) error {
 			return err
 		}
 	}
+	o.logger.Info("applying OCM shim CRDs", "cluster", clusterName)
+	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, kubeconfig, ocmShims, "shims/crd"); err != nil {
+		return err
+	}
+
 	clusterVersion := ocp.NewClusterVersion(o.runner)
 	o.logger.Info("applying ClusterVersion", "cluster", clusterName, "version", version)
 	if err := clusterVersion.ApplyCRD(ctx, kubeconfig); err != nil {
 		return err
 	}
-	if err := clusterVersion.Apply(ctx, kubeconfig, clusterName, clusterVersionChannel); err != nil {
+	if err := clusterVersion.Apply(ctx, kubeconfig, clusterVersionChannel); err != nil {
 		return err
 	}
 	if err := clusterVersion.PatchStatus(ctx, kubeconfig, version); err != nil {
+		return err
+	}
+	o.logger.Info("applying OCM shim resources", "cluster", clusterName)
+	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, kubeconfig, ocmShims, "shims/cr"); err != nil {
 		return err
 	}
 	o.logger.Info("scaling OCM cluster-manager", "cluster", clusterName, "replicas", 1)
