@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"regexp"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
@@ -12,9 +11,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 )
-
-// basic X.Y.Z check, use a semver library if stricter validation is needed
-var reVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 var defaultCluster = rootconfig.Load().Name
 
@@ -73,10 +69,7 @@ Example:
 							if v == "" {
 								return nil
 							}
-							if !reVersion.MatchString(v) {
-								return fmt.Errorf("version %q must be in X.Y.Z format", v)
-							}
-							return nil
+							return support.ValidateVersionFormat(v)
 						},
 					},
 				},

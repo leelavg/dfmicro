@@ -21,25 +21,6 @@ status:
         - name: {{.CSV}}
 `
 
-const clusterVersionTmpl = `apiVersion: config.openshift.io/v1
-kind: ClusterVersion
-metadata:
-  name: version
-  labels:
-    app.kubernetes.io/created-by: dfmicro
-spec:
-  channel: {{.Channel}}
-  clusterID: {{.ClusterID}}
-status:
-  desired:
-    version: {{.Version}}
-  history:
-  - state: Completed
-    version: {{.Version}}
-    completionTime: "2026-01-01T00:00:00Z"
-  version: {{.Version}}
-`
-
 const catalogTmpl = `apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:

@@ -2,6 +2,7 @@ package odf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -19,13 +20,29 @@ func waitForCRD(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig
 	err := support.Poll(ctx, odfPoll, odfTimeout, func(ctx context.Context) (bool, error) {
 		result, err := runner.Run(ctx, kubeClient,
 			"get", "crd/"+name,
-			"-o", `jsonpath={.status.conditions[?(@.type=="Established")].status}`,
+			"-o", "json",
 			"--kubeconfig", kubeconfig,
 		)
 		if err != nil {
 			return false, err
 		}
-		return strings.TrimSpace(result.Stdout) == "True", nil
+		var crd struct {
+			Status struct {
+				Conditions []struct {
+					Type   string `json:"type"`
+					Status string `json:"status"`
+				} `json:"conditions"`
+			} `json:"status"`
+		}
+		if err := json.Unmarshal([]byte(result.Stdout), &crd); err != nil {
+			return false, fmt.Errorf("decode CRD %s: %w", name, err)
+		}
+		for _, condition := range crd.Status.Conditions {
+			if condition.Type == "Established" {
+				return strings.EqualFold(condition.Status, "true"), nil
+			}
+		}
+		return false, nil
 	})
 	if err != nil {
 		return fmt.Errorf("wait for CRD %s establishment: %w", name, err)

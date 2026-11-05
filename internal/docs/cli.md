@@ -75,16 +75,37 @@ Remove local-s3 and its cluster Services
 
 Manage Open Cluster Management
 
-    Use --cluster before the subcommand to select its kubeconfig.
+    Use --cluster before the subcommand to select the hub.
 
     Example:
-      dfmicro addon ocm --cluster ocm install
+      dfmicro addon ocm --cluster hub install --version 5.0.0
+      dfmicro addon ocm --cluster hub configure --spoke spoke --addon governance-policy-framework
+      dfmicro addon ocm --cluster hub configure --addon application-manager
+      dfmicro addon ocm --list-addons
 
-**--cluster**="": Cluster to install OCM on (default: "micro")
+**--cluster**="": Hub cluster for OCM operations (default: "micro")
+
+**--list-addons**: List supported OCM addons and their hub and spoke names
+
+#### configure
+
+Join spokes and configure OCM addons
+
+    Without --addon, configure only joins the selected spokes.
+    With --addon and no --spoke, it installs the addon on the hub only.
+
+    Example:
+      dfmicro addon ocm --cluster hub configure --spoke spoke1,spoke2 --addon governance-policy-framework,application-manager
+
+**--addon**="": Addon to install on the hub and enable on spokes
+
+**--spoke**="": Cluster to join as a spoke (repeatable or comma separated)
 
 #### install
 
 Install OCM hub components
+
+**--version**="": OCP version in X.Y.Z format (e.g. 5.0.0)
 
 ### odf
 

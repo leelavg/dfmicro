@@ -5,6 +5,7 @@ import (
 	"embed"
 	"slices"
 
+	"dfmicro/internal/addon/ocp"
 	"dfmicro/internal/support"
 )
 
@@ -23,8 +24,12 @@ type installConfig struct {
 }
 
 func (o *odf) install(ctx context.Context, cfg installConfig) error {
+	clusterVersion := ocp.NewClusterVersion(o.runner)
 	o.logger.Info("applying shim CRDs")
 	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, o.kubeconfig, odfFS, "shims/crd"); err != nil {
+		return err
+	}
+	if err := clusterVersion.ApplyCRD(ctx, o.kubeconfig); err != nil {
 		return err
 	}
 	if cfg.shims {
@@ -32,15 +37,10 @@ func (o *odf) install(ctx context.Context, cfg installConfig) error {
 	}
 
 	o.logger.Info("applying ClusterVersion")
-	cv, err := support.Render(clusterVersionTmpl, map[string]string{
-		"Channel":   cfg.channel,
-		"Version":   cfg.version,
-		"ClusterID": clusterID(o.clusterName),
-	})
-	if err != nil {
+	if err := clusterVersion.Apply(ctx, o.kubeconfig, o.clusterName, cfg.channel); err != nil {
 		return err
 	}
-	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, cv); err != nil {
+	if err := clusterVersion.PatchStatus(ctx, o.kubeconfig, cfg.version); err != nil {
 		return err
 	}
 

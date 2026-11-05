@@ -49,6 +49,11 @@ var clusteradmReleases = map[string]struct {
 	},
 }
 
+// ClusteradmPath returns the managed clusteradm binary path.
+func ClusteradmPath() string {
+	return filepath.Join(rootconfig.ConfigDir(), ",tools", "clusteradm")
+}
+
 func EnsureClusteradm(ctx context.Context, runner execx.Runner, logger *slog.Logger) (string, error) {
 	platform := runtime.GOOS + "/" + runtime.GOARCH
 	release, ok := clusteradmReleases[platform]
@@ -56,11 +61,11 @@ func EnsureClusteradm(ctx context.Context, runner execx.Runner, logger *slog.Log
 		return "", fmt.Errorf("clusteradm %s has no release for %s", clusteradmVersion, platform)
 	}
 
-	toolsDir := filepath.Join(rootconfig.ConfigDir(), ",tools")
+	binaryPath := ClusteradmPath()
+	toolsDir := filepath.Dir(binaryPath)
 	if err := ensureToolsDir(toolsDir); err != nil {
 		return "", err
 	}
-	binaryPath := filepath.Join(toolsDir, "clusteradm")
 	if info, err := os.Lstat(binaryPath); err == nil {
 		if !info.Mode().IsRegular() {
 			return "", fmt.Errorf("clusteradm tool path %q is not a regular file", binaryPath)

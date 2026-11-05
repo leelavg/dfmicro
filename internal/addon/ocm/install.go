@@ -2,6 +2,7 @@ package ocm
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"log/slog"
 	"net"
@@ -10,57 +11,73 @@ import (
 	"path/filepath"
 	"strings"
 
+	"dfmicro/internal/addon/ocp"
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
 )
+
+//go:embed assets/ocm-controller.yaml
+var ocmControllerManifest string
 
 type ocm struct {
 	logger *slog.Logger
 	runner execx.Runner
 }
 
-func (o *ocm) install(ctx context.Context, clusterName string) error {
+const clusterVersionChannel = "stable"
+
+func (o *ocm) install(ctx context.Context, clusterName, version string) error {
 	kubeconfig, err := rootconfig.Kubeconfig(clusterName)
 	if err != nil {
 		return fmt.Errorf("could not load kubeconfig for cluster %q: %w", clusterName, err)
-	}
-	tempDir, err := os.MkdirTemp("", "dfmicro-ocm-")
-	if err != nil {
-		return fmt.Errorf("create temporary OCM config directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir)
-	selectedKubeconfig := filepath.Join(tempDir, "kubeconfig")
-	contextName, err := privateContext(ctx, o.runner, kubeconfig, selectedKubeconfig)
-	if err != nil {
-		return err
 	}
 	result, err := execx.Run(ctx, o.runner, support.KubeClient, "get", "deployment/cluster-manager",
 		"--namespace=open-cluster-management", "--ignore-not-found", "--output=name", "--kubeconfig="+kubeconfig)
 	if err != nil {
 		return fmt.Errorf("check OCM cluster-manager: %w", err)
 	}
-	if strings.TrimSpace(result.Stdout) != "" {
-		o.logger.Info("OCM cluster-manager already exists", "cluster", clusterName)
-		return nil
-	}
 	clusteradm, err := support.EnsureClusteradm(ctx, o.runner, o.logger)
 	if err != nil {
 		return err
 	}
-
-	o.logger.Info("initializing OCM hub", "cluster", clusterName, "context", contextName)
-	args := []string{
-		"init",
-		"--feature-gates=ManagedClusterAutoApproval=true",
-		"--singleton-name=" + clusterName,
-		"--create-namespace=true",
-		"--wait=true",
-		"--kubeconfig=" + selectedKubeconfig,
-		"--context=" + contextName,
+	if strings.TrimSpace(result.Stdout) != "" {
+		o.logger.Info("OCM cluster-manager already exists", "cluster", clusterName)
+	} else {
+		tempDir, err := os.MkdirTemp("", "dfmicro-ocm-")
+		if err != nil {
+			return fmt.Errorf("create temporary OCM config directory: %w", err)
+		}
+		defer os.RemoveAll(tempDir)
+		selectedKubeconfig := filepath.Join(tempDir, "kubeconfig")
+		contextName, err := privateContext(ctx, o.runner, kubeconfig, selectedKubeconfig)
+		if err != nil {
+			return err
+		}
+		o.logger.Info("initializing OCM hub", "cluster", clusterName, "context", contextName)
+		args := []string{
+			"init",
+			"--feature-gates=ManagedClusterAutoApproval=true",
+			"--singleton-name=" + clusterName,
+			"--create-namespace=true",
+			"--wait=true",
+			"--kubeconfig=" + selectedKubeconfig,
+			"--context=" + contextName,
+		}
+		// Keep clusteradm's --wait output visible while hub components settle.
+		if err := o.runner.RunInteractive(ctx, clusteradm, args...); err != nil {
+			return err
+		}
 	}
-	// Keep clusteradm's --wait output visible while hub components settle.
-	if err := o.runner.RunInteractive(ctx, clusteradm, args...); err != nil {
+	clusterVersion := ocp.NewClusterVersion(o.runner)
+	o.logger.Info("applying ClusterVersion", "cluster", clusterName, "version", version)
+	if err := clusterVersion.ApplyCRD(ctx, kubeconfig); err != nil {
+		return err
+	}
+	if err := clusterVersion.Apply(ctx, kubeconfig, clusterName, clusterVersionChannel); err != nil {
+		return err
+	}
+	if err := clusterVersion.PatchStatus(ctx, kubeconfig, version); err != nil {
 		return err
 	}
 	o.logger.Info("scaling OCM cluster-manager", "cluster", clusterName, "replicas", 1)
@@ -68,6 +85,11 @@ func (o *ocm) install(ctx context.Context, clusterName string) error {
 	if err != nil {
 		return fmt.Errorf("scale OCM cluster-manager to one replica: %w", err)
 	}
+	o.logger.Info("deploying OCM controller", "cluster", clusterName)
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, kubeconfig, ocmControllerManifest); err != nil {
+		return fmt.Errorf("deploy OCM controller: %w", err)
+	}
+	o.logger.Info("no need to copy the OCM token, configure retrieves a fresh token for each spoke")
 	return nil
 }
 

@@ -531,7 +531,7 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ",") {
 			continue
 		}
 		clusterName := entry.Name()
