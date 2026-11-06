@@ -156,7 +156,13 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		return err
 	}
 
-	for _, spoke := range spokeNames {
+	for i, spoke := range spokeNames {
+		spokePrivateKubeconfig := filepath.Join(tempDir, fmt.Sprintf("spoke-%d-kubeconfig", i))
+		spokeContext, err := privateContext(ctx, o.runner, spokeKubeconfigs[spoke], spokePrivateKubeconfig)
+		if err != nil {
+			return fmt.Errorf("select private API context for spoke %q: %w", spoke, err)
+		}
+
 		tokenResult, err := execx.Run(ctx, o.runner, clusteradm, "--kubeconfig", hubPrivateKubeconfig,
 			"--context", contextName, "get", "token", "--output=json")
 		if err != nil {
@@ -172,10 +178,9 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		if token.HubToken == "" || token.HubAPIServer == "" {
 			return fmt.Errorf("OCM token response for spoke %q is missing hub-token or hub-apiserver", spoke)
 		}
-
-		o.logger.Info("joining OCM spoke", "hub", hubName, "spoke", spoke, "hub-context", contextName)
+		o.logger.Info("joining OCM spoke", "hub", hubName, "spoke", spoke, "hub-context", contextName, "spoke-context", spokeContext)
 		args := []string{
-			"--kubeconfig", spokeKubeconfigs[spoke],
+			"--kubeconfig", spokePrivateKubeconfig,
 			"join",
 			"--hub-token", token.HubToken,
 			"--hub-apiserver", token.HubAPIServer,
@@ -183,7 +188,7 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 			"--singleton",
 			"--wait",
 		}
-		if _, err := execx.Run(ctx, o.runner, clusteradm, args...); err != nil {
+		if err := o.runner.RunInteractive(ctx, clusteradm, args...); err != nil {
 			return fmt.Errorf("join OCM spoke %q: %w", spoke, err)
 		}
 		o.logger.Info("OCM spoke joined", "hub", hubName, "spoke", spoke)

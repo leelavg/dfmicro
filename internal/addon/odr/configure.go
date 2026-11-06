@@ -45,6 +45,12 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 		return fmt.Errorf("scale down ODF Multicluster console: %w", err)
 	}
 
+	for _, clusterName := range managedClusters {
+		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
+			return err
+		}
+	}
+
 	o.logger.Info("creating or confirming local S3 bucket", "cluster", o.clusterName, "bucket", s3BucketName)
 	result, err := support.RunPodmanPrivileged(ctx, o.runner,
 		"exec", rootconfig.NodeName(o.clusterName, 0), "curl",
@@ -82,6 +88,11 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	o.logger.Info("applying ODR S3Configuration", "cluster", o.clusterName, "managedClusters", managedClusters)
 	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, configuration); err != nil {
 		return fmt.Errorf("apply ODR S3Configuration: %w", err)
+	}
+	if peerType == "sync" {
+		if err := o.configureSyncCIDRs(ctx, managedClusters); err != nil {
+			return err
+		}
 	}
 
 	mirrorPeer, err := support.Render(mirrorPeerTmpl, map[string]string{

@@ -31,7 +31,7 @@ const trustedCABundleTmpl = `apiVersion: v1
 kind: ConfigMap
 metadata:
   name: openshift-trusted-cabundle
-  namespace: openshift-operators
+  namespace: {{.Namespace}}
   labels:
     app.kubernetes.io/created-by: dfmicro
 data:

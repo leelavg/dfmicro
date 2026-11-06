@@ -229,6 +229,26 @@ Disables hardware watchdog completely. wdavdaemon falls back to software watchdo
 **Why not fixed in dfmicro:** Real-time scanning is a host-level security feature. The exclusion must be configured on the host.
 </details>
 
+<details>
+<summary>Kindnet crashes with "Extension comment revision 0 not supported"</summary>
+<br>
+
+Kindnet's masquerade rules use the iptables comment match. The Linux kernel running Podman must provide the `xt_comment` module. On CentOS Stream 10, install the module package matching the running kernel and load it:
+
+```bash
+sudo dnf install "kernel-modules-extra-$(uname -r)"
+sudo modprobe xt_comment
+```
+
+Confirm it is available with `modinfo xt_comment`. Then delete the crashing kindnet pod so its DaemonSet recreates it:
+
+```bash
+kubectl -n kube-kindnet delete pod <kindnet-pod>
+```
+
+For Podman Machine, install and load the module inside the VM that runs Podman. The host operating system's kernel is not used by the cluster containers.
+</details>
+
 ## Contributing
 
 Bug reports and suggestions are welcome via [issues](https://github.com/leelavg/dfmicro/issues). This is a personal project with a focused scope and occasional history rewrites for now, so pull requests are not being accepted at this time.

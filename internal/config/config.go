@@ -25,10 +25,11 @@ type ClusterDefaults struct {
 	Image       string `json:"image"`
 	PowerTuning bool   `json:"powerTuning"`
 
-	APIServerPort int    `json:"apiServerPort"`
-	ClusterCIDR   string `json:"clusterCIDR"`
-	ServiceCIDR   string `json:"serviceCIDR"`
-	ExposeKubeAPI bool   `json:"exposeKubeAPI"`
+	APIServerPort int      `json:"apiServerPort"`
+	APIServerIPs  []string `json:"apiServerIPs,omitempty"`
+	ClusterCIDR   string   `json:"clusterCIDR"`
+	ServiceCIDR   string   `json:"serviceCIDR"`
+	ExposeKubeAPI bool     `json:"exposeKubeAPI"`
 
 	LVMVolSize          string  `json:"lvmVolSize"`
 	OverprovisionRatio  float32 `json:"overprovisionRatio"`

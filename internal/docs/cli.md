@@ -231,6 +231,8 @@ Create a cluster, wait until ready, and print connection info
       dfmicro cluster create --name odf --lvm-volsize 50G --pull-secret ~/pull-secret.json
       dfmicro cluster create --idms ~/idms-1.yaml --idms ~/idms-2.yaml
 
+**--api-server-ip**="": Additional IPv4 address for API server access (repeatable, e.g. cloud floating IP)
+
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
 
 **--bridge-subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/24")
@@ -500,6 +502,7 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 
     Examples:
       dfmicro ops resources
+      dfmicro ops resources --tune
       dfmicro ops resources --namespace openshift-operator-lifecycle-manager
       dfmicro ops resources --name dev --node microshift-node-1
 
@@ -508,6 +511,8 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 **--namespace**="": Restrict output to a single namespace (omit for all namespaces)
 
 **--node**="": Restrict output to a single node by name (omit for all nodes)
+
+**--tune**: Apply fixed CPU and memory requests to known ODF and Ramen controllers
 
 ### storage
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strconv"
@@ -43,7 +44,7 @@ const podTruncAt = 42
 const truncSuffix = 3
 const dotLen = 3
 
-func resourcesCommand(runner execx.Runner) *cli.Command {
+func resourcesCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
 	return &cli.Command{
 		Name:  "resources",
 		Usage: "Show CPU and memory requests, limits, and live usage per container (experimental)",
@@ -51,6 +52,7 @@ func resourcesCommand(runner execx.Runner) *cli.Command {
 
 Examples:
   dfmicro ops resources
+  dfmicro ops resources --tune
   dfmicro ops resources --namespace openshift-operator-lifecycle-manager
   dfmicro ops resources --name dev --node microshift-node-1`,
 		Flags: []cli.Flag{
@@ -67,13 +69,21 @@ Examples:
 				Name:  "node",
 				Usage: "Restrict output to a single node by name (omit for all nodes)",
 			},
+			&cli.BoolFlag{
+				Name:  "tune",
+				Usage: "Apply fixed CPU and memory requests to known ODF and Ramen controllers",
+			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			r := &resources{
+				logger:    logger,
 				runner:    runner,
 				cluster:   cmd.String("name"),
 				namespace: cmd.String("namespace"),
 				node:      cmd.String("node"),
+			}
+			if cmd.Bool("tune") {
+				return r.tune(ctx)
 			}
 			return r.print(ctx)
 		},
@@ -82,6 +92,7 @@ Examples:
 
 type resources struct {
 	formatter
+	logger    *slog.Logger
 	runner    execx.Runner
 	cluster   string
 	namespace string

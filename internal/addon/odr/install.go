@@ -3,12 +3,9 @@ package odr
 import (
 	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
-	"strings"
 
 	"dfmicro/internal/addon/ocp"
-	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/support"
 )
 
@@ -55,27 +52,8 @@ func (o *odr) install(ctx context.Context, catalogImage, channel, version string
 		return fmt.Errorf("apply ODF Multicluster Orchestrator subscription: %w", err)
 	}
 
-	result, err := support.RunPodmanPrivileged(ctx, o.runner,
-		"exec", rootconfig.NodeName(o.clusterName, 0),
-		"cat", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-	)
-	if err != nil {
-		return fmt.Errorf("read cluster TLS CA bundle: %w", err)
-	}
-	if strings.TrimSpace(result.Stdout) == "" {
-		return fmt.Errorf("cluster TLS CA bundle is empty")
-	}
-	caBundle, err := json.Marshal(result.Stdout)
-	if err != nil {
-		return fmt.Errorf("encode cluster TLS CA bundle: %w", err)
-	}
-	configMap, err := support.Render(trustedCABundleTmpl, map[string]string{"CABundle": string(caBundle)})
-	if err != nil {
+	if err := o.applyTrustedCABundle(ctx, o.clusterName, "openshift-operators", "odr-hub-operator", "ramen-hub-operator"); err != nil {
 		return err
-	}
-	o.logger.Info("applying trusted CA bundle", "cluster", o.clusterName)
-	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, configMap); err != nil {
-		return fmt.Errorf("apply trusted CA bundle: %w", err)
 	}
 	return nil
 }

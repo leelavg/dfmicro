@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
+	"text/tabwriter"
 
 	"dfmicro/internal/execx"
 	"dfmicro/internal/support"
@@ -30,6 +32,8 @@ func storageCommand(runner execx.Runner) *cli.Command {
 				return err
 			}
 
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(w, "CONTAINER\tSTORAGE PATH")
 			for _, c := range containers {
 				if len(c.Names) == 0 {
 					continue
@@ -38,12 +42,12 @@ func storageCommand(runner execx.Runner) *cli.Command {
 
 				result, err := support.RunPodmanPrivileged(ctx, runner, "inspect", name, "--format", "{{.GraphDriver.Data.MergedDir}}")
 				if err != nil {
-					fmt.Printf("%s\terror\n", name)
+					fmt.Fprintf(w, "%s\terror\n", name)
 					continue
 				}
-				fmt.Printf("%s\t%s\n", name, strings.TrimSpace(result.Stdout))
+				fmt.Fprintf(w, "%s\t%s\n", name, strings.TrimSpace(result.Stdout))
 			}
-			return nil
+			return w.Flush()
 		},
 	}
 }

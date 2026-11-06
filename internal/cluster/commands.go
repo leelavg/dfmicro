@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 
 	rootconfig "dfmicro/internal/config"
@@ -69,6 +70,20 @@ func createFlags() []cli.Flag {
 			Validator: func(v int) error {
 				if v < 1024 || v > 65535 {
 					return fmt.Errorf("api server port must be between 1024 and 65535: %d", v)
+				}
+				return nil
+			},
+		},
+		&cli.StringSliceFlag{
+			Name:     "api-server-ip",
+			Usage:    "Additional IPv4 address for API server access (repeatable, e.g. cloud floating IP)",
+			Category: "Network:",
+			Validator: func(ips []string) error {
+				for _, value := range ips {
+					ip := net.ParseIP(value)
+					if ip == nil || ip.To4() == nil {
+						return fmt.Errorf("invalid IPv4 address %q", value)
+					}
 				}
 				return nil
 			},

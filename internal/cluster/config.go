@@ -18,6 +18,7 @@ func newConfigFromCommand(cmd *cli.Command) (rootconfig.ClusterConfig, error) {
 	cfg.Image = cmd.String("image")
 	cfg.LVMVolSize = cmd.String("lvm-volsize")
 	cfg.APIServerPort = cmd.Int("api-server-port")
+	cfg.APIServerIPs = cmd.StringSlice("api-server-ip")
 	cfg.BridgeSubnet = cmd.String("bridge-subnet")
 	cfg.ClusterCIDR = cmd.String("cluster-cidr")
 	cfg.ServiceCIDR = cmd.String("service-cidr")

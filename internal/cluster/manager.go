@@ -321,7 +321,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 
 	var clients []string
 	if m.cfg.ExposeKubeAPI {
-		clients = getClients()
+		clients = getClients(m.cfg.APIServerIPs...)
 		extraArgs = append(extraArgs, "-p", fmt.Sprintf("%d:6443", m.cfg.APIServerPort))
 	}
 
@@ -435,7 +435,7 @@ func (m *manager) copyKubeconfig(ctx context.Context, containerName string) erro
 	}
 
 	if m.cfg.ExposeKubeAPI {
-		clients := getClients()
+		clients := getClients(m.cfg.APIServerIPs...)
 		if len(clients) > 0 {
 			var kubeconfigs []string
 			for _, client := range clients {
@@ -592,7 +592,7 @@ func listAll(ctx context.Context, logger *slog.Logger, runner execx.Runner) erro
 	return nil
 }
 
-func getClients() []string {
+func getClients(additionalIPs ...string) []string {
 	var clients []string
 
 	hostname, err := os.Hostname()
@@ -635,6 +635,12 @@ func getClients() []string {
 					clients = append(clients, ipStr)
 				}
 			}
+		}
+	}
+	for _, ip := range additionalIPs {
+		if _, exists := seen[ip]; !exists {
+			seen[ip] = struct{}{}
+			clients = append(clients, ip)
 		}
 	}
 	return clients

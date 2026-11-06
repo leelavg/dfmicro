@@ -17,7 +17,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			return cli.ShowSubcommandHelp(cmd)
 		},
 		Commands: []*cli.Command{
-			resourcesCommand(runner),
+			resourcesCommand(logger, runner),
 			sudoersCommand(logger, runner),
 			storageCommand(runner),
 		},
