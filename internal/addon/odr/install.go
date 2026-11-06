@@ -9,7 +9,7 @@ import (
 	"dfmicro/internal/support"
 )
 
-//go:embed shims/crd/*.yaml shims/rbac/*.yaml
+//go:embed assets/volsync.yaml shims/crd/*.yaml shims/rbac/*.yaml shims/volsync/crd/*.yaml shims/volsync/cr/*.yaml
 var odrFS embed.FS
 
 func (o *odr) install(ctx context.Context, catalogImage, channel, version string) error {

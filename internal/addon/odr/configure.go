@@ -46,6 +46,9 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	}
 
 	for _, clusterName := range managedClusters {
+		if err := o.installVolSync(ctx, clusterName); err != nil {
+			return err
+		}
 		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
 			return err
 		}

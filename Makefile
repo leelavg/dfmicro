@@ -10,10 +10,12 @@ BINARY := $(BIN_DIR)/dfmicro
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
 TOPOLVM_VERSION ?= 17.2.0
+VOLSYNC_VERSION ?= 0.17.0
+VOLSYNC_CHART_COMMIT ?= d90957908caa97c9088111ad574f2c12ae3a4916
 MDBOOK_VERSION ?= 0.5.4
 MDBOOK := $(BIN_DIR)/mdbook
 
-.PHONY: vet fmt generate generate-topolvm generate-ocm-controller build build-cross build-release build-analyze lint install-mdbook docs docs-serve
+.PHONY: vet fmt generate generate-topolvm generate-ocm-controller generate-volsync build build-cross build-release build-analyze lint install-mdbook docs docs-serve
 
 vet:
 	go vet ./...
@@ -48,7 +50,7 @@ docs-serve: docs
 fmt:
 	go fmt ./...
 
-generate: generate-topolvm generate-ocm-controller
+generate: generate-topolvm generate-ocm-controller generate-volsync
 	go generate ./internal/docs
 
 generate-topolvm:
@@ -56,6 +58,9 @@ generate-topolvm:
 
 generate-ocm-controller:
 	./hack/generate-ocm-controller.sh
+
+generate-volsync:
+	VOLSYNC_VERSION=$(VOLSYNC_VERSION) VOLSYNC_CHART_COMMIT=$(VOLSYNC_CHART_COMMIT) ./hack/generate-volsync.sh
 
 fix:
 	go fix ./...

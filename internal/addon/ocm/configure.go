@@ -19,15 +19,16 @@ import (
 var applicationManagerManifest string
 
 type ocmAddon struct {
-	hubName    string
-	spokeName  string
-	appManager bool
+	hubName      string
+	hubNamespace string
+	spokeName    string
+	appManager   bool
 }
 
 // The hub and spoke CLIs use different names for some addons.
 var supportedOCMAddons = map[string]ocmAddon{
 	"application-manager":         {spokeName: "application-manager", appManager: true},
-	"argocd":                      {hubName: "argocd", spokeName: "argocd"},
+	"argocd":                      {hubName: "argocd", hubNamespace: "argocd", spokeName: "argocd"},
 	"argocd-agent":                {hubName: "argocd-agent", spokeName: "argocd-agent-addon"},
 	"config-policy-controller":    {hubName: "governance-policy-framework", spokeName: "config-policy-controller"},
 	"governance-policy-framework": {hubName: "governance-policy-framework", spokeName: "governance-policy-framework"},
@@ -75,10 +76,21 @@ func validateOCMSpokes(names []string) error {
 }
 
 func validateOCMAddons(names []string) error {
+	var argocd, argocdAgent bool
 	for _, name := range names {
-		if _, ok := supportedOCMAddons[strings.TrimSpace(name)]; !ok {
+		name = strings.TrimSpace(name)
+		if _, ok := supportedOCMAddons[name]; !ok {
 			return fmt.Errorf("unsupported OCM addon %q; supported addons: %s", name, strings.Join(supportedOCMAddonNames, ", "))
 		}
+		switch name {
+		case "argocd":
+			argocd = true
+		case "argocd-agent":
+			argocdAgent = true
+		}
+	}
+	if argocd && argocdAgent {
+		return fmt.Errorf("argocd and argocd-agent are alternative OCM integrations; choose one")
 	}
 	return nil
 }
@@ -93,7 +105,8 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		return fmt.Errorf("could not load kubeconfig for hub cluster %q: %w", hubName, err)
 	}
 
-	hubAddons := make([]string, 0, len(addonNames))
+	hubAddonsByNamespace := make(map[string][]string)
+	hubAddonNamespaces := make([]string, 0, len(addonNames))
 	spokeAddons := make([]string, 0, len(addonNames))
 	hubSeen := make(map[string]struct{})
 	spokeAddonSeen := make(map[string]struct{})
@@ -107,7 +120,10 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		if addon.hubName != "" {
 			if _, ok := hubSeen[addon.hubName]; !ok {
 				hubSeen[addon.hubName] = struct{}{}
-				hubAddons = append(hubAddons, addon.hubName)
+				if _, ok := hubAddonsByNamespace[addon.hubNamespace]; !ok {
+					hubAddonNamespaces = append(hubAddonNamespaces, addon.hubNamespace)
+				}
+				hubAddonsByNamespace[addon.hubNamespace] = append(hubAddonsByNamespace[addon.hubNamespace], addon.hubName)
 			}
 		}
 		if addon.spokeName != "" {
@@ -128,15 +144,37 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 	}
 
 	clusteradm := support.ClusteradmPath()
+	var tempDir string
+	var hubPrivateKubeconfig, contextName string
+	if len(hubAddonNamespaces) > 0 || len(spokeNames) > 0 {
+		tempDir, err = os.MkdirTemp("", "dfmicro-ocm-")
+		if err != nil {
+			return fmt.Errorf("create temporary OCM config directory: %w", err)
+		}
+		defer os.RemoveAll(tempDir)
+		hubPrivateKubeconfig = filepath.Join(tempDir, "hub-kubeconfig")
+		contextName, err = privateContext(ctx, o.runner, hubKubeconfig, hubPrivateKubeconfig)
+		if err != nil {
+			return err
+		}
+	}
+
 	if installApplicationManager {
 		o.logger.Info("installing OCM addon on hub", "addon", "application-manager", "cluster", hubName)
 		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, hubKubeconfig, applicationManagerManifest); err != nil {
 			return fmt.Errorf("install application-manager on hub: %w", err)
 		}
 	}
-	if len(hubAddons) > 0 {
-		o.logger.Info("installing OCM addons on hub", "addons", hubAddons, "cluster", hubName)
-		args := []string{"--kubeconfig", hubKubeconfig, "install", "hub-addon", "--names=" + strings.Join(hubAddons, ",")}
+	for _, namespace := range hubAddonNamespaces {
+		addons := hubAddonsByNamespace[namespace]
+		o.logger.Info("installing OCM addons on hub", "addons", addons, "cluster", hubName, "namespace", namespace)
+		args := []string{
+			"--kubeconfig", hubPrivateKubeconfig, "--context", contextName,
+			"install", "hub-addon", "--names=" + strings.Join(addons, ","),
+		}
+		if namespace != "" {
+			args = append(args, "--namespace="+namespace, "--create-namespace")
+		}
 		if _, err := execx.Run(ctx, o.runner, clusteradm, args...); err != nil {
 			return fmt.Errorf("install OCM addons on hub: %w", err)
 		}
@@ -145,18 +183,19 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 	if len(spokeNames) == 0 {
 		return nil
 	}
-	tempDir, err := os.MkdirTemp("", "dfmicro-ocm-")
-	if err != nil {
-		return fmt.Errorf("create temporary OCM config directory: %w", err)
-	}
-	defer os.RemoveAll(tempDir)
-	hubPrivateKubeconfig := filepath.Join(tempDir, "hub-kubeconfig")
-	contextName, err := privateContext(ctx, o.runner, hubKubeconfig, hubPrivateKubeconfig)
-	if err != nil {
-		return err
-	}
 
 	for i, spoke := range spokeNames {
+		managedCluster, err := execx.Run(ctx, o.runner, support.KubeClient,
+			"--kubeconfig", hubPrivateKubeconfig, "--context", contextName,
+			"get", "managedcluster", spoke, "--ignore-not-found", "-o", "name")
+		if err != nil {
+			return fmt.Errorf("check OCM spoke %q: %w", spoke, err)
+		}
+		if strings.TrimSpace(managedCluster.Stdout) != "" {
+			o.logger.Info("OCM spoke already joined", "hub", hubName, "spoke", spoke)
+			continue
+		}
+
 		spokePrivateKubeconfig := filepath.Join(tempDir, fmt.Sprintf("spoke-%d-kubeconfig", i))
 		spokeContext, err := privateContext(ctx, o.runner, spokeKubeconfigs[spoke], spokePrivateKubeconfig)
 		if err != nil {
@@ -197,7 +236,8 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 	if len(spokeAddons) > 0 {
 		o.logger.Info("enabling OCM addons on spokes", "addons", spokeAddons, "spokes", spokeNames)
 		args := []string{
-			"--kubeconfig", hubKubeconfig,
+			"--kubeconfig", hubPrivateKubeconfig,
+			"--context", contextName,
 			"addon", "enable",
 			"--names=" + strings.Join(spokeAddons, ","),
 			"--clusters=" + strings.Join(spokeNames, ","),
