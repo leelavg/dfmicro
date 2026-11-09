@@ -9,12 +9,16 @@ import (
 	"dfmicro/internal/support"
 )
 
-//go:embed assets/volsync.yaml shims/crd/*.yaml shims/rbac/*.yaml shims/volsync/crd/*.yaml shims/volsync/cr/*.yaml
+//go:embed assets/*.yaml assets/velero-crds/*.yaml shims/crd/*.yaml shims/rbac/*.yaml shims/velero/crd/*.yaml shims/volsync/crd/*.yaml shims/volsync/cr/*.yaml
 var odrFS embed.FS
 
 func (o *odr) install(ctx context.Context, catalogImage, channel, version string) error {
-	o.logger.Info("applying ODR shim CRDs", "cluster", o.clusterName)
-	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, o.kubeconfig, odrFS, "shims/crd"); err != nil {
+	o.logger.Info("creating ODR shim CRDs if missing", "cluster", o.clusterName)
+	if err := support.ApplyDirIfMissing(ctx, o.runner, support.KubeClient, o.kubeconfig, odrFS, "shims/crd"); err != nil {
+		return err
+	}
+	o.logger.Info("creating Velero shim CRDs if missing", "cluster", o.clusterName)
+	if err := support.ApplyDirIfMissing(ctx, o.runner, support.KubeClient, o.kubeconfig, odrFS, "shims/velero/crd"); err != nil {
 		return err
 	}
 	o.logger.Info("applying ODR shim RBAC", "cluster", o.clusterName)

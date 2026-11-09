@@ -1,0 +1,345 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-adp
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+
+# Source: velero/crds/backups.yaml
+---
+
+# Source: velero/crds/backupstoragelocations.yaml
+---
+
+# Source: velero/crds/datadownloads.yaml
+---
+
+# Source: velero/crds/datauploads.yaml
+---
+
+# Source: velero/crds/deletebackuprequests.yaml
+---
+
+# Source: velero/crds/downloadrequests.yaml
+---
+
+# Source: velero/crds/podvolumebackups.yaml
+---
+
+# Source: velero/crds/podvolumerestores.yaml
+---
+
+# Source: velero/crds/restores.yaml
+---
+
+# Source: velero/crds/schedules.yaml
+---
+
+# Source: velero/crds/serverstatusrequests.yaml
+---
+
+# Source: velero/crds/volumesnapshotlocations.yaml
+---
+# Source: velero/templates/serviceaccount-server.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: velero-server
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+automountServiceAccountToken: true
+---
+# Source: velero/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dfmicro-velero-s3
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+type: Opaque
+data:
+  cloud: "W2RlZmF1bHRdCmF3c19hY2Nlc3Nfa2V5X2lkPWR1bW15CmF3c19zZWNyZXRfYWNjZXNzX2tleT1kdW1teQo="
+---
+# Source: velero/templates/repo-maintenance-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-repo-maintenance
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+data:
+  global: |
+    {
+      "keepLatestMaintenanceJobs": 3
+    }
+---
+# Source: velero/templates/clusterrolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: velero-server
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+subjects:
+  - kind: ServiceAccount
+    namespace: openshift-adp
+    name: velero-server
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: velero/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: velero-server
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+rules:
+  - apiGroups:
+      - "*"
+    resources:
+      - "*"
+    verbs:
+      - "*"
+---
+# Source: velero/templates/rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: velero-server
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/component: server
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+subjects:
+  - kind: ServiceAccount
+    namespace: openshift-adp
+    name: velero-server
+roleRef:
+  kind: Role
+  name: velero-server
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: velero/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: velero
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.18.2
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+spec:
+  type: ClusterIP
+  ports:
+    - name: http-monitoring
+      port: 8085
+      targetPort: http-monitoring
+  selector:
+    name: velero
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+---
+# Source: velero/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: velero
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.18.2
+    helm.sh/chart: velero-12.2.1
+    component: velero
+    app.kubernetes.io/created-by: dfmicro
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: velero
+      app.kubernetes.io/name: velero
+  template:
+    metadata:
+      labels:
+        name: velero
+        app.kubernetes.io/name: velero
+        app.kubernetes.io/instance: velero
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/version: 1.18.2
+        helm.sh/chart: velero-12.2.1
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8085"
+        prometheus.io/scrape: "true"
+        checksum/secret: 2f1c74b6a33f5cb83aeb604c42d4aebf44ed9a9af4ef4a151e0d5fcd96c601af
+    spec:
+      restartPolicy: Always
+      serviceAccountName: velero-server
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 3600
+      containers:
+        - name: velero
+          image: "docker.io/velero/velero:v1.18.4"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - name: http-monitoring
+              containerPort: 8085
+          command:
+            - /velero
+          args:
+            - server
+            ### Flags
+            - --uploader-type=kopia
+            ### Global Flags
+            - --namespace=openshift-adp
+            - --repo-maintenance-job-configmap=velero-repo-maintenance
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /metrics
+              port: http-monitoring
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /metrics
+              port: http-monitoring
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: plugins
+              mountPath: /plugins
+            - name: cloud-credentials
+              mountPath: /credentials
+            - name: scratch
+              mountPath: /scratch
+          env:
+            - name: VELERO_SCRATCH_DIR
+              value: /scratch
+            - name: VELERO_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: LD_LIBRARY_PATH
+              value: /plugins
+            - name: AWS_SHARED_CREDENTIALS_FILE
+              value: /credentials/cloud
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /credentials/cloud
+            - name: AZURE_CREDENTIALS_FILE
+              value: /credentials/cloud
+            - name: ALIBABA_CLOUD_CREDENTIALS_FILE
+              value: /credentials/cloud
+      dnsPolicy: ClusterFirst
+      initContainers:
+        - image: docker.io/velero/velero-plugin-for-aws:v1.14.4
+          imagePullPolicy: IfNotPresent
+          name: velero-plugin-for-aws
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /target
+              name: plugins
+      volumes:
+        - name: cloud-credentials
+          secret:
+            secretName: dfmicro-velero-s3
+        - name: plugins
+          emptyDir: {}
+        - name: scratch
+          emptyDir: {}
+---
+# Source: velero/templates/backupstoragelocation.yaml
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: default
+  namespace: openshift-adp
+  labels:
+    app.kubernetes.io/name: velero
+    app.kubernetes.io/instance: velero
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.18.2
+    helm.sh/chart: velero-12.2.1
+    app.kubernetes.io/created-by: dfmicro
+spec:
+  credential:
+    name: dfmicro-velero-s3
+    key: cloud
+  provider: aws
+  accessMode: ReadWrite
+  default: true
+  objectStorage:
+    bucket: "dfmicro-odr"
+    prefix: "velero"
+  config:
+    region: "us-east-1"
+    s3ForcePathStyle: "true"
+    s3Url: "http://s3.default.svc:9000"

@@ -1,0 +1,1 @@
+velero=1.18.4 chart=12.2.1 aws-plugin=1.14.4 namespace=openshift-adp bucket=dfmicro-odr pod-security=restricted registry=docker.io

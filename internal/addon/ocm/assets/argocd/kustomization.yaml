@@ -1,0 +1,57 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+resources:
+  - install.yaml
+  - namespace.yaml
+  - managed-cluster-set-binding.yaml
+labels:
+  - pairs:
+      app.kubernetes.io/created-by: dfmicro
+    includeSelectors: false
+    includeTemplates: true
+patches:
+  # MicroShift's restricted-v3 SCC requires hostUsers=false and UIDs >= 1000.
+  - target:
+      kind: Deployment
+      name: argocd-dex-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-dex-server
+      spec:
+        template:
+          spec:
+            hostUsers: false
+  - target:
+      kind: Deployment
+      name: argocd-redis
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-redis
+      spec:
+        template:
+          spec:
+            hostUsers: false
+            securityContext:
+              runAsUser: 1001
+  - target:
+      group: rbac.authorization.k8s.io
+      version: v1
+      kind: Role
+      name: argocd-applicationset-controller
+    patch: |-
+      - op: add
+        path: /rules/-
+        value:
+          apiGroups:
+            - cluster.open-cluster-management.io
+          resources:
+            - placementdecisions
+          verbs:
+            - get
+            - list
+            - watch

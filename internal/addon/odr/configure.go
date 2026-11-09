@@ -46,10 +46,13 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	}
 
 	for _, clusterName := range managedClusters {
+		if err := o.applyTemplateAccess(ctx, clusterName); err != nil {
+			return err
+		}
 		if err := o.installVolSync(ctx, clusterName); err != nil {
 			return err
 		}
-		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
+		if err := o.installVelero(ctx, clusterName); err != nil {
 			return err
 		}
 	}
@@ -109,6 +112,11 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	o.logger.Info("applying ODR MirrorPeer", "cluster", o.clusterName, "type", peerType, "managedClusters", managedClusters)
 	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, mirrorPeer); err != nil {
 		return fmt.Errorf("apply ODR MirrorPeer: %w", err)
+	}
+	for _, clusterName := range managedClusters {
+		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -21,7 +21,7 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 
 Example:
   dfmicro addon ocm --cluster hub install --version 5.0.0
-  dfmicro addon ocm --cluster hub configure --spoke spoke --addon governance-policy-framework
+  dfmicro addon ocm --cluster hub configure --spoke spoke --addon governance-policy-framework,argocd
   dfmicro addon ocm --cluster hub configure --addon application-manager
   dfmicro addon ocm --list-addons`,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -32,7 +32,7 @@ Example:
 		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "cluster", Usage: "Hub cluster for OCM operations", Value: rootconfig.Load().Name},
-			&cli.BoolFlag{Name: "list-addons", Usage: "List supported OCM addons and their hub and spoke names"},
+			&cli.BoolFlag{Name: "list-addons", Usage: "List supported OCM addon setup for hub and spokes"},
 		},
 		Commands: []*cli.Command{
 			{
@@ -57,7 +57,7 @@ Example:
 With --addon and no --spoke, it installs the addon on the hub only.
 
 Example:
-  dfmicro addon ocm --cluster hub configure --spoke spoke1,spoke2 --addon governance-policy-framework,application-manager`,
+  dfmicro addon ocm --cluster hub configure --spoke spoke1,spoke2 --addon governance-policy-framework,application-manager,argocd`,
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					spokes := cmd.StringSlice("spoke")
 					addons := cmd.StringSlice("addon")
@@ -79,7 +79,7 @@ Example:
 					},
 					&cli.StringSliceFlag{
 						Name:  "addon",
-						Usage: "Addon to install on the hub and enable on spokes",
+						Usage: "Addon to configure on the hub and selected spokes",
 					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {

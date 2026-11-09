@@ -23,13 +23,13 @@ type ocmAddon struct {
 	hubNamespace string
 	spokeName    string
 	appManager   bool
+	argocd       bool
 }
 
 // The hub and spoke CLIs use different names for some addons.
 var supportedOCMAddons = map[string]ocmAddon{
 	"application-manager":         {spokeName: "application-manager", appManager: true},
-	"argocd":                      {hubName: "argocd", hubNamespace: "argocd", spokeName: "argocd"},
-	"argocd-agent":                {hubName: "argocd-agent", spokeName: "argocd-agent-addon"},
+	"argocd":                      {argocd: true},
 	"config-policy-controller":    {hubName: "governance-policy-framework", spokeName: "config-policy-controller"},
 	"governance-policy-framework": {hubName: "governance-policy-framework", spokeName: "governance-policy-framework"},
 }
@@ -37,21 +37,24 @@ var supportedOCMAddons = map[string]ocmAddon{
 var supportedOCMAddonNames = []string{
 	"application-manager",
 	"argocd",
-	"argocd-agent",
 	"config-policy-controller",
 	"governance-policy-framework",
 }
 
 func (o *ocm) listAddons() error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DFMICRO ADDON\tHUB INSTALL\tSPOKE ENABLE")
+	fmt.Fprintln(w, "DFMICRO ADDON\tHUB SETUP\tSPOKE SETUP")
 	for _, name := range supportedOCMAddonNames {
 		addon := supportedOCMAddons[name]
 		hubName := addon.hubName
+		spokeName := addon.spokeName
+		if addon.argocd {
+			hubName = "Argo CD v" + argocdVersion
+			spokeName = "Argo CD cluster Secrets"
+		}
 		if addon.appManager {
 			hubName = "embedded bundle"
 		}
-		spokeName := addon.spokeName
 		if spokeName == "" {
 			spokeName = "hub only"
 		}
@@ -76,21 +79,11 @@ func validateOCMSpokes(names []string) error {
 }
 
 func validateOCMAddons(names []string) error {
-	var argocd, argocdAgent bool
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		if _, ok := supportedOCMAddons[name]; !ok {
 			return fmt.Errorf("unsupported OCM addon %q; supported addons: %s", name, strings.Join(supportedOCMAddonNames, ", "))
 		}
-		switch name {
-		case "argocd":
-			argocd = true
-		case "argocd-agent":
-			argocdAgent = true
-		}
-	}
-	if argocd && argocdAgent {
-		return fmt.Errorf("argocd and argocd-agent are alternative OCM integrations; choose one")
 	}
 	return nil
 }
@@ -111,9 +104,15 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 	hubSeen := make(map[string]struct{})
 	spokeAddonSeen := make(map[string]struct{})
 	installApplicationManager := false
+	installArgoCD := false
+	installGPFOnSpokes := false
 	for _, name := range addonNames {
 		name = strings.TrimSpace(name)
 		addon := supportedOCMAddons[name]
+		if addon.argocd {
+			installArgoCD = true
+			continue
+		}
 		if addon.appManager {
 			installApplicationManager = true
 		}
@@ -131,6 +130,7 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 				spokeAddonSeen[addon.spokeName] = struct{}{}
 				spokeAddons = append(spokeAddons, addon.spokeName)
 			}
+			installGPFOnSpokes = installGPFOnSpokes || addon.spokeName == "governance-policy-framework"
 		}
 	}
 
@@ -163,6 +163,12 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		o.logger.Info("installing OCM addon on hub", "addon", "application-manager", "cluster", hubName)
 		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, hubKubeconfig, applicationManagerManifest); err != nil {
 			return fmt.Errorf("install application-manager on hub: %w", err)
+		}
+	}
+	if installArgoCD {
+		o.logger.Info("installing Argo CD on hub", "cluster", hubName, "version", argocdVersion)
+		if err := o.installArgoCD(ctx, hubKubeconfig); err != nil {
+			return fmt.Errorf("install Argo CD on hub: %w", err)
 		}
 	}
 	for _, namespace := range hubAddonNamespaces {
@@ -217,7 +223,7 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		if token.HubToken == "" || token.HubAPIServer == "" {
 			return fmt.Errorf("OCM token response for spoke %q is missing hub-token or hub-apiserver", spoke)
 		}
-		o.logger.Info("joining OCM spoke", "hub", hubName, "spoke", spoke, "hub-context", contextName, "spoke-context", spokeContext)
+		o.logger.Info("joining OCM spoke", "hub", hubName, "spoke", spoke, "hub-api-server", token.HubAPIServer, "hub-context", contextName, "spoke-context", spokeContext)
 		args := []string{
 			"--kubeconfig", spokePrivateKubeconfig,
 			"join",
@@ -233,6 +239,22 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		o.logger.Info("OCM spoke joined", "hub", hubName, "spoke", spoke)
 	}
 
+	if installGPFOnSpokes {
+		server, err := execx.Run(ctx, o.runner, support.KubeClient,
+			"--kubeconfig", hubPrivateKubeconfig, "--context", contextName,
+			"config", "view", "--minify", "-o", "jsonpath={.clusters[0].cluster.server}")
+		if err != nil {
+			return fmt.Errorf("get private hub API endpoint: %w", err)
+		}
+		hubAPIServer := strings.TrimSpace(server.Stdout)
+		for _, spoke := range spokeNames {
+			o.logger.Info("allowing GPF egress to hub API", "hub", hubName, "spoke", spoke, "hub-api-server", hubAPIServer)
+			if err := o.allowGPFHubAPI(ctx, hubPrivateKubeconfig, spoke, hubAPIServer); err != nil {
+				return fmt.Errorf("allow GPF access to hub API from spoke %q: %w", spoke, err)
+			}
+		}
+	}
+
 	if len(spokeAddons) > 0 {
 		o.logger.Info("enabling OCM addons on spokes", "addons", spokeAddons, "spokes", spokeNames)
 		args := []string{
@@ -244,6 +266,18 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		}
 		if _, err := execx.Run(ctx, o.runner, clusteradm, args...); err != nil {
 			return fmt.Errorf("enable OCM addons on spokes: %w", err)
+		}
+	}
+	if installArgoCD {
+		for i, spoke := range spokeNames {
+			spokePrivateKubeconfig := filepath.Join(tempDir, fmt.Sprintf("argocd-spoke-%d-kubeconfig", i))
+			if _, err := privateContext(ctx, o.runner, spokeKubeconfigs[spoke], spokePrivateKubeconfig); err != nil {
+				return fmt.Errorf("select private API context for Argo CD cluster %q: %w", spoke, err)
+			}
+			o.logger.Info("registering cluster with Argo CD", "hub", hubName, "cluster", spoke)
+			if err := o.registerArgoCDCluster(ctx, hubKubeconfig, spoke, spokePrivateKubeconfig); err != nil {
+				return fmt.Errorf("register cluster %q with Argo CD: %w", spoke, err)
+			}
 		}
 	}
 

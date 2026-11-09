@@ -78,13 +78,13 @@ Manage Open Cluster Management
 
     Example:
       dfmicro addon ocm --cluster hub install --version 5.0.0
-      dfmicro addon ocm --cluster hub configure --spoke spoke --addon governance-policy-framework
+      dfmicro addon ocm --cluster hub configure --spoke spoke --addon governance-policy-framework,argocd
       dfmicro addon ocm --cluster hub configure --addon application-manager
       dfmicro addon ocm --list-addons
 
 **--cluster**="": Hub cluster for OCM operations (default: "micro")
 
-**--list-addons**: List supported OCM addons and their hub and spoke names
+**--list-addons**: List supported OCM addon setup for hub and spokes
 
 #### configure
 
@@ -94,9 +94,9 @@ Join spokes and configure OCM addons
     With --addon and no --spoke, it installs the addon on the hub only.
 
     Example:
-      dfmicro addon ocm --cluster hub configure --spoke spoke1,spoke2 --addon governance-policy-framework,application-manager
+      dfmicro addon ocm --cluster hub configure --spoke spoke1,spoke2 --addon governance-policy-framework,application-manager,argocd
 
-**--addon**="": Addon to install on the hub and enable on spokes
+**--addon**="": Addon to configure on the hub and selected spokes
 
 **--spoke**="": Cluster to join as a spoke (repeatable or comma separated)
 

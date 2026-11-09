@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Requires curl, helm, and yq. Generated manifests are checked in, so these
+# tools are only needed when a version changes.
+
+version="${VELERO_VERSION:?VELERO_VERSION is required}"
+chart_version="${VELERO_CHART_VERSION:?VELERO_CHART_VERSION is required}"
+plugin_version="${VELERO_AWS_PLUGIN_VERSION:?VELERO_AWS_PLUGIN_VERSION is required}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+addon_dir="${script_dir}/../internal/addon/odr"
+assets_dir="${addon_dir}/assets"
+crds_dir="${assets_dir}/velero-crds"
+resource_file="${assets_dir}/velero.yaml"
+template_file="${addon_dir}/velero_gen.go"
+marker="${assets_dir}/.velero-version"
+state="velero=${version} chart=${chart_version} aws-plugin=${plugin_version} namespace=openshift-adp bucket=dfmicro-odr pod-security=restricted registry=docker.io"
+
+if [[ -f "${marker}" ]] && [[ "$(<"${marker}")" == "${state}" ]] && [[ -s "${resource_file}" ]] && [[ -s "${template_file}" ]] && [[ -s "${crds_dir}/backups.velero.io.yaml" ]] && [[ -s "${crds_dir}/backupstoragelocations.velero.io.yaml" ]] && [[ -s "${crds_dir}/restores.velero.io.yaml" ]]; then
+	echo "Velero ${version} manifests are up to date"
+	exit 0
+fi
+
+missing=()
+for dependency in curl gofmt helm sed tar yq; do
+	if ! command -v "${dependency}" >/dev/null 2>&1; then
+		missing+=("${dependency}")
+	fi
+done
+if ((${#missing[@]} > 0)); then
+	echo "error: missing required tools: ${missing[*]}" >&2
+	exit 1
+fi
+
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "${tmp_dir}"' EXIT
+chart="${tmp_dir}/velero-${chart_version}.tgz"
+chart_url="https://github.com/vmware-tanzu/helm-charts/releases/download/velero-${chart_version}/velero-${chart_version}.tgz"
+rendered="${tmp_dir}/rendered.yaml"
+crds="${tmp_dir}/crds.yaml"
+resources="${tmp_dir}/resources.yaml"
+values="${tmp_dir}/values.yaml"
+
+curl -fsSL --retry 5 "${chart_url}" -o "${chart}"
+actual_chart_version="$(tar -xOf "${chart}" velero/Chart.yaml | yq -r '.version')"
+if [[ "${actual_chart_version}" != "${chart_version}" ]]; then
+	echo "error: expected Velero chart ${chart_version}, found ${actual_chart_version}" >&2
+	exit 1
+fi
+
+cat >"${values}" <<EOF
+image:
+  repository: docker.io/velero/velero
+  tag: v${version}
+  pullPolicy: IfNotPresent
+initContainers:
+  - name: velero-plugin-for-aws
+    image: docker.io/velero/velero-plugin-for-aws:v${plugin_version}
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+credentials:
+  useSecret: true
+  name: dfmicro-velero-s3
+  secretContents:
+    cloud: |
+      [default]
+      aws_access_key_id=dummy
+      aws_secret_access_key=dummy
+configuration:
+  namespace: openshift-adp
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: dfmicro-odr
+      prefix: velero
+      default: true
+      credential:
+        name: dfmicro-velero-s3
+        key: cloud
+      config:
+        region: us-east-1
+        s3ForcePathStyle: "true"
+        s3Url: http://s3.default.svc:9000
+  volumeSnapshotLocation: []
+backupsEnabled: true
+snapshotsEnabled: false
+deployNodeAgent: false
+upgradeCRDs: false
+namespace:
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+labels:
+  app.kubernetes.io/created-by: dfmicro
+EOF
+
+helm template velero "${chart}" \
+	--include-crds \
+	--namespace openshift-adp \
+	--values "${values}" \
+	>"${rendered}"
+yq 'select(.kind == "CustomResourceDefinition")' "${rendered}" >"${crds}"
+yq 'select(.kind != "CustomResourceDefinition" and .metadata.name != "velero-label-namespace")' "${rendered}" >"${resources}"
+if [[ ! -s "${crds}" || ! -s "${resources}" ]]; then
+	echo "error: Velero chart did not render CRDs and resources" >&2
+	exit 1
+fi
+
+rm -rf "${crds_dir}"
+mkdir -p "${crds_dir}"
+while IFS= read -r name; do
+	yq "select(.kind == \"CustomResourceDefinition\" and .metadata.name == \"${name}\")" "${crds}" \
+		>"${crds_dir}/${name}.yaml"
+	yq -i '(.metadata.labels = (.metadata.labels // {})) | .metadata.labels."app.kubernetes.io/created-by" = "dfmicro"' "${crds_dir}/${name}.yaml"
+done < <(yq -r 'select(.kind == "CustomResourceDefinition" and .metadata.name != null) | .metadata.name' "${crds}" | sed '/^---$/d; /^null$/d; /^$/d')
+
+cat >"${resource_file}" <<'EOF'
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-adp
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+EOF
+yq -i '(.metadata.labels = (.metadata.labels // {})) | .metadata.labels."app.kubernetes.io/created-by" = "dfmicro"' "${resources}"
+cat "${resources}" >>"${resource_file}"
+
+cat >"${template_file}" <<EOF
+package odr
+
+// Code generated by hack/generate-velero.sh. DO NOT EDIT.
+const (
+	veleroVersion         = "v${version}"
+	veleroAWSPluginVersion = "v${plugin_version}"
+)
+EOF
+gofmt -w "${template_file}"
+
+printf '%s\n' "${state}" >"${marker}"
+echo "Generated Velero ${version} manifests in ${assets_dir}"

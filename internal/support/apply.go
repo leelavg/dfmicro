@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"os"
+	"strings"
 	"text/template"
 
 	"dfmicro/internal/execx"
@@ -21,6 +23,49 @@ func ApplyDir(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig s
 			return err
 		}
 		return ApplyYAML(ctx, runner, kubeClient, kubeconfig, string(data))
+	})
+}
+
+func ApplyDirIfMissing(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig string, fsys embed.FS, dir string) error {
+	return fs.WalkDir(fsys, dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fsys.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		f, err := os.CreateTemp("", "dfmicro-*.yaml")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(f.Name())
+		if _, err := f.Write(data); err != nil {
+			f.Close()
+			return err
+		}
+		if err := f.Close(); err != nil {
+			return err
+		}
+		args := []string{"get", "-f", f.Name(), "--ignore-not-found", "-o", "name"}
+		if kubeconfig != "" {
+			args = append(args, "--kubeconfig", kubeconfig)
+		}
+		result, err := runner.Run(ctx, kubeClient, args...)
+		if err != nil {
+			return fmt.Errorf("check shim %s: %w", path, err)
+		}
+		if strings.TrimSpace(result.Stdout) != "" {
+			return nil
+		}
+		args = []string{"apply", "--server-side", "-f", f.Name()}
+		if kubeconfig != "" {
+			args = append(args, "--kubeconfig", kubeconfig)
+		}
+		if _, err := runner.Run(ctx, kubeClient, args...); err != nil {
+			return fmt.Errorf("apply shim %s: %w", path, err)
+		}
+		return nil
 	})
 }
 

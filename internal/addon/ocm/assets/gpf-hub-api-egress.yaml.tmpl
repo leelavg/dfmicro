@@ -1,0 +1,30 @@
+apiVersion: work.open-cluster-management.io/v1
+kind: ManifestWork
+metadata:
+  name: {{.Name}}
+  namespace: {{.Spoke}}
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+spec:
+  workload:
+    manifests:
+    - apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: {{.Name}}
+        namespace: open-cluster-management-agent-addon
+        labels:
+          app.kubernetes.io/created-by: dfmicro
+      spec:
+        podSelector:
+          matchLabels:
+            app: governance-policy-framework
+        policyTypes:
+        - Egress
+        egress:
+        - to:
+          - ipBlock:
+              cidr: {{.HubIP}}/32
+          ports:
+          - protocol: TCP
+            port: {{.HubPort}}

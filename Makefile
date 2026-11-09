@@ -12,10 +12,14 @@ LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
 TOPOLVM_VERSION ?= 17.2.0
 VOLSYNC_VERSION ?= 0.17.0
 VOLSYNC_CHART_COMMIT ?= d90957908caa97c9088111ad574f2c12ae3a4916
+ARGOCD_VERSION ?= 3.6.1
+VELERO_VERSION ?= 1.18.4
+VELERO_CHART_VERSION ?= 12.2.1
+VELERO_AWS_PLUGIN_VERSION ?= 1.14.4
 MDBOOK_VERSION ?= 0.5.4
 MDBOOK := $(BIN_DIR)/mdbook
 
-.PHONY: vet fmt generate generate-topolvm generate-ocm-controller generate-volsync build build-cross build-release build-analyze lint install-mdbook docs docs-serve
+.PHONY: vet fmt generate generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero build build-cross build-release build-analyze lint install-mdbook docs docs-serve
 
 vet:
 	go vet ./...
@@ -50,7 +54,7 @@ docs-serve: docs
 fmt:
 	go fmt ./...
 
-generate: generate-topolvm generate-ocm-controller generate-volsync
+generate: generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero
 	go generate ./internal/docs
 
 generate-topolvm:
@@ -61,6 +65,12 @@ generate-ocm-controller:
 
 generate-volsync:
 	VOLSYNC_VERSION=$(VOLSYNC_VERSION) VOLSYNC_CHART_COMMIT=$(VOLSYNC_CHART_COMMIT) ./hack/generate-volsync.sh
+
+generate-argocd:
+	ARGOCD_VERSION=$(ARGOCD_VERSION) ./hack/generate-argocd.sh
+
+generate-velero:
+	VELERO_VERSION=$(VELERO_VERSION) VELERO_CHART_VERSION=$(VELERO_CHART_VERSION) VELERO_AWS_PLUGIN_VERSION=$(VELERO_AWS_PLUGIN_VERSION) ./hack/generate-velero.sh
 
 fix:
 	go fix ./...

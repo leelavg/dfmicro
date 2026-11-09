@@ -72,8 +72,8 @@ func (o *ocm) install(ctx context.Context, clusterName, version string) error {
 			return err
 		}
 	}
-	o.logger.Info("applying OCM shim CRDs", "cluster", clusterName)
-	if err := support.ApplyDir(ctx, o.runner, support.KubeClient, kubeconfig, ocmShims, "shims/crd"); err != nil {
+	o.logger.Info("creating OCM shim CRDs if missing", "cluster", clusterName)
+	if err := support.ApplyDirIfMissing(ctx, o.runner, support.KubeClient, kubeconfig, ocmShims, "shims/crd"); err != nil {
 		return err
 	}
 
