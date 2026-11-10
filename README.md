@@ -213,7 +213,7 @@ sudo systemctl restart mdatp
 
 If using different scanning software (ClamAV, Sophos, etc.), add equivalent exclusions for `/var/lib/containers` and the cluster config directory.
 
-dfmicro also mounts etcd to tmpfs to minimize disk I/O during startup.
+Etcd data is stored in Podman's container storage. Exclude its configured storage directory from scanning.
 
 **Last resort:** If exclusions don't work and reboots persist, blacklist the hardware watchdog entirely:
 

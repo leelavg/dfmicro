@@ -55,7 +55,7 @@ func newManager(cfg rootconfig.ClusterConfig, logger *slog.Logger, runner execx.
 	return &manager{
 		cfg:     cfg,
 		node:    support.NewNodeMgr(logger, runner),
-		topolvm: support.NewTopoLVMMgr(runner, cfg),
+		topolvm: support.NewTopoLVMMgr(logger, runner, cfg),
 		logger:  logger,
 		runner:  runner,
 	}
@@ -314,7 +314,12 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	)
 
 	if m.topolvm.Enabled() {
+		lvmConfigMount, err := m.topolvm.LVMConfigMount(ctx, name)
+		if err != nil {
+			return fmt.Errorf("write TopoLVM LVM filter: %w", err)
+		}
 		extraArgs = append(extraArgs,
+			"--volume", lvmConfigMount,
 			"--volume", m.topolvm.ManifestDir()+":/usr/lib/microshift/manifests.d/001-microshift-topolvm:ro",
 		)
 	}
@@ -356,10 +361,7 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		if err := os.WriteFile(etcdFlagPath, []byte(""), 0o644); err != nil {
 			return err
 		}
-		extraArgs = append(extraArgs,
-			"--volume", etcdFlagPath+":/var/lib/microshift/.use-etcd:ro",
-			"--tmpfs", "/var/lib/etcd:size=1G",
-		)
+		extraArgs = append(extraArgs, "--volume", etcdFlagPath+":/var/lib/microshift/.use-etcd:ro")
 	}
 
 	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")

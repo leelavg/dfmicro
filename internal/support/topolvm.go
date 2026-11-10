@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,6 +21,8 @@ import (
 //go:embed topolvm-assets/*
 var topolvmAssets embed.FS
 
+var errNoLoopDevice = errors.New("no loop device associated")
+
 type topoLVMConfig struct {
 	enabled            bool
 	volumeSize         string
@@ -28,13 +31,14 @@ type topoLVMConfig struct {
 }
 
 type TopoLVMMgr struct {
+	logger   *slog.Logger
 	runner   execx.Runner
 	stateDir string
 	config   topoLVMConfig
 }
 
-func NewTopoLVMMgr(runner execx.Runner, cfg rootconfig.ClusterConfig) *TopoLVMMgr {
-	return &TopoLVMMgr{runner: runner, stateDir: cfg.StateDir, config: topoLVMConfig{
+func NewTopoLVMMgr(logger *slog.Logger, runner execx.Runner, cfg rootconfig.ClusterConfig) *TopoLVMMgr {
+	return &TopoLVMMgr{logger: logger, runner: runner, stateDir: cfg.StateDir, config: topoLVMConfig{
 		enabled:            cfg.EnableTopoLVM,
 		volumeSize:         cfg.LVMVolSize,
 		overprovisionRatio: cfg.OverprovisionRatio,
@@ -92,6 +96,79 @@ func (t *TopoLVMMgr) CreateBackend(ctx context.Context, nodeName string) error {
 	}
 	disk := filepath.Join(t.stateDir, nodeName, nodeName+".image")
 	return t.createBackend(ctx, disk, nodeName)
+}
+
+func (t *TopoLVMMgr) LVMConfigMount(ctx context.Context, nodeName string) (string, error) {
+	if !t.Enabled() {
+		return "", nil
+	}
+	config, err := t.lvmConfig(ctx, nodeName)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(t.stateDir, nodeName, "lvm.conf")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
+		return "", err
+	}
+	return path + ":/etc/lvm/lvm.conf:ro", nil
+}
+
+func (t *TopoLVMMgr) lvmConfig(ctx context.Context, nodeName string) (string, error) {
+	device, err := t.loopDevice(ctx, filepath.Join(t.stateDir, nodeName, nodeName+".image"))
+	if err != nil {
+		return "", err
+	}
+	if device == "" {
+		return "", fmt.Errorf("%w with %s", errNoLoopDevice, nodeName)
+	}
+	// Disable the devices file so LVM honors this exact-device filter.
+	return fmt.Sprintf(`devices {
+    use_devicesfile = 0
+    filter = [ "a|^%s$|", "r|.*|" ]
+    global_filter = [ "a|^%s$|", "r|.*|" ]
+}`, device, device), nil
+}
+
+func (t *TopoLVMMgr) loopDevice(ctx context.Context, disk string) (string, error) {
+	if _, err := os.Stat(disk); errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	result, err := RunPrivileged(ctx, t.runner, "losetup", "--associated", disk, "--output", "NAME", "--noheadings")
+	if err != nil {
+		return "", err
+	}
+	devices := strings.Fields(result.Stdout)
+	if len(devices) == 0 {
+		return "", nil
+	}
+	if len(devices) != 1 {
+		return "", fmt.Errorf("expected one loop device for %s, found %d", disk, len(devices))
+	}
+	device := devices[0]
+	number := strings.TrimPrefix(device, "/dev/loop")
+	if number == device || number == "" {
+		return "", fmt.Errorf("unexpected loop device %q for %s", device, disk)
+	}
+	for _, digit := range number {
+		if digit < '0' || digit > '9' {
+			return "", fmt.Errorf("unexpected loop device %q for %s", device, disk)
+		}
+	}
+	return device, nil
+}
+
+func (t *TopoLVMMgr) runLVM(ctx context.Context, nodeName, command string, args ...string) (execx.Result, error) {
+	config, err := t.lvmConfig(ctx, nodeName)
+	if err != nil {
+		return execx.Result{}, err
+	}
+	lvmArgs := append([]string{"--config", config}, args...)
+	return RunPrivileged(ctx, t.runner, command, lvmArgs...)
 }
 
 func (t *TopoLVMMgr) DeleteBackends(ctx context.Context, nodeNames ...string) error {
@@ -178,12 +255,19 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 	imageExists := false
 	if _, err := os.Stat(disk); err == nil {
 		imageExists = true
-		result, err := RunPrivileged(ctx, t.runner, "vgs", "--noheadings", "-o", "vg_name", vg)
-		if err == nil && strings.TrimSpace(result.Stdout) == vg {
+		device, err := t.loopDevice(ctx, disk)
+		if err != nil {
+			return err
+		}
+		var result execx.Result
+		if device != "" {
+			result, err = t.runLVM(ctx, vg, "vgs", "--noheadings", "-o", "vg_name", vg)
+		}
+		if device != "" && err == nil && strings.TrimSpace(result.Stdout) == vg {
 			if !t.config.thinpool {
 				return nil
 			}
-			result, err := RunPrivileged(ctx, t.runner, "lvs", "--noheadings", "-o", "lv_name", vg)
+			result, err := t.runLVM(ctx, vg, "lvs", "--noheadings", "-o", "lv_name", vg)
 			if err == nil {
 				for lv := range strings.FieldsSeq(result.Stdout) {
 					if lv == "thin" {
@@ -217,7 +301,7 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 	if device == "" {
 		return errors.New("losetup did not return a device name")
 	}
-	if _, err := RunPrivileged(ctx, t.runner, "vgcreate", "-f", "-y", vg, device); err != nil {
+	if _, err := t.runLVM(ctx, vg, "vgcreate", "-f", "-y", vg, device); err != nil {
 		_, _ = RunPrivileged(ctx, t.runner, "losetup", "--detach", device)
 		return err
 	}
@@ -232,7 +316,7 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 			if _, err := RunUnprivileged(ctx, t.runner, "udevadm", "settle"); err != nil {
 				return err
 			}
-			_, err := RunPrivileged(ctx, t.runner, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
+			_, err := t.runLVM(ctx, vg, "lvcreate", "--zero", "n", "-l", "99%FREE", "--thinpool", "thin", vg)
 			return err
 		})
 		if err == nil {
@@ -248,7 +332,7 @@ func (t *TopoLVMMgr) createBackend(ctx context.Context, disk, vg string) error {
 
 func (t *TopoLVMMgr) waitForVolumeGroup(ctx context.Context, vg string) error {
 	err := Poll(ctx, time.Second, time.Minute, func(ctx context.Context) (bool, error) {
-		result, err := RunPrivileged(ctx, t.runner, "vgs", "--noheadings", "-o", "vg_name", vg)
+		result, err := t.runLVM(ctx, vg, "vgs", "--noheadings", "-o", "vg_name", vg)
 		return err == nil && strings.TrimSpace(result.Stdout) == vg, nil
 	})
 	if err != nil {
@@ -274,21 +358,41 @@ func isTransientThinpoolError(err error) bool {
 }
 
 func (t *TopoLVMMgr) deleteBackend(ctx context.Context, disk, vg string) error {
-	if _, err := RunPrivileged(ctx, t.runner, "lvremove", "--force", "-y", vg); err != nil && !isMissingLVMResource(err) {
-		if cleanupErr := t.removeDeviceMappings(ctx, vg); cleanupErr != nil {
-			return fmt.Errorf("remove logical volumes for %s: %w (device cleanup failed: %v)", vg, err, cleanupErr)
+	device, err := t.loopDevice(ctx, disk)
+	if err != nil {
+		return err
+	}
+	runRemove := func(command string) error {
+		_, err := t.runLVM(ctx, vg, command, "--force", "-y", vg)
+		if errors.Is(err, errNoLoopDevice) {
+			t.logger.Warn("no loop device associated, skipping LVM removal", "node", vg)
+			device = ""
+			return nil
 		}
-		_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
-		if _, retryErr := RunPrivileged(ctx, t.runner, "lvremove", "--force", "-y", vg); retryErr != nil && !isMissingLVMResource(retryErr) {
-			return fmt.Errorf("remove logical volumes for %s: %w", vg, retryErr)
+		return err
+	}
+	if device == "" {
+		t.logger.Warn("no loop device associated, skipping LVM removal", "node", vg)
+	}
+	if device != "" {
+		if err := runRemove("lvremove"); err != nil && !isMissingLVMResource(err) {
+			if cleanupErr := t.removeDeviceMappings(ctx, vg); cleanupErr != nil {
+				return fmt.Errorf("remove logical volumes for %s: %w (device cleanup failed: %v)", vg, err, cleanupErr)
+			}
+			_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
+			if retryErr := runRemove("lvremove"); retryErr != nil && !isMissingLVMResource(retryErr) {
+				return fmt.Errorf("remove logical volumes for %s: %w", vg, retryErr)
+			}
 		}
 	}
 	if err := t.removeDeviceMappings(ctx, vg); err != nil {
 		return fmt.Errorf("remove device mappings for %s: %w", vg, err)
 	}
 	_, _ = RunUnprivileged(ctx, t.runner, "udevadm", "settle")
-	if _, err := RunPrivileged(ctx, t.runner, "vgremove", "--force", "-y", vg); err != nil && !isMissingLVMResource(err) {
-		return fmt.Errorf("remove volume group %s: %w", vg, err)
+	if device != "" {
+		if err := runRemove("vgremove"); err != nil && !isMissingLVMResource(err) {
+			return fmt.Errorf("remove volume group %s: %w", vg, err)
+		}
 	}
 
 	result, err := RunPrivileged(ctx, t.runner, "losetup", "--associated", disk, "--output", "NAME", "--noheadings")

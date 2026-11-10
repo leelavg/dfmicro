@@ -32,14 +32,14 @@ metadata:
   name: topolvm-lvmd-{{.NodeName}}
   namespace: topolvm-system
   labels:
-    app.kubernetes.io/created-by: dfmicro
     idx: "0"
-    helm.sh/chart: topolvm-17.2.0
+    helm.sh/chart: topolvm-17.3.1
     app.kubernetes.io/name: topolvm
     app.kubernetes.io/instance: topolvm
-    app.kubernetes.io/version: "0.41.1"
+    app.kubernetes.io/version: "0.42.1"
     app.kubernetes.io/managed-by: Helm
     dfmicro.io/topolvm-node: '{{.NodeName}}'
+    app.kubernetes.io/created-by: dfmicro
 spec:
   selector:
     matchLabels:
@@ -63,7 +63,7 @@ spec:
       hostPID: true
       containers:
         - name: lvmd
-          image: "ghcr.io/topolvm/topolvm-with-sidecar:0.41.1@sha256:70548dbe0c6addcccf79a557f29e95db2e6dc2cba2102988c91f30086004d0fc"
+          image: "ghcr.io/topolvm/topolvm-with-sidecar:0.42.1@sha256:00acceab51f358ea88abd74bd0968f78764e9aa94146590e9bc5ead30243c45a"
           securityContext:
             privileged: true
           command:
@@ -87,6 +87,9 @@ spec:
               mountPath: /etc/topolvm
             - name: lvmd-socket-dir
               mountPath: /run/topolvm
+            - name: lvm-config
+              mountPath: /etc/lvm/lvm.conf
+              readOnly: true
       volumes:
         - name: devices-dir
           hostPath:
@@ -99,6 +102,10 @@ spec:
           hostPath:
             path: /run/topolvm
             type: DirectoryOrCreate
+        - name: lvm-config
+          hostPath:
+            path: /etc/lvm/lvm.conf
+            type: File
       nodeSelector:
         kubernetes.io/hostname: '{{.NodeName}}'
 `

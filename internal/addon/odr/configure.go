@@ -22,6 +22,12 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	for i, name := range managedClusters {
 		managedClusters[i] = strings.TrimSpace(name)
 	}
+	for _, name := range managedClusters {
+		o.logger.Info("labeling ManagedCluster with cluster ID", "cluster", name)
+		if err := o.labelManagedClusterID(ctx, name); err != nil {
+			return err
+		}
+	}
 
 	for _, crd := range []string{s3ConfigCRD, "mirrorpeers.multicluster.odf.openshift.io"} {
 		o.logger.Info("waiting for CRD", "name", crd, "cluster", o.clusterName)
@@ -117,6 +123,32 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (o *odr) labelManagedClusterID(ctx context.Context, name string) error {
+	kubeconfig, err := rootconfig.Kubeconfig(name)
+	if err != nil {
+		return fmt.Errorf("load kubeconfig for managed cluster %q: %w", name, err)
+	}
+	result, err := o.runner.Run(ctx, support.KubeClient,
+		"get", "namespace", "kube-system",
+		"-o=jsonpath={.metadata.uid}",
+		"--kubeconfig", kubeconfig,
+	)
+	if err != nil {
+		return fmt.Errorf("get kube-system namespace UID for managed cluster %q: %w", name, err)
+	}
+	clusterID := strings.TrimSpace(result.Stdout)
+	if clusterID == "" {
+		return fmt.Errorf("kube-system namespace UID for managed cluster %q is empty", name)
+	}
+	if _, err := o.runner.Run(ctx, support.KubeClient,
+		"label", "managedcluster", name, "clusterID="+clusterID, "--overwrite",
+		"--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("label ManagedCluster %q with cluster ID: %w", name, err)
 	}
 	return nil
 }

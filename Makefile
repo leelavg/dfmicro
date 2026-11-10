@@ -9,7 +9,7 @@ BIN_DIR := bin
 BINARY := $(BIN_DIR)/dfmicro
 BUILD_TIME := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS := -X dfmicro/internal/buildinfo.BuildTime=$(BUILD_TIME)
-TOPOLVM_VERSION ?= 17.2.0
+TOPOLVM_VERSION ?= 17.3.1
 VOLSYNC_VERSION ?= 0.17.0
 VOLSYNC_CHART_COMMIT ?= d90957908caa97c9088111ad574f2c12ae3a4916
 ARGOCD_VERSION ?= 3.6.1

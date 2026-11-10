@@ -46,7 +46,7 @@ func newManager(clusterName string, logger *slog.Logger, runner execx.Runner) (*
 		clusterName: clusterName,
 		cfg:         cfg,
 		node:        support.NewNodeMgr(logger, runner),
-		topolvm:     support.NewTopoLVMMgr(runner, cfg),
+		topolvm:     support.NewTopoLVMMgr(logger, runner, cfg),
 		logger:      logger,
 		runner:      runner,
 	}, nil
@@ -287,6 +287,13 @@ func (m *manager) createWorker(ctx context.Context, w worker) error {
 	extraArgs, err := m.workerArgs(w)
 	if err != nil {
 		return err
+	}
+	lvmConfigMount, err := m.topolvm.LVMConfigMount(ctx, w.name)
+	if err != nil {
+		return fmt.Errorf("write TopoLVM LVM filter: %w", err)
+	}
+	if lvmConfigMount != "" {
+		extraArgs = append(extraArgs, "--volume", lvmConfigMount)
 	}
 	if err := m.node.Create(ctx, support.NodeSpec{
 		Name:                w.name,

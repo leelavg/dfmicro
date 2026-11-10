@@ -15,12 +15,14 @@ func main() {
 	defer stop()
 
 	logger := support.NewLogger(os.Stdout)
-	runner, cleanup, err := support.NewRunner(logger)
+	runner, commandLog, err := support.NewRunner(logger)
 	if err != nil {
 		logger.Error("failed to get runner", "error", err)
 		os.Exit(1)
 	}
-	defer cleanup()
+	if commandLog != nil {
+		defer commandLog.Close()
+	}
 
 	cmd := app.Command(logger, runner)
 	if err := cmd.Run(ctx, os.Args); err != nil {

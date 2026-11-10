@@ -1,7 +1,7 @@
 package support
 
 import (
-	"bufio"
+	"io"
 	"log/slog"
 	"os"
 	"slices"
@@ -9,7 +9,7 @@ import (
 	"dfmicro/internal/execx"
 )
 
-func NewRunner(logger *slog.Logger) (execx.Runner, func(), error) {
+func NewRunner(logger *slog.Logger) (execx.Runner, io.Closer, error) {
 	runner := &execx.OSRunner{}
 	if logPath := os.Getenv("DFMICRO_CMD_LOG"); logPath != "" {
 		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -17,18 +17,13 @@ func NewRunner(logger *slog.Logger) (execx.Runner, func(), error) {
 			logger.Error("failed to open command log file", "error", err)
 			return nil, nil, err
 		}
-		bw := bufio.NewWriter(f)
-		cmdLogger := NewLogger(bw)
+		cmdLogger := NewLogger(f)
 
 		if !slices.Contains(os.Args, "--generate-shell-completion") {
 			cmdLogger.Info("starting new run", "name", os.Args[0], "args", os.Args[1:])
 		}
 
-		return execx.NewLoggingRunner(runner, cmdLogger),
-			func() {
-				bw.Flush()
-				f.Close()
-			}, nil
+		return execx.NewLoggingRunner(runner, cmdLogger), f, nil
 	}
-	return runner, func() {}, nil
+	return runner, nil, nil
 }

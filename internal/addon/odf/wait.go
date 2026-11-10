@@ -13,7 +13,7 @@ func waitForSub(ctx context.Context, runner execx.Runner, kubeClient, kubeconfig
 	var subscription string
 	err := support.Poll(ctx, odfPoll, odfTimeout, func(ctx context.Context) (bool, error) {
 		result, err := runner.Run(ctx, kubeClient,
-			"get", "subscription", "-n", providerNamespace,
+			"get", "subscriptions.operators.coreos.com", "-n", providerNamespace,
 			"-o", output,
 			"--kubeconfig", kubeconfig,
 		)

@@ -82,7 +82,9 @@ yq 'select(.kind == "DaemonSet" and .metadata.name == "topolvm-lvmd-0") |
   .spec.template.metadata.labels."dfmicro.io/topolvm-node" = "{{.NodeName}}" |
   del(.spec.template.metadata.annotations."checksum/config") |
   .spec.template.spec.nodeSelector."kubernetes.io/hostname" = "{{.NodeName}}" |
-	(.spec.template.spec.volumes[] | select(.name == "config").configMap.name) = "topolvm-lvmd-{{.NodeName}}"' \
+	(.spec.template.spec.volumes[] | select(.name == "config").configMap.name) = "topolvm-lvmd-{{.NodeName}}" |
+	(.spec.template.spec.containers[] | select(.name == "lvmd").volumeMounts) += [{"name": "lvm-config", "mountPath": "/etc/lvm/lvm.conf", "readOnly": true}] |
+	.spec.template.spec.volumes += [{"name": "lvm-config", "hostPath": {"path": "/etc/lvm/lvm.conf", "type": "File"}}]' \
 	"${rendered}/02-topolvm.yaml" >"${rendered}/topolvm-lvmd-daemonset.yaml"
 if [[ ! -s "${rendered}/topolvm-lvmd-daemonset.yaml" ]]; then
 	echo "error: TopoLVM chart did not contain topolvm-lvmd-0 DaemonSet" >&2

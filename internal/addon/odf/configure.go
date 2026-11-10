@@ -149,7 +149,7 @@ func (o *odf) patchOCSSubscription(ctx context.Context) error {
 	}
 	o.logger.Info("subscription created", "name", name)
 	_, err = o.runner.Run(ctx, support.KubeClient,
-		"patch", "subscription", name, "-n", "openshift-storage",
+		"patch", "subscriptions.operators.coreos.com", name, "-n", "openshift-storage",
 		"--type=merge", "-p", `{"spec":{"config":{"env":[{"name":"SINGLE_NODE","value":"true"}]}}}`,
 		"--kubeconfig", o.kubeconfig,
 	)

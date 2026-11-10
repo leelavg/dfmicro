@@ -45,14 +45,14 @@ spec:
       provisioner:
         limits:
           cpu: 10m
-          memory: 50Mi
+          memory: 128Mi
         requests:
           cpu: 10m
           memory: 50Mi
       resizer:
         limits:
           cpu: 10m
-          memory: 50Mi
+          memory: 128Mi
         requests:
           cpu: 10m
           memory: 50Mi
