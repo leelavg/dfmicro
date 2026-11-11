@@ -41,6 +41,9 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	if err != nil {
 		return err
 	}
+	if err := o.applyTrustedCABundle(ctx, o.clusterName, "openshift-operators", "odr-hub-operator", "ramen-hub-operator"); err != nil {
+		return err
+	}
 	o.logger.Info("scaling down ODF Multicluster console", "cluster", o.clusterName, "csv", csvName)
 	_, err = o.runner.Run(ctx, support.KubeClient,
 		"patch", "csv", csvName, "-n", "openshift-operators",
@@ -100,6 +103,20 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	o.logger.Info("applying ODR S3Configuration", "cluster", o.clusterName, "managedClusters", managedClusters)
 	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, configuration); err != nil {
 		return fmt.Errorf("apply ODR S3Configuration: %w", err)
+	}
+	for _, clusterName := range managedClusters {
+		kubeconfig, err := rootconfig.Kubeconfig(clusterName)
+		if err != nil {
+			return fmt.Errorf("load kubeconfig for cluster %q: %w", clusterName, err)
+		}
+		o.logger.Info("waiting for StorageCluster", "cluster", clusterName)
+		if _, err := o.runner.Run(ctx, support.KubeClient,
+			"wait", "--for=jsonpath={.status.phase}=Ready", "--timeout=600s",
+			"storagecluster/ocs-storagecluster", "-n", "openshift-storage",
+			"--kubeconfig", kubeconfig,
+		); err != nil {
+			return fmt.Errorf("wait for StorageCluster in cluster %q: %w", clusterName, err)
+		}
 	}
 	if peerType == "sync" {
 		if err := o.configureSyncCIDRs(ctx, managedClusters); err != nil {

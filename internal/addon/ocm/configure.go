@@ -238,6 +238,13 @@ func (o *ocm) configure(ctx context.Context, hubName string, spokeNames, addonNa
 		}
 		o.logger.Info("OCM spoke joined", "hub", hubName, "spoke", spoke)
 	}
+	for _, spoke := range spokeNames {
+		if _, err := execx.Run(ctx, o.runner, support.KubeClient,
+			"--kubeconfig", hubPrivateKubeconfig, "--context", contextName,
+			"label", "managedcluster", spoke, "name="+spoke, "--overwrite"); err != nil {
+			return fmt.Errorf("label OCM spoke %q: %w", spoke, err)
+		}
+	}
 
 	if installGPFOnSpokes {
 		server, err := execx.Run(ctx, o.runner, support.KubeClient,

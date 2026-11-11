@@ -183,7 +183,7 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 
 		m.logger.Info("removing container", "name", m.cfg.Name, "container", container)
 		if err := m.node.Remove(ctx, container); err != nil {
-			m.logger.Warn("failed to remove container during delete", "name", m.cfg.Name, "container", container, "error", err)
+			return fmt.Errorf("remove container %s during delete: %w", container, err)
 		}
 	}
 

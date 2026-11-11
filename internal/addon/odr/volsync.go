@@ -15,9 +15,9 @@ func (o *odr) installVolSync(ctx context.Context, clusterName string) error {
 		return fmt.Errorf("load kubeconfig for VolSync cluster %q: %w", clusterName, err)
 	}
 
-	o.logger.Info("applying VolSync APIServer shim if CRD is missing", "cluster", clusterName)
+	o.logger.Info("applying VolSync shim CRDs if missing", "cluster", clusterName)
 	if err := support.ApplyDirIfMissing(ctx, o.runner, support.KubeClient, kubeconfig, odrFS, "shims/volsync/crd"); err != nil {
-		return fmt.Errorf("apply VolSync APIServer shim to cluster %q: %w", clusterName, err)
+		return fmt.Errorf("apply VolSync shim CRDs to cluster %q: %w", clusterName, err)
 	}
 	if err := ocp.WaitForCRD(ctx, o.runner, support.KubeClient, kubeconfig, "apiservers.config.openshift.io"); err != nil {
 		return fmt.Errorf("wait for VolSync APIServer CRD in cluster %q: %w", clusterName, err)
