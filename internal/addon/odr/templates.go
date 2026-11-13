@@ -81,10 +81,8 @@ spec:
   items:
     - clusterName: {{.ClusterA}}
       storageClusterRef:
-        name: ocs-storagecluster
-        namespace: openshift-storage
+        name: {{.StorageClusterRefName}}
     - clusterName: {{.ClusterB}}
       storageClusterRef:
-        name: ocs-storagecluster
-        namespace: openshift-storage
+        name: {{.StorageClusterRefName}}
 `

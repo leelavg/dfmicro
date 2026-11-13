@@ -16,7 +16,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:   "network",
 		Usage:  "Manage multi-cluster networks",
@@ -30,8 +30,8 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 			detachCommand(logger, runner),
 			deleteCommand(logger, runner),
 			configCommand(),
-			peerCommand(logger, runner),
-			unpeerCommand(logger, runner),
+			peerCommand(logger, runner, reconcileRoutes),
+			unpeerCommand(logger, runner, reconcileRoutes),
 		},
 	}
 }
@@ -432,7 +432,7 @@ Example:
 	}
 }
 
-func peerCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func peerCommand(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:  "peer",
 		Usage: "Establish direct peering between clusters",
@@ -463,12 +463,16 @@ Example:
 				logger: logger,
 				runner: runner,
 			}
-			return ops.peer(ctx, clusterNames)
+			if err := ops.peer(ctx, clusterNames); err != nil {
+				return err
+			}
+			reconcileRouteDNS(ctx, logger, reconcileRoutes)
+			return nil
 		},
 	}
 }
 
-func unpeerCommand(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func unpeerCommand(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:  "unpeer",
 		Usage: "Remove direct peering between clusters",
@@ -499,8 +503,21 @@ Example:
 				logger: logger,
 				runner: runner,
 			}
-			return ops.unpeer(ctx, clusterNames)
+			if err := ops.unpeer(ctx, clusterNames); err != nil {
+				return err
+			}
+			reconcileRouteDNS(ctx, logger, reconcileRoutes)
+			return nil
 		},
+	}
+}
+
+func reconcileRouteDNS(ctx context.Context, logger *slog.Logger, reconcile func(context.Context) error) {
+	if reconcile == nil {
+		return
+	}
+	if err := reconcile(ctx); err != nil {
+		logger.Warn("failed to reconcile route DNS", "error", err)
 	}
 }
 

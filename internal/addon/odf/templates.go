@@ -441,6 +441,15 @@ metadata:
   namespace: openshift-storage
   labels:
     app.kubernetes.io/created-by: dfmicro
+spec:
+  storageClasses:
+    - name: ocs-storagecluster-ceph-rbd
+  networkFenceClasses:
+    - name: ocs-storagecluster-ceph-rbd-networkfenceclass
+{{if .MappingConfigMap}}
+  resourceNameMappingConfigMap:
+    name: {{.MappingConfigMap}}
+{{end}}
 `
 
 const odfClientNetworkPolicyTmpl = `apiVersion: networking.k8s.io/v1

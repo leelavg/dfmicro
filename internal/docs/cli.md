@@ -130,6 +130,8 @@ Configure ODF to run on MicroShift
 
 **--include-cephfs**: Run CephFS and CSI Driver
 
+**--map-from**="": Client cluster whose resource mapping to reuse
+
 **--multi-node**: Configure ODF for a multi-node cluster
 
 #### install
@@ -513,6 +515,18 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 **--node**="": Restrict output to a single node by name (omit for all nodes)
 
 **--tune**: Apply fixed CPU and memory requests to known ODF and Ramen controllers
+
+### routes
+
+Manage wildcard DNS for cluster routes
+
+#### create
+
+Create route DNS entries for running clusters
+
+#### delete
+
+Remove dfmicro route DNS entries
 
 ### storage
 

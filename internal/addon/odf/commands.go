@@ -134,6 +134,10 @@ Example:
 						Name:  "connect-to",
 						Usage: "Source cluster. With --client, connects to an ODF provider. Otherwise, connects to a Rook Ceph provider",
 					},
+					&cli.StringFlag{
+						Name:  "map-from",
+						Usage: "Client cluster whose resource mapping to reuse",
+					},
 				},
 				Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 					if cmd.Bool("client") && cmd.Bool("external-ceph") {
@@ -141,6 +145,9 @@ Example:
 					}
 					if cmd.Bool("external-ceph") && cmd.String("connect-to") != "" {
 						return ctx, fmt.Errorf("--external-ceph cannot be combined with --connect-to")
+					}
+					if cmd.String("map-from") != "" && (!cmd.Bool("client") || cmd.String("connect-to") == "") {
+						return ctx, fmt.Errorf("--map-from requires --client and --connect-to")
 					}
 					return ctx, nil
 				},
@@ -152,6 +159,7 @@ Example:
 						hostNetwork:   cmd.Bool("hostnetwork"),
 						externalCeph:  cmd.Bool("external-ceph"),
 						connectTo:     cmd.String("connect-to"),
+						mapFrom:       cmd.String("map-from"),
 					}
 					if cfg.clientOnly && cfg.connectTo != "" {
 						clusterConfig, err := rootconfig.ReadClusterConfig(o.clusterName)

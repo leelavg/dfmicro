@@ -9,8 +9,9 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
-	return &cli.Command{
+func Command(logger *slog.Logger, runner execx.Runner) (*cli.Command, func(context.Context) error) {
+	routes := &routeDNS{logger: logger, runner: runner}
+	command := &cli.Command{
 		Name:  "ops",
 		Usage: "Operational utilities for running clusters",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -18,8 +19,10 @@ func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
 		},
 		Commands: []*cli.Command{
 			resourcesCommand(logger, runner),
+			routesCommand(logger, runner),
 			sudoersCommand(logger, runner),
 			storageCommand(runner),
 		},
 	}
+	return command, routes.reconcile
 }

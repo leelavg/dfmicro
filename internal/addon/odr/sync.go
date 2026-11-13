@@ -33,6 +33,7 @@ func (o *odr) configureSyncCIDRs(ctx context.Context, managedClusters []string) 
 			return err
 		}
 
+		o.logger.Info("waiting for network fence client CIDRs", "cluster", clusterName)
 		cidrs, err := o.networkFenceClientCIDRs(ctx, clusterName, kubeconfig)
 		if err != nil {
 			return err

@@ -33,6 +33,7 @@ type peerOps struct {
 
 type networkInfo struct {
 	nodeIP      string
+	nodeIPs     []string
 	clusterCIDR string
 	serviceCIDR string
 }
@@ -326,9 +327,20 @@ func (o *peerOps) run(
 		if err != nil {
 			return fmt.Errorf("failed to read config for cluster %s: %w", name, err)
 		}
-		nodeIP, err := support.GetContainerIP(ctx, o.runner, cfg.BridgeName, gatewayNode)
-		if err != nil {
-			return fmt.Errorf("failed to get node IP for cluster %s: %w", name, err)
+		var nodeIP string
+		nodeIPs := make([]string, 0, len(containers))
+		for _, container := range containers {
+			ip, err := support.GetContainerIP(ctx, o.runner, cfg.BridgeName, container)
+			if err != nil {
+				return fmt.Errorf("failed to get node IP for container %s: %w", container, err)
+			}
+			nodeIPs = append(nodeIPs, ip)
+			if container == gatewayNode {
+				nodeIP = ip
+			}
+		}
+		if nodeIP == "" {
+			return fmt.Errorf("gateway node %s is missing from cluster %s containers", gatewayNode, name)
 		}
 
 		cidrs, err := rootconfig.GetCIDRs(name)
@@ -338,6 +350,7 @@ func (o *peerOps) run(
 
 		networkByClusterName[name] = networkInfo{
 			nodeIP:      nodeIP,
+			nodeIPs:     nodeIPs,
 			clusterCIDR: cidrs.Cluster,
 			serviceCIDR: cidrs.Service,
 		}
@@ -388,6 +401,10 @@ func (o *peerOps) peer(ctx context.Context, clusterNames []string) error {
 					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
 					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
 					fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 || firewall-cmd --zone=trusted --add-source=%s/32\n", dstNetwork.nodeIP, dstNetwork.nodeIP)
+					// kube-proxy marks Service traffic for SNAT, so clear that mark for peer sources after DNAT.
+					for _, source := range append([]string{dstNetwork.clusterCIDR}, dstNetwork.nodeIPs...) {
+						fmt.Fprintf(&commands, "iptables -t mangle -C POSTROUTING -s %s -d %s -j MARK --set-xmark 0x0/0x4000 >/dev/null 2>&1 || iptables -t mangle -I POSTROUTING 1 -s %s -d %s -j MARK --set-xmark 0x0/0x4000\n", source, srcNetwork.clusterCIDR, source, srcNetwork.clusterCIDR)
+					}
 				}
 			}
 			return commands.String()
@@ -423,6 +440,9 @@ func (o *peerOps) unpeer(ctx context.Context, clusterNames []string) error {
 				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.clusterCIDR, dstNetwork.clusterCIDR)
 				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s || true\n", dstNetwork.serviceCIDR, dstNetwork.serviceCIDR)
 				fmt.Fprintf(&commands, "firewall-cmd --zone=trusted --query-source=%s/32 >/dev/null 2>&1 && firewall-cmd --zone=trusted --remove-source=%s/32 || true\n", dstNetwork.nodeIP, dstNetwork.nodeIP)
+				for _, source := range append([]string{dstNetwork.clusterCIDR}, dstNetwork.nodeIPs...) {
+					fmt.Fprintf(&commands, "iptables -t mangle -C POSTROUTING -s %s -d %s -j MARK --set-xmark 0x0/0x4000 >/dev/null 2>&1 && iptables -t mangle -D POSTROUTING -s %s -d %s -j MARK --set-xmark 0x0/0x4000 || true\n", source, srcNetwork.clusterCIDR, source, srcNetwork.clusterCIDR)
+				}
 			}
 			return commands.String()
 		},

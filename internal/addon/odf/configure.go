@@ -17,6 +17,7 @@ type configureConfig struct {
 	hostNetwork   bool
 	externalCeph  bool
 	connectTo     string
+	mapFrom       string
 	clusterCIDR   string
 }
 
@@ -55,7 +56,7 @@ func (o *odf) configureClient(ctx context.Context, cfg configureConfig) error {
 		return err
 	}
 	if cfg.connectTo != "" {
-		return o.configureOdfClient(ctx, cfg.connectTo, cfg.clusterCIDR)
+		return o.configureOdfClient(ctx, cfg.connectTo, cfg.clusterCIDR, cfg.mapFrom)
 	}
 	return nil
 }

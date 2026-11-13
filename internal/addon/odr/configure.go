@@ -22,6 +22,11 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	for i, name := range managedClusters {
 		managedClusters[i] = strings.TrimSpace(name)
 	}
+	if peerType == "sync" {
+		if err := o.validateStorageClients(ctx, managedClusters); err != nil {
+			return err
+		}
+	}
 	for _, name := range managedClusters {
 		o.logger.Info("labeling ManagedCluster with cluster ID", "cluster", name)
 		if err := o.labelManagedClusterID(ctx, name); err != nil {
@@ -104,18 +109,21 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, configuration); err != nil {
 		return fmt.Errorf("apply ODR S3Configuration: %w", err)
 	}
-	for _, clusterName := range managedClusters {
-		kubeconfig, err := rootconfig.Kubeconfig(clusterName)
-		if err != nil {
-			return fmt.Errorf("load kubeconfig for cluster %q: %w", clusterName, err)
-		}
-		o.logger.Info("waiting for StorageCluster", "cluster", clusterName)
-		if _, err := o.runner.Run(ctx, support.KubeClient,
-			"wait", "--for=jsonpath={.status.phase}=Ready", "--timeout=600s",
-			"storagecluster/ocs-storagecluster", "-n", "openshift-storage",
-			"--kubeconfig", kubeconfig,
-		); err != nil {
-			return fmt.Errorf("wait for StorageCluster in cluster %q: %w", clusterName, err)
+	o.logger.Info("ODR S3Configuration applied", "cluster", o.clusterName)
+	if peerType == "async" {
+		for _, clusterName := range managedClusters {
+			kubeconfig, err := rootconfig.Kubeconfig(clusterName)
+			if err != nil {
+				return fmt.Errorf("load kubeconfig for cluster %q: %w", clusterName, err)
+			}
+			o.logger.Info("waiting for StorageCluster", "cluster", clusterName)
+			if _, err := o.runner.Run(ctx, support.KubeClient,
+				"wait", "--for=jsonpath={.status.phase}=Ready", "--timeout=600s",
+				"storagecluster/ocs-storagecluster", "-n", "openshift-storage",
+				"--kubeconfig", kubeconfig,
+			); err != nil {
+				return fmt.Errorf("wait for StorageCluster in cluster %q: %w", clusterName, err)
+			}
 		}
 	}
 	if peerType == "sync" {
@@ -124,10 +132,16 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 		}
 	}
 
+	storageClusterRefName := "ocs-storagecluster"
+	if peerType == "sync" {
+		// MDR creates the StorageClient under the hub cluster name.
+		storageClusterRefName = o.clusterName
+	}
 	mirrorPeer, err := support.Render(mirrorPeerTmpl, map[string]string{
-		"ClusterA": strconv.Quote(managedClusters[0]),
-		"ClusterB": strconv.Quote(managedClusters[1]),
-		"Type":     peerType,
+		"ClusterA":              strconv.Quote(managedClusters[0]),
+		"ClusterB":              strconv.Quote(managedClusters[1]),
+		"StorageClusterRefName": strconv.Quote(storageClusterRefName),
+		"Type":                  peerType,
 	})
 	if err != nil {
 		return err
@@ -140,6 +154,29 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 		if err := o.applyTrustedCABundle(ctx, clusterName, "openshift-dr-system", "odr-cluster-operator", "ramen-dr-cluster-operator"); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (o *odr) validateStorageClients(ctx context.Context, managedClusters []string) error {
+	for _, clusterName := range managedClusters {
+		kubeconfig, err := rootconfig.Kubeconfig(clusterName)
+		if err != nil {
+			return fmt.Errorf("load kubeconfig for managed cluster %q: %w", clusterName, err)
+		}
+		result, err := o.runner.Run(ctx, support.KubeClient,
+			"get", "storageclient", o.clusterName,
+			"-o=jsonpath={.status.phase}",
+			"--kubeconfig", kubeconfig,
+		)
+		if err != nil {
+			return fmt.Errorf("get StorageClient %q in managed cluster %q: %w", o.clusterName, clusterName, err)
+		}
+		phase := strings.TrimSpace(result.Stdout)
+		if phase != "Connected" {
+			return fmt.Errorf("StorageClient %q in managed cluster %q is %q, expected Connected", o.clusterName, clusterName, phase)
+		}
+		o.logger.Info("StorageClient is connected", "cluster", clusterName, "name", o.clusterName)
 	}
 	return nil
 }

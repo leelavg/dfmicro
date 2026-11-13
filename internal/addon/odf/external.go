@@ -158,7 +158,7 @@ func (o *odf) configureRookClient(ctx context.Context, providerName string, incl
 	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, externalStorageClusterTmpl)
 }
 
-func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR string) error {
+func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR, mapFrom string) error {
 	providerKubeconfig, err := rootconfig.Kubeconfig(providerName)
 	if err != nil {
 		return fmt.Errorf("could not load provider kubeconfig for %q: %w", providerName, err)
@@ -195,7 +195,27 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR 
 		return nil
 	}
 
-	consumer, err := support.Render(storageConsumerTmpl, map[string]string{"ClientCluster": o.clusterName})
+	mappingConfigMap := ""
+	if mapFrom != "" {
+		result, err := o.runner.Run(ctx, support.KubeClient,
+			"get", "storageconsumer", mapFrom, "-n", providerNamespace,
+			"-o", "jsonpath={.status.resourceNameMappingConfigMap.name}",
+			"--kubeconfig", providerKubeconfig,
+		)
+		if err != nil {
+			return fmt.Errorf("get resource mapping from StorageConsumer %q: %w", mapFrom, err)
+		}
+		mappingConfigMap = strings.TrimSpace(result.Stdout)
+		if mappingConfigMap == "" {
+			return fmt.Errorf("StorageConsumer %q on provider %q has no status.resourceNameMappingConfigMap.name", mapFrom, providerName)
+		}
+		o.logger.Info("reusing ODF resource mapping", "source", mapFrom, "configmap", mappingConfigMap)
+	}
+
+	consumer, err := support.Render(storageConsumerTmpl, map[string]string{
+		"ClientCluster":    o.clusterName,
+		"MappingConfigMap": mappingConfigMap,
+	})
 	if err != nil {
 		return err
 	}

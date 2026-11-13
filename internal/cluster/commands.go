@@ -151,7 +151,7 @@ func clusterFlags() []cli.Flag {
 	return []cli.Flag{nameFlag()}
 }
 
-func Command(logger *slog.Logger, runner execx.Runner) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:      "cluster",
 		Usage:     "Manage cluster lifecycle",
@@ -210,7 +210,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner).create(ctx)
+					return newManager(cfg, logger, runner, reconcileRoutes).create(ctx)
 				},
 			},
 			{
@@ -222,7 +222,7 @@ Examples:
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
 					if err == nil {
-						return newManager(cfg, logger, runner).delete(ctx, false)
+						return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, false)
 					}
 					if !errors.Is(err, os.ErrNotExist) {
 						return err
@@ -230,12 +230,12 @@ Examples:
 					// Rebuild the paths and node defaults needed for cleanup after the config file is gone.
 					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, cmd.String("name"))
 					if _, err := os.Stat(cfg.StateDir); errors.Is(err, os.ErrNotExist) {
-						return newManager(cfg, logger, runner).delete(ctx, true)
+						return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, true)
 					}
 					// A state directory without config can still contain TopoLVM resources from an interrupted delete.
 					// Enable their cleanup before removing the remaining cluster state.
 					cfg.EnableTopoLVM = true
-					return newManager(cfg, logger, runner).delete(ctx, false)
+					return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, false)
 				},
 			},
 			{
@@ -248,7 +248,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner).start(ctx)
+					return newManager(cfg, logger, runner, reconcileRoutes).start(ctx)
 				},
 			},
 			{
@@ -261,7 +261,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner).stop(ctx)
+					return newManager(cfg, logger, runner, reconcileRoutes).stop(ctx)
 				},
 			},
 			{
@@ -286,7 +286,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner).printKubeconfig(ctx)
+					return newManager(cfg, logger, runner, reconcileRoutes).printKubeconfig(ctx)
 				},
 			},
 			{
@@ -305,7 +305,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					manager := newManager(cfg, logger, runner)
+					manager := newManager(cfg, logger, runner, reconcileRoutes)
 					return manager.exec(ctx, cmd.String("container"))
 				},
 			},
