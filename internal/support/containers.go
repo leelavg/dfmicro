@@ -20,10 +20,13 @@ const containerNetworkInterfaceTemplate = `
 	{{- end -}}
 `
 
-func clusterContainers(ctx context.Context, runner execx.Runner, name string, all bool) ([]string, error) {
+func clusterContainers(ctx context.Context, runner execx.Runner, name string, all bool, status string) ([]string, error) {
 	args := []string{"ps"}
 	if all {
 		args = append(args, "-a")
+	}
+	if status != "" {
+		args = append(args, "--filter", "status="+status)
 	}
 	args = append(args, "--filter", "label=part-of="+name, "--format", "{{.Names}}")
 	result, err := RunPodmanPrivileged(ctx, runner, args...)
@@ -34,11 +37,15 @@ func clusterContainers(ctx context.Context, runner execx.Runner, name string, al
 }
 
 func AllClusterContainers(ctx context.Context, runner execx.Runner, name string) ([]string, error) {
-	return clusterContainers(ctx, runner, name, true)
+	return clusterContainers(ctx, runner, name, true, "")
 }
 
 func RunningClusterContainers(ctx context.Context, runner execx.Runner, name string) ([]string, error) {
-	return clusterContainers(ctx, runner, name, false)
+	return clusterContainers(ctx, runner, name, false, "running")
+}
+
+func PausedClusterContainers(ctx context.Context, runner execx.Runner, name string) ([]string, error) {
+	return clusterContainers(ctx, runner, name, true, "paused")
 }
 
 func AllNetworkContainers(ctx context.Context, runner execx.Runner, networkName string) ([]string, error) {

@@ -444,8 +444,10 @@ metadata:
 spec:
   storageClasses:
     - name: ocs-storagecluster-ceph-rbd
+    - name: ocs-storagecluster-cephfs
   networkFenceClasses:
     - name: ocs-storagecluster-ceph-rbd-networkfenceclass
+    - name: ocs-storagecluster-cephfs-networkfenceclass
 {{if .MappingConfigMap}}
   resourceNameMappingConfigMap:
     name: {{.MappingConfigMap}}

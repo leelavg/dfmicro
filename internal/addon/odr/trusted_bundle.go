@@ -55,11 +55,6 @@ func (o *odr) applyTrustedCABundle(ctx context.Context, clusterName, namespace, 
 	if err != nil {
 		return err
 	}
-	o.logger.Info("applying trusted CA bundle", "cluster", clusterName, "namespace", namespace)
-	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, kubeconfig, configMap); err != nil {
-		return fmt.Errorf("apply trusted CA bundle in cluster %q: %w", clusterName, err)
-	}
-
 	result, err = o.runner.Run(ctx, support.KubeClient,
 		"get", "deployment", deployment, "-n", namespace,
 		"--ignore-not-found", `-o=jsonpath={.metadata.name}{":"}{.status.availableReplicas}`,
@@ -70,7 +65,7 @@ func (o *odr) applyTrustedCABundle(ctx context.Context, clusterName, namespace, 
 	}
 	deploymentState := strings.TrimSpace(result.Stdout)
 	if deploymentState == "" {
-		return nil
+		return o.applyTrustedCABundleYAML(ctx, clusterName, namespace, kubeconfig, configMap)
 	}
 	_, availableReplicas, ok := strings.Cut(deploymentState, ":")
 	if !ok {
@@ -78,7 +73,7 @@ func (o *odr) applyTrustedCABundle(ctx context.Context, clusterName, namespace, 
 	}
 	available, err := strconv.Atoi(availableReplicas)
 	if err == nil && available > 0 {
-		return nil
+		return o.applyTrustedCABundleYAML(ctx, clusterName, namespace, kubeconfig, configMap)
 	}
 
 	o.logger.Info("restarting unavailable ODR operator", "cluster", clusterName, "deployment", deployment)
@@ -88,11 +83,22 @@ func (o *odr) applyTrustedCABundle(ctx context.Context, clusterName, namespace, 
 	); err != nil {
 		return fmt.Errorf("restart ODR deployment %s in cluster %q: %w", deployment, clusterName, err)
 	}
+	if err := o.applyTrustedCABundleYAML(ctx, clusterName, namespace, kubeconfig, configMap); err != nil {
+		return err
+	}
 	if _, err := o.runner.Run(ctx, support.KubeClient,
 		"rollout", "status", "deployment/"+deployment, "-n", namespace,
 		"--timeout=10m", "--kubeconfig", kubeconfig,
 	); err != nil {
 		return fmt.Errorf("wait for ODR deployment %s in cluster %q: %w", deployment, clusterName, err)
+	}
+	return nil
+}
+
+func (o *odr) applyTrustedCABundleYAML(ctx context.Context, clusterName, namespace, kubeconfig, configMap string) error {
+	o.logger.Info("applying trusted CA bundle", "cluster", clusterName, "namespace", namespace)
+	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, kubeconfig, configMap); err != nil {
+		return fmt.Errorf("apply trusted CA bundle in cluster %q: %w", clusterName, err)
 	}
 	return nil
 }

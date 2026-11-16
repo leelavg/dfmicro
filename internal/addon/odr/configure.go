@@ -155,6 +155,9 @@ func (o *odr) configure(ctx context.Context, managedClusters []string, peerType 
 			return err
 		}
 	}
+	if peerType == "async" {
+		o.logger.Info("for CephFS RDR, run dfmicro ops clusterset sync after the destination ServiceExport appears")
+	}
 	return nil
 }
 

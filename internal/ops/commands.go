@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"dfmicro/internal/execx"
@@ -11,6 +12,7 @@ import (
 
 func Command(logger *slog.Logger, runner execx.Runner) (*cli.Command, func(context.Context) error) {
 	routes := &routeDNS{logger: logger, runner: runner}
+	clusterSet := &clusterSetDNS{logger: logger, runner: runner}
 	command := &cli.Command{
 		Name:  "ops",
 		Usage: "Operational utilities for running clusters",
@@ -22,7 +24,10 @@ func Command(logger *slog.Logger, runner execx.Runner) (*cli.Command, func(conte
 			routesCommand(logger, runner),
 			sudoersCommand(logger, runner),
 			storageCommand(runner),
+			clusterSetCommand(clusterSet),
 		},
 	}
-	return command, routes.reconcile
+	return command, func(ctx context.Context) error {
+		return errors.Join(routes.reconcile(ctx), clusterSet.reconcile(ctx))
+	}
 }

@@ -59,7 +59,7 @@ Start the standalone local-s3 service
     Use configure to publish a Service in a cluster.
     The service allows anonymous access until accounts are configured.
 
-**--image**="": Container image for local-s3 (default: "ghcr.io/shyim/local-s3:0.1.1")
+**--image**="": Container image for local-s3 (default: "ghcr.io/leelavg/local-s3:0.1.2")
 
 #### uninstall
 
@@ -191,7 +191,9 @@ Manage OpenShift Data Foundation disaster recovery
 
 Configure S3 and managed clusters for ODR
 
->Requires local-s3 attached to the hub and both managed clusters. Creates the shared dfmicro-odr bucket.
+    Requires local-s3 attached to the hub and both managed clusters. Creates the shared dfmicro-odr bucket.
+
+    For CephFS RDR, run dfmicro ops clusterset sync after the destination ServiceExport appears.
 
 **--managed-cluster**="": ManagedCluster name (repeatable or comma separated)
 
@@ -245,7 +247,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
-**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.0.0_202609201132_g4582bf673_5.0.0_okd_scos.ec.8")
+**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.1.0_202611160934_g68a5f5e9e_5.1.0_okd_scos.ec.3")
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 
@@ -306,17 +308,21 @@ List all clusters
 
 Start a stopped cluster
 
->Use after 'cluster stop' or after a host reboot.
+>Use after a host reboot or with --unpause to resume containers paused with 'cluster stop --pause'.
 
 **--name**="": Cluster name (default: "micro")
+
+**--unpause**: Resume paused containers without changing their IP addresses
 
 ### stop
 
-Stop cluster containers without removing them
+Stop or pause cluster containers without removing them
 
->Preserves all state. Resume with 'cluster start'.
+>Use --pause to retain container IP addresses. Resume with 'cluster start --unpause'.
 
 **--name**="": Cluster name (default: "micro")
+
+**--pause**: Pause containers and retain their IP addresses
 
 ## config
 
@@ -495,6 +501,18 @@ remove worker node from cluster
 ## ops
 
 Operational utilities for running clusters
+
+### clusterset
+
+Manage ClusterSet DNS records
+
+#### delete
+
+Remove dfmicro ClusterSet DNS records
+
+#### sync
+
+Reconcile DNS for exported VolSync destination services
 
 ### resources
 

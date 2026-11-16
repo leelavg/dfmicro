@@ -2,6 +2,7 @@ package odf
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -102,6 +103,27 @@ func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 	sc, err := support.Render(storageclusterTmpl, scVars)
 	if err != nil {
 		return err
+	}
+	if cfg.includeCephFS {
+		result, err := o.runner.Run(ctx, support.KubeClient,
+			"get", "storagecluster/ocs-storagecluster", "-n", "openshift-storage",
+			"--ignore-not-found", "-o", "name", "--kubeconfig", o.kubeconfig,
+		)
+		if err != nil {
+			return fmt.Errorf("check for existing StorageCluster: %w", err)
+		}
+		if strings.TrimSpace(result.Stdout) != "" {
+			o.logger.Info("enabling CephFS in existing StorageCluster")
+			_, err := o.runner.Run(ctx, support.KubeClient,
+				"patch", "storagecluster/ocs-storagecluster", "-n", "openshift-storage",
+				"--type=merge", "-p", `{"spec":{"managedResources":{"cephFilesystems":null}}}`,
+				"--kubeconfig", o.kubeconfig,
+			)
+			if err != nil {
+				return fmt.Errorf("enable CephFS in existing StorageCluster: %w", err)
+			}
+			return nil
+		}
 	}
 	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, sc)
 }

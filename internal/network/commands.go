@@ -16,7 +16,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func Command(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner, reconcileDNS func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:   "network",
 		Usage:  "Manage multi-cluster networks",
@@ -30,8 +30,8 @@ func Command(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(cont
 			detachCommand(logger, runner),
 			deleteCommand(logger, runner),
 			configCommand(),
-			peerCommand(logger, runner, reconcileRoutes),
-			unpeerCommand(logger, runner, reconcileRoutes),
+			peerCommand(logger, runner, reconcileDNS),
+			unpeerCommand(logger, runner, reconcileDNS),
 		},
 	}
 }
@@ -432,7 +432,7 @@ Example:
 	}
 }
 
-func peerCommand(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
+func peerCommand(logger *slog.Logger, runner execx.Runner, reconcileDNS func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:  "peer",
 		Usage: "Establish direct peering between clusters",
@@ -466,13 +466,13 @@ Example:
 			if err := ops.peer(ctx, clusterNames); err != nil {
 				return err
 			}
-			reconcileRouteDNS(ctx, logger, reconcileRoutes)
+			reconcileDNSAfterPeer(ctx, logger, reconcileDNS)
 			return nil
 		},
 	}
 }
 
-func unpeerCommand(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
+func unpeerCommand(logger *slog.Logger, runner execx.Runner, reconcileDNS func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:  "unpeer",
 		Usage: "Remove direct peering between clusters",
@@ -506,18 +506,18 @@ Example:
 			if err := ops.unpeer(ctx, clusterNames); err != nil {
 				return err
 			}
-			reconcileRouteDNS(ctx, logger, reconcileRoutes)
+			reconcileDNSAfterPeer(ctx, logger, reconcileDNS)
 			return nil
 		},
 	}
 }
 
-func reconcileRouteDNS(ctx context.Context, logger *slog.Logger, reconcile func(context.Context) error) {
+func reconcileDNSAfterPeer(ctx context.Context, logger *slog.Logger, reconcile func(context.Context) error) {
 	if reconcile == nil {
 		return
 	}
 	if err := reconcile(ctx); err != nil {
-		logger.Warn("failed to reconcile route DNS", "error", err)
+		logger.Warn("failed to reconcile DNS", "error", err)
 	}
 }
 

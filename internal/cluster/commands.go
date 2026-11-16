@@ -151,7 +151,7 @@ func clusterFlags() []cli.Flag {
 	return []cli.Flag{nameFlag()}
 }
 
-func Command(logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *cli.Command {
+func Command(logger *slog.Logger, runner execx.Runner, reconcileDNS func(context.Context) error) *cli.Command {
 	return &cli.Command{
 		Name:      "cluster",
 		Usage:     "Manage cluster lifecycle",
@@ -210,7 +210,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner, reconcileRoutes).create(ctx)
+					return newManager(cfg, logger, runner, reconcileDNS).create(ctx)
 				},
 			},
 			{
@@ -222,7 +222,7 @@ Examples:
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
 					if err == nil {
-						return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, false)
+						return newManager(cfg, logger, runner, reconcileDNS).delete(ctx, false)
 					}
 					if !errors.Is(err, os.ErrNotExist) {
 						return err
@@ -230,38 +230,52 @@ Examples:
 					// Rebuild the paths and node defaults needed for cleanup after the config file is gone.
 					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, cmd.String("name"))
 					if _, err := os.Stat(cfg.StateDir); errors.Is(err, os.ErrNotExist) {
-						return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, true)
+						return newManager(cfg, logger, runner, reconcileDNS).delete(ctx, true)
 					}
 					// A state directory without config can still contain TopoLVM resources from an interrupted delete.
 					// Enable their cleanup before removing the remaining cluster state.
 					cfg.EnableTopoLVM = true
-					return newManager(cfg, logger, runner, reconcileRoutes).delete(ctx, false)
+					return newManager(cfg, logger, runner, reconcileDNS).delete(ctx, false)
 				},
 			},
 			{
 				Name:      "start",
 				Usage:     "Start a stopped cluster",
-				UsageText: "Use after 'cluster stop' or after a host reboot.",
-				Flags:     clusterFlags(),
+				UsageText: "Use after a host reboot or with --unpause to resume containers paused with 'cluster stop --pause'.",
+				Flags: append(clusterFlags(), &cli.BoolFlag{
+					Name:  "unpause",
+					Usage: "Resume paused containers without changing their IP addresses",
+				}),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner, reconcileRoutes).start(ctx)
+					manager := newManager(cfg, logger, runner, reconcileDNS)
+					if cmd.Bool("unpause") {
+						return manager.unpause(ctx)
+					}
+					return manager.start(ctx)
 				},
 			},
 			{
 				Name:      "stop",
-				Usage:     "Stop cluster containers without removing them",
-				UsageText: "Preserves all state. Resume with 'cluster start'.",
-				Flags:     clusterFlags(),
+				Usage:     "Stop or pause cluster containers without removing them",
+				UsageText: "Use --pause to retain container IP addresses. Resume with 'cluster start --unpause'.",
+				Flags: append(clusterFlags(), &cli.BoolFlag{
+					Name:  "pause",
+					Usage: "Pause containers and retain their IP addresses",
+				}),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner, reconcileRoutes).stop(ctx)
+					manager := newManager(cfg, logger, runner, reconcileDNS)
+					if cmd.Bool("pause") {
+						return manager.pause(ctx)
+					}
+					return manager.stop(ctx)
 				},
 			},
 			{
@@ -286,7 +300,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					return newManager(cfg, logger, runner, reconcileRoutes).printKubeconfig(ctx)
+					return newManager(cfg, logger, runner, reconcileDNS).printKubeconfig(ctx)
 				},
 			},
 			{
@@ -305,7 +319,7 @@ Examples:
 					if err != nil {
 						return err
 					}
-					manager := newManager(cfg, logger, runner, reconcileRoutes)
+					manager := newManager(cfg, logger, runner, reconcileDNS)
 					return manager.exec(ctx, cmd.String("container"))
 				},
 			},

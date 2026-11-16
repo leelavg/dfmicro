@@ -110,6 +110,16 @@ func (n *NodeMgr) Stop(ctx context.Context, name string) error {
 	return err
 }
 
+func (n *NodeMgr) Pause(ctx context.Context, name string) error {
+	_, err := RunPodmanPrivileged(ctx, n.runner, "pause", name)
+	return err
+}
+
+func (n *NodeMgr) Unpause(ctx context.Context, name string) error {
+	_, err := RunPodmanPrivileged(ctx, n.runner, "unpause", name)
+	return err
+}
+
 func (n *NodeMgr) Start(ctx context.Context, name string, trust NetworkTrust) error {
 	if _, err := RunPodmanPrivileged(ctx, n.runner, "start", name); err != nil {
 		return err

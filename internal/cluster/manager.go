@@ -44,22 +44,22 @@ type podmanContainer struct {
 }
 
 type manager struct {
-	cfg             rootconfig.ClusterConfig
-	node            *support.NodeMgr
-	topolvm         *support.TopoLVMMgr
-	logger          *slog.Logger
-	runner          execx.Runner
-	reconcileRoutes func(context.Context) error
+	cfg          rootconfig.ClusterConfig
+	node         *support.NodeMgr
+	topolvm      *support.TopoLVMMgr
+	logger       *slog.Logger
+	runner       execx.Runner
+	reconcileDNS func(context.Context) error
 }
 
-func newManager(cfg rootconfig.ClusterConfig, logger *slog.Logger, runner execx.Runner, reconcileRoutes func(context.Context) error) *manager {
+func newManager(cfg rootconfig.ClusterConfig, logger *slog.Logger, runner execx.Runner, reconcileDNS func(context.Context) error) *manager {
 	return &manager{
-		cfg:             cfg,
-		node:            support.NewNodeMgr(logger, runner),
-		topolvm:         support.NewTopoLVMMgr(logger, runner, cfg),
-		logger:          logger,
-		runner:          runner,
-		reconcileRoutes: reconcileRoutes,
+		cfg:          cfg,
+		node:         support.NewNodeMgr(logger, runner),
+		topolvm:      support.NewTopoLVMMgr(logger, runner, cfg),
+		logger:       logger,
+		runner:       runner,
+		reconcileDNS: reconcileDNS,
 	}
 }
 
@@ -103,7 +103,7 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	m.refreshRouteDNS(ctx)
+	m.refreshDNS(ctx)
 	m.logger.Info("cluster created", "name", m.cfg.Name, "container", containerName, "kubeconfig", m.cfg.Kubeconfig)
 	return nil
 }
@@ -144,7 +144,7 @@ func (m *manager) start(ctx context.Context) error {
 		return err
 	}
 
-	m.refreshRouteDNS(ctx)
+	m.refreshDNS(ctx)
 	m.logger.Info("cluster started", "name", m.cfg.Name, "kubeconfig", m.cfg.Kubeconfig)
 	return nil
 }
@@ -156,7 +156,7 @@ func (m *manager) stop(ctx context.Context) error {
 	}
 	if len(containers) == 0 {
 		m.logger.Info("no running cluster containers", "name", m.cfg.Name)
-		m.refreshRouteDNS(ctx)
+		m.refreshDNS(ctx)
 		return nil
 	}
 
@@ -167,16 +167,61 @@ func (m *manager) stop(ctx context.Context) error {
 			m.logger.Warn("failed to stop container", "name", m.cfg.Name, "container", container, "error", err)
 		}
 	}
-	m.refreshRouteDNS(ctx)
+	m.refreshDNS(ctx)
 	return nil
 }
 
-func (m *manager) refreshRouteDNS(ctx context.Context) {
-	if m.reconcileRoutes == nil {
+func (m *manager) pause(ctx context.Context) error {
+	containers, err := support.RunningClusterContainers(ctx, m.runner, m.cfg.Name)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		m.logger.Info("no running cluster containers", "name", m.cfg.Name)
+		return nil
+	}
+
+	m.logger.Info("pausing cluster", "name", m.cfg.Name, "containers", len(containers))
+	for _, container := range containers {
+		m.logger.Info("pausing container", "name", m.cfg.Name, "container", container)
+		if err := m.node.Pause(ctx, container); err != nil {
+			m.logger.Warn("failed to pause container", "name", m.cfg.Name, "container", container, "error", err)
+		}
+	}
+	return nil
+}
+
+func (m *manager) unpause(ctx context.Context) error {
+	containers, err := support.PausedClusterContainers(ctx, m.runner, m.cfg.Name)
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		m.logger.Info("no paused cluster containers", "name", m.cfg.Name)
+		return nil
+	}
+
+	m.logger.Info("unpausing cluster", "name", m.cfg.Name, "containers", len(containers))
+	for _, container := range containers {
+		m.logger.Info("unpausing container", "name", m.cfg.Name, "container", container)
+		if err := m.node.Unpause(ctx, container); err != nil {
+			m.logger.Warn("failed to unpause container", "name", m.cfg.Name, "container", container, "error", err)
+		}
+	}
+	if err := m.waitReady(ctx); err != nil {
+		return err
+	}
+	m.refreshDNS(ctx)
+	m.logger.Info("cluster unpaused", "name", m.cfg.Name)
+	return nil
+}
+
+func (m *manager) refreshDNS(ctx context.Context) {
+	if m.reconcileDNS == nil {
 		return
 	}
-	if err := m.reconcileRoutes(ctx); err != nil {
-		m.logger.Warn("failed to reconcile route DNS", "cluster", m.cfg.Name, "error", err)
+	if err := m.reconcileDNS(ctx); err != nil {
+		m.logger.Warn("failed to reconcile DNS", "cluster", m.cfg.Name, "error", err)
 	}
 }
 
@@ -201,7 +246,7 @@ func (m *manager) delete(ctx context.Context, onlyContainer bool) error {
 			return fmt.Errorf("remove container %s during delete: %w", container, err)
 		}
 	}
-	m.refreshRouteDNS(ctx)
+	m.refreshDNS(ctx)
 
 	if onlyContainer {
 		m.logger.Info("deleted container(s) only")
