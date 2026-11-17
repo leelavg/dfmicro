@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 
@@ -62,6 +63,25 @@ func ContainerExists(ctx context.Context, runner execx.Runner, name string) (boo
 
 func NetworkExists(ctx context.Context, runner execx.Runner, name string) (bool, error) {
 	return podmanObjectExists(ctx, runner, "network", name)
+}
+
+func EnsurePodmanNetwork(ctx context.Context, logger *slog.Logger, runner execx.Runner, name, subnet string) error {
+	exists, err := NetworkExists(ctx, runner, name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		logger.Info("podman network already exists", "network", name)
+		return nil
+	}
+	logger.Info("creating podman network", "network", name, "subnet", subnet)
+	args := []string{"network", "create", "--label", "created-by=dfmicro"}
+	if subnet != "" {
+		args = append(args, "--subnet", subnet)
+	}
+	args = append(args, name)
+	_, err = RunPodmanPrivileged(ctx, runner, args...)
+	return err
 }
 
 func podmanObjectExists(ctx context.Context, runner execx.Runner, objectType, name string) (bool, error) {

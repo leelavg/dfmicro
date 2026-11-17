@@ -378,12 +378,6 @@ func (m *manager) workerArgs(w worker) ([]string, error) {
 		extraArgs = append(extraArgs, "--volume", powerTuningPath+":/etc/microshift/config.d/10-power-tuning.yaml:ro")
 	}
 
-	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
-	if err := support.WriteMultusDropin(crioDropinPath); err != nil {
-		return nil, err
-	}
-	extraArgs = append(extraArgs, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
-
 	return extraArgs, nil
 }
 

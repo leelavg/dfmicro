@@ -99,6 +99,11 @@ my $list_scope = '';
 my ($micro_kubeconfig, $first_kubeconfig);
 my ($pull_secret, $catalog_image, $channel, $ocp_version, @idms);
 
+sub local_timestamp {
+	my @time = localtime;
+	return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $time[5] + 1900, $time[4] + 1, $time[3], $time[2], $time[1], $time[0]);
+}
+
 sub check {
     my ($passed, $name, $scope) = @_;
     if ($list_only) {
@@ -111,7 +116,7 @@ sub check {
     }
     $tests++;
     $failed++ unless $passed;
-    print($passed ? "ok" : "not ok", " $tests - $name\n");
+	print "[", local_timestamp(), "] ", ($passed ? "ok" : "not ok"), " $tests - $name\n";
 	if (!$passed && $fail_fast) {
 		cleanup_on_exit();
 		finish();
@@ -268,6 +273,7 @@ sub run_process {
         print {$child} $options{input};
         close $child;
         my $status = $?;
+        note_child_signal($status);
         abort_if_interrupted();
         return ($status == 0, '');
     }
@@ -279,6 +285,7 @@ sub run_process {
         my $output = <$pipe> // '';
         close $pipe;
         my $status = $?;
+        note_child_signal($status);
         abort_if_interrupted();
         return ($status == 0, $output);
     }
@@ -293,8 +300,27 @@ sub run_process {
         ? " 2>&1 | sed -n '1,${max_lines}p' >> " . shell_quote("$work_dir/tests.log")
         : " >> " . shell_quote("$work_dir/tests.log") . " 2>&1";
     my $status = system('sh', '-c', $command . $output);
+    note_child_signal($status);
     abort_if_interrupted();
     return ($status == 0, '');
+}
+
+sub note_child_signal {
+	my ($status) = @_;
+	return if $interrupted || $status < 0;
+
+	my $signal = $status & 127;
+	my $exit_status = $status >> 8;
+	my $interrupted_status = $signal == 2 ? 130
+		: $signal == 15 ? 143
+		: $exit_status == 130 ? 130
+		: $exit_status == 143 ? 143
+		: 0;
+	return unless $interrupted_status;
+
+	$interrupted = $interrupted_status;
+	my $signal_name = $interrupted_status == 130 ? 'SIGINT' : 'SIGTERM';
+	print STDERR "received $signal_name while the current operation was running\n";
 }
 
 sub run_program {
@@ -607,13 +633,22 @@ sub cleanup_on_exit {
 	my ($force) = @_;
 	return if $list_only || ($keep && !$force) || $cleaning_up;
 	$cleaning_up = 1;
+	print STDERR "cleaning up test resources\n";
+	print STDERR "cleanup: removing netshoot containers\n";
 	remove_netshoots();
+	print STDERR "cleanup: removing storage workloads\n";
 	remove_storage_workloads();
+	print STDERR "cleanup: uninstalling ODF from $micro\n" if cluster_config_exists($micro);
 	run_command("addon odf --cluster $micro uninstall --attempt") if cluster_config_exists($micro);
+	print STDERR "cleanup: uninstalling ODF from $first\n" if cluster_config_exists($first);
 	run_command("addon odf --cluster $first uninstall --attempt") if cluster_config_exists($first);
+	print STDERR "cleanup: removing local S3\n";
 	cleanup_local_s3();
+	print STDERR "cleanup: removing cluster $first\n";
 	remove_cluster($first);
+	print STDERR "cleanup: removing cluster $micro\n";
 	remove_cluster($micro);
+	print STDERR "cleanup: removing network\n";
 	remove_network();
 	$started = 0;
 	$cleaning_up = 0;
@@ -709,6 +744,7 @@ sub run_level_6 {
 
 	section('client-only ODF consumer', $micro);
 	run_ok('install ODF client operator on micro', "addon odf --cluster $micro install " . odf_install_args('ocs-client-operator'));
+	run_ok('create route DNS entries', 'ops routes create');
 	run_ok('configure ODF client on micro', "addon odf --cluster $micro configure --client --connect-to $first");
 	kubectl_ok('set client StorageClass', $first_kubeconfig,
 		"patch storageconsumer $micro -n openshift-storage --type=json -p '[{\"op\":\"add\",\"path\":\"/spec/storageClasses\",\"value\":[{\"name\":\"ocs-storagecluster-ceph-rbd\"}]}]'");
@@ -727,6 +763,7 @@ sub run_level_7 {
 
 	section('client-only ODF consumer', $micro);
 	run_ok('install ODF client operator on micro', "addon odf --cluster $micro install " . odf_install_args('ocs-client-operator'));
+	run_ok('create route DNS entries', 'ops routes create');
 	run_ok('configure ODF client on micro', "addon odf --cluster $micro configure --client --connect-to $first");
 	kubectl_ok('set client StorageClass', $first_kubeconfig,
 		"patch storageconsumer $micro -n openshift-storage --type=json -p '[{\"op\":\"add\",\"path\":\"/spec/storageClasses\",\"value\":[{\"name\":\"ocs-storagecluster-ceph-rbd\"}]}]'");
@@ -851,17 +888,24 @@ sub run_selected_level {
 }
 
 sub install_signal_handlers {
-	$SIG{INT} = sub { $interrupted = 130 };
-	$SIG{TERM} = sub { $interrupted = 143 };
+	$SIG{INT} = sub {
+		$interrupted = 130;
+		print STDERR "received SIGINT; waiting for the current operation to stop\n";
+	};
+	$SIG{TERM} = sub {
+		$interrupted = 143;
+		print STDERR "received SIGTERM; waiting for the current operation to stop\n";
+	};
 	$SIG{ALRM} = sub {
 		$interrupted = 124;
+		print STDERR "suite timeout reached; waiting for the current operation to stop\n";
 	};
 }
 
 sub abort_if_interrupted {
 	return unless $interrupted;
 	return if $cleaning_up;
-	print STDERR $interrupted == 124 ? "suite timeout exceeded\n" : "suite interrupted\n";
+	print STDERR $interrupted == 124 ? "suite timeout exceeded; starting cleanup\n" : "suite interrupted; starting cleanup\n";
 	cleanup_on_exit(1) if $started;
 	exit $interrupted;
 }
@@ -1144,12 +1188,6 @@ sub main {
 	}
 	cleanup_odf($micro);
 	cleanup_odf($first);
-	section('install local S3 on the dfmicro bridge', $micro);
-	mark_local_s3_installed(1);
-	unless (run_ok('install local-s3', 'addon local-s3 install')) {
-		finish_level(8, [$micro, $first], []);
-		return;
-	}
 	run_level_8();
 	finish_level(8, [$first, $micro], []);
 }

@@ -471,6 +471,15 @@ spec:
     - from:
         - ipBlock:
             cidr: {{.ClientCIDR}}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-storage
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
       ports:
         - protocol: TCP
           port: 50051

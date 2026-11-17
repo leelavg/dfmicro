@@ -83,7 +83,7 @@ func (m *manager) create(ctx context.Context) error {
 		return err
 	}
 
-	if err := m.ensurePodmanNetwork(ctx, m.cfg.BridgeName, m.cfg.BridgeSubnet); err != nil {
+	if err := support.EnsurePodmanNetwork(ctx, m.logger, m.runner, m.cfg.BridgeName, m.cfg.BridgeSubnet); err != nil {
 		return err
 	}
 
@@ -335,25 +335,6 @@ func (m *manager) networkTrust() support.NetworkTrust {
 	}
 }
 
-func (m *manager) ensurePodmanNetwork(ctx context.Context, name, subnet string) error {
-	exists, err := support.NetworkExists(ctx, m.runner, name)
-	if err != nil {
-		return err
-	}
-	if exists {
-		m.logger.Info("podman network already exists", "network", name)
-		return nil
-	}
-	m.logger.Info("creating podman network", "network", name, "subnet", subnet)
-	args := []string{"network", "create", "--label", "created-by=dfmicro"}
-	if subnet != "" {
-		args = append(args, "--subnet", subnet)
-	}
-	args = append(args, name)
-	_, err = support.RunPodmanPrivileged(ctx, m.runner, args...)
-	return err
-}
-
 func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	nodeStateDir := filepath.Join(m.cfg.StateDir, name)
 	if err := os.MkdirAll(nodeStateDir, 0o755); err != nil {
@@ -361,6 +342,15 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 	}
 
 	var extraArgs []string
+	dbDir := filepath.Join(nodeStateDir, "db")
+	if err := os.MkdirAll(dbDir, 0o700); err != nil {
+		return err
+	}
+	dbPath := "/var/lib/microshift/kine"
+	if m.cfg.UseEtcd {
+		dbPath = "/var/lib/microshift/etcd"
+	}
+	extraArgs = append(extraArgs, "--volume", dbDir+":"+dbPath)
 
 	kindnetConfigPath := filepath.Join(nodeStateDir, "00-kindnet-config.yaml")
 	var kindnetConfigBuf bytes.Buffer
@@ -424,12 +414,6 @@ func (m *manager) addNode(ctx context.Context, name, networkName string) error {
 		}
 		extraArgs = append(extraArgs, "--volume", etcdFlagPath+":/var/lib/microshift/.use-etcd:ro")
 	}
-
-	crioDropinPath := filepath.Join(nodeStateDir, "20-multus-cni-plugins.conf")
-	if err := support.WriteMultusDropin(crioDropinPath); err != nil {
-		return err
-	}
-	extraArgs = append(extraArgs, "--volume", crioDropinPath+":/etc/crio/crio.conf.d/20-multus-cni-plugins.conf:ro")
 
 	return m.node.Create(ctx, support.NodeSpec{
 		Name:                name,

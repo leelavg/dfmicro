@@ -22,7 +22,11 @@ func (m *manager) install(ctx context.Context, image string) error {
 	if err := m.ensureVolume(ctx); err != nil {
 		return err
 	}
-	network := rootconfig.Load().BridgeName
+	config := rootconfig.Load()
+	network := config.BridgeName
+	if err := support.EnsurePodmanNetwork(ctx, m.logger, m.runner, network, config.BridgeSubnet); err != nil {
+		return err
+	}
 	args := []string{
 		"run", "--detach", "--name", containerName,
 		"--network", network,

@@ -24,15 +24,6 @@ ingress:
     threadCount: 2
 `
 
-const multusDropinConfig = `[crio.network]
-# Enable Multus as default CNI and add plugin directories
-cni_default_network = "multus-cni-network"
-plugin_dirs = [
-	"/run/cni/bin",
-	"/usr/libexec/cni",
-]
-`
-
 func WriteNetworkConfig(path, baseDomain, clusterCIDR, serviceCIDR string, clients []string) error {
 	var apiServer string
 	if len(clients) > 0 {
@@ -47,8 +38,4 @@ func WriteNetworkConfig(path, baseDomain, clusterCIDR, serviceCIDR string, clien
 
 func WritePowerTuningConfig(path string) error {
 	return os.WriteFile(path, []byte(powerTuningConfig), 0o644)
-}
-
-func WriteMultusDropin(path string) error {
-	return os.WriteFile(path, []byte(multusDropinConfig), 0o644)
 }

@@ -61,9 +61,54 @@ check_checksum_dependency() {
 
 list_releases() {
     check_dependencies curl jq column
-    curl -fsSL "https://api.github.com/repos/$repo/releases?per_page=100" |
-        jq -r '.[] | "\(.tag_name)\t\(.published_at)"' |
-        column -t
+    spinner_pid=
+    if [ -t 1 ]; then
+        spin &
+        spinner_pid=$!
+    fi
+
+    if ! releases=$(curl -fsSL "https://api.github.com/repos/$repo/releases?per_page=100"); then
+        stop_spinner
+        return 1
+    fi
+    if ! release_rows=$(printf '%s\n' "$releases" |
+        jq -r '.[] | [.tag_name, .published_at] | @tsv' |
+        while IFS="$(printf '\t')" read -r tag published_at; do
+            defaults_url="https://raw.githubusercontent.com/$repo/$tag/internal/config/defaults.json"
+            if image=$(curl -fsSL "$defaults_url" 2>/dev/null | jq -er '.image' 2>/dev/null); then
+                :
+            else
+                image=n/a
+            fi
+            printf '%s\t%s\t%s\n' "$tag" "$published_at" "$image"
+        done); then
+        stop_spinner
+        return 1
+    fi
+    stop_spinner
+
+    {
+        printf 'TAG\tPUBLISHED\tIMAGE\n'
+        printf '%s\n' "$release_rows"
+    } | column -t
+}
+
+spin() {
+    while :; do
+        for frame in '[.    ]' '[..   ]' '[...  ]' '[.... ]' '[.....]'; do
+            printf '\r%s' "$frame"
+            sleep 0.2
+        done
+    done
+}
+
+stop_spinner() {
+    if [ -n "$spinner_pid" ]; then
+        kill "$spinner_pid" 2>/dev/null || :
+        wait "$spinner_pid" 2>/dev/null || :
+        printf '\r       \r'
+        spinner_pid=
+    fi
 }
 
 get_asset_url() {
