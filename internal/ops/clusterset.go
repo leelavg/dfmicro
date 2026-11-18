@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"time"
 
 	rootconfig "dfmicro/internal/config"
 	"dfmicro/internal/execx"
@@ -21,6 +22,8 @@ const (
 	volsyncDNSEnd         = "# dfmicro volsync end"
 	volsyncServicePrefix  = "volsync-rsync-tls-dst-"
 	serviceExportsCRDName = "serviceexports.multicluster.x-k8s.io"
+	clusterSetDNSPoll     = 5 * time.Second
+	clusterSetDNSTimeout  = 2 * time.Minute
 )
 
 type clusterSetDNS struct {
@@ -231,12 +234,43 @@ func (v *clusterSetDNS) update(ctx context.Context, cluster rootconfig.ClusterCo
 		return fmt.Errorf("encode ClusterSet DNS patch: %w", err)
 	}
 	v.logger.Info("updating ClusterSet DNS", "cluster", cluster.Name, "records", recordCount(blocks))
+	reloadSince := time.Now().UTC().Format(time.RFC3339Nano)
 	if _, err := v.run(ctx, cluster,
 		"patch", "configmap", "dns-default", "-n", "openshift-dns", "--type=merge", "-p", string(patch),
 	); err != nil {
 		return fmt.Errorf("patch CoreDNS Corefile: %w", err)
 	}
+	v.logger.Info("waiting for CoreDNS reload", "cluster", cluster.Name)
+	if err := v.waitForReload(ctx, cluster, reloadSince); err != nil {
+		return fmt.Errorf("wait for CoreDNS reload: %w", err)
+	}
+	v.logger.Info("CoreDNS reloaded", "cluster", cluster.Name)
 	return nil
+}
+
+func (v *clusterSetDNS) waitForReload(ctx context.Context, cluster rootconfig.ClusterConfig, since string) error {
+	return support.Poll(ctx, clusterSetDNSPoll, clusterSetDNSTimeout, func(ctx context.Context) (bool, error) {
+		output, err := v.run(ctx, cluster,
+			"get", "pods", "-n", "openshift-dns", "-l", "dns.operator.openshift.io/daemonset-dns=default", "-o=name",
+		)
+		if err != nil {
+			return false, fmt.Errorf("list CoreDNS pods: %w", err)
+		}
+		pods := strings.Fields(output)
+		if len(pods) == 0 {
+			return false, nil
+		}
+
+		for _, pod := range pods {
+			logs, err := v.run(ctx, cluster,
+				"logs", "-n", "openshift-dns", pod, "-c", "dns", "--since-time="+since,
+			)
+			if err != nil || !strings.Contains(logs, "Reloading complete") {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
 }
 
 func (v *clusterSetDNS) run(ctx context.Context, cluster rootconfig.ClusterConfig, args ...string) (string, error) {

@@ -79,7 +79,8 @@ build: fmt vet generate fix
 	$(MAKE) -s build-cross
 
 install: build
-	install $(BINARY) ~/.local/bin
+	mkdir -p ~/.local/bin
+	install $(BINARY) ~/.local/bin/dfmicro
 
 build-release: fmt vet generate
 	@mkdir -p $(BIN_DIR)

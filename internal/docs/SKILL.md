@@ -16,6 +16,17 @@ dfmicro runs MicroShift clusters as rootful Podman containers. A cluster starts 
 
 - ODF use additionally requires the host kernel modules loaded with `dfmicro addon odf modules load` and idms/pull-secret mounts during cluster creation for private catalogs.
 
+## Host networking gotcha
+
+- Some Linux installations do not include `xt_comment` by default. Install the distribution package that provides extra kernel modules containing `xt_comment`, then load it with `sudo modprobe xt_comment` in the environment running rootful Podman. Without it, kindnet can intermittently panic while synchronizing iptables rules, leaving pod networking broken. On macOS, install and load the module in the Podman machine's Linux environment, not on the macOS host.
+
+## Control-plane datastore sizing
+
+- Operator-heavy clusters can generate frequent API writes. Confirm which datastore backend is active rather than inferring it from a mount or image. A cluster runs one backend at a time.
+- Size the active backend's persistent storage from observed database and WAL growth under the expected operator load, with room for growth. For etcd, low fsync latency and IOPS matter alongside capacity. Check the actual backing device and its provisioned limits. A dedicated persistent volume per control node helped in the dfmicro DR lab, but there is no universal disk size or throughput value.
+- Keep datastore data on persistent storage if the cluster must survive stop/start or host reboot. Do not use tmpfs for that case. Mounts are fixed when the node container is created.
+- During load, compare API responsiveness with datastore size and host disk latency/utilization, and inspect CPU and memory using `dfmicro ops resources --name <cluster>`. More disk capacity will not fix CPU or memory pressure. Avoid attributing an API stall to storage without checking measurements.
+
 ## Operating pattern
 
 Before changing anything, inspect the current state with `dfmicro cluster ls`, `dfmicro cluster config`, and the relevant `dfmicro node config` or `dfmicro network config` commands if node/network exists. Check the command help when options or defaults matter.

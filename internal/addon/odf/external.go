@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"dfmicro/internal/addon/ocp"
@@ -186,59 +187,70 @@ func (o *odf) configureOdfClient(ctx context.Context, providerName, clusterCIDR,
 	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, providerKubeconfig, networkPolicy); err != nil {
 		return err
 	}
+	clientSAN, err := o.ensureClientTLS(ctx, providerName, providerKubeconfig)
+	if err != nil {
+		return err
+	}
 	ready, err := o.odfClientReady(ctx, providerKubeconfig, providerName)
 	if err != nil {
 		return err
 	}
 	if ready {
-		o.logger.Info("ODF client already connected", "provider", providerName, "client", o.clusterName)
-		return nil
-	}
+		o.logger.Info("updating mTLS settings on connected ODF client", "provider", providerName, "client", o.clusterName)
+		if err := o.patchStorageConsumerTLS(ctx, providerKubeconfig, clientSAN); err != nil {
+			return err
+		}
+		if err := o.patchStorageClientTLS(ctx, providerName); err != nil {
+			return err
+		}
+	} else {
+		mappingConfigMap := ""
+		if mapFrom != "" {
+			result, err := o.runner.Run(ctx, support.KubeClient,
+				"get", "storageconsumer", mapFrom, "-n", providerNamespace,
+				"-o", "jsonpath={.status.resourceNameMappingConfigMap.name}",
+				"--kubeconfig", providerKubeconfig,
+			)
+			if err != nil {
+				return fmt.Errorf("get resource mapping from StorageConsumer %q: %w", mapFrom, err)
+			}
+			mappingConfigMap = strings.TrimSpace(result.Stdout)
+			if mappingConfigMap == "" {
+				return fmt.Errorf("StorageConsumer %q on provider %q has no status.resourceNameMappingConfigMap.name", mapFrom, providerName)
+			}
+			o.logger.Info("reusing ODF resource mapping", "source", mapFrom, "configmap", mappingConfigMap)
+		}
 
-	mappingConfigMap := ""
-	if mapFrom != "" {
-		result, err := o.runner.Run(ctx, support.KubeClient,
-			"get", "storageconsumer", mapFrom, "-n", providerNamespace,
-			"-o", "jsonpath={.status.resourceNameMappingConfigMap.name}",
-			"--kubeconfig", providerKubeconfig,
-		)
+		consumer, err := support.Render(storageConsumerTmpl, map[string]string{
+			"ClientCluster":    o.clusterName,
+			"ClientSAN":        strconv.Quote(clientSAN),
+			"MappingConfigMap": mappingConfigMap,
+		})
 		if err != nil {
-			return fmt.Errorf("get resource mapping from StorageConsumer %q: %w", mapFrom, err)
+			return err
 		}
-		mappingConfigMap = strings.TrimSpace(result.Stdout)
-		if mappingConfigMap == "" {
-			return fmt.Errorf("StorageConsumer %q on provider %q has no status.resourceNameMappingConfigMap.name", mapFrom, providerName)
+		o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.clusterName)
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, providerKubeconfig, consumer); err != nil {
+			return err
 		}
-		o.logger.Info("reusing ODF resource mapping", "source", mapFrom, "configmap", mappingConfigMap)
-	}
 
-	consumer, err := support.Render(storageConsumerTmpl, map[string]string{
-		"ClientCluster":    o.clusterName,
-		"MappingConfigMap": mappingConfigMap,
-	})
-	if err != nil {
-		return err
-	}
-	o.logger.Info("applying StorageConsumer", "cluster", providerName, "name", o.clusterName)
-	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, providerKubeconfig, consumer); err != nil {
-		return err
-	}
-
-	ticket, endpoint, err := o.odfOnboardingData(ctx, providerKubeconfig)
-	if err != nil {
-		return err
-	}
-	client, err := support.Render(storageClientTmpl, map[string]string{
-		"ProviderCluster": providerName,
-		"Ticket":          ticket,
-		"Endpoint":        endpoint,
-	})
-	if err != nil {
-		return err
-	}
-	o.logger.Info("applying StorageClient", "name", providerName)
-	if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, client); err != nil {
-		return err
+		ticket, endpoint, err := o.odfOnboardingData(ctx, providerKubeconfig)
+		if err != nil {
+			return err
+		}
+		client, err := support.Render(storageClientTmpl, map[string]string{
+			"ProviderCluster": providerName,
+			"Ticket":          ticket,
+			"Endpoint":        endpoint,
+			"ServerSAN":       providerServerSAN,
+		})
+		if err != nil {
+			return err
+		}
+		o.logger.Info("applying StorageClient", "name", providerName)
+		if err := support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, client); err != nil {
+			return err
+		}
 	}
 
 	o.logger.Info("waiting for StorageClient", "name", providerName)

@@ -251,7 +251,7 @@ Create a cluster, wait until ready, and print connection info
 
 **--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
 
-**--mount**="": Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)
+**--mount**="": Bind mount in Podman format: /host/path:/container/path[:opts] (repeatable, replaces the same container path)
 
 **--name**="": Cluster name, used to identify containers and stored config (default: "micro")
 

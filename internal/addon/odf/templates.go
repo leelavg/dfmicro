@@ -448,10 +448,51 @@ spec:
   networkFenceClasses:
     - name: ocs-storagecluster-ceph-rbd-networkfenceclass
     - name: ocs-storagecluster-cephfs-networkfenceclass
+  clientCAConfigMap:
+    name: {{.ClientCluster}}
+  clientSAN: {{.ClientSAN}}
 {{if .MappingConfigMap}}
   resourceNameMappingConfigMap:
     name: {{.MappingConfigMap}}
 {{end}}
+`
+
+const storageClientCertSecretTmpl = `apiVersion: v1
+kind: Secret
+metadata:
+  name: {{.ProviderCluster}}
+  namespace: openshift-storage
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+  annotations:
+    cert.ocs.openshift.io/expiry-date: {{.Expiry}}
+    cert.ocs.openshift.io/identity: {{.ClientSAN}}
+type: kubernetes.io/tls
+data:
+  tls.crt: {{.Certificate}}
+  tls.key: {{.PrivateKey}}
+`
+
+const storageConsumerCATmpl = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{.ClientCluster}}
+  namespace: openshift-storage
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+data:
+  ca.crt: {{.Certificate}}
+`
+
+const storageClientServerCATmpl = `apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{.ProviderCluster}}
+  namespace: openshift-storage
+  labels:
+    app.kubernetes.io/created-by: dfmicro
+data:
+  service-ca.crt: {{.Certificate}}
 `
 
 const odfClientNetworkPolicyTmpl = `apiVersion: networking.k8s.io/v1
@@ -494,4 +535,10 @@ metadata:
 spec:
   onboardingTicket: {{.Ticket}}
   storageProviderEndpoint: {{.Endpoint}}
+  serverCAConfigMap:
+    name: {{.ProviderCluster}}
+    key: service-ca.crt
+  serverSAN: {{.ServerSAN}}
+  clientCertSecret:
+    name: {{.ProviderCluster}}
 `

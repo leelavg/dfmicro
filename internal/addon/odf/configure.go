@@ -52,6 +52,9 @@ func (o *odf) configureClient(ctx context.Context, cfg configureConfig) error {
 	if err := o.patchClientConsoleCSV(ctx); err != nil {
 		return err
 	}
+	if err := o.patchCSIRetryDelay(ctx); err != nil {
+		return err
+	}
 
 	if err := o.applyDrivers(ctx, cfg.includeCephFS); err != nil {
 		return err
@@ -88,6 +91,9 @@ func (o *odf) configureStorage(ctx context.Context, cfg configureConfig) error {
 
 	o.logger.Info("patching external-snapshotter-operator CSV")
 	if err := o.patchSnapshotCSV(ctx); err != nil {
+		return err
+	}
+	if err := o.patchCSIRetryDelay(ctx); err != nil {
 		return err
 	}
 
@@ -159,6 +165,70 @@ func (o *odf) applyDrivers(ctx context.Context, includeCephFS bool) error {
 		return err
 	}
 	return support.ApplyYAML(ctx, o.runner, support.KubeClient, o.kubeconfig, string(rbd))
+}
+
+func (o *odf) patchCSIRetryDelay(ctx context.Context) error {
+	o.logger.Info("waiting for CSV", "name", "odf-csi-addons-operator")
+	csvName, err := waitForCSV(ctx, o.runner, support.KubeClient, o.kubeconfig,
+		"odf-csi-addons-operator",
+		`jsonpath={.items[?(@.metadata.labels.operators\.coreos\.com/odf-csi-addons-operator\.openshift-storage)].metadata.name}`,
+	)
+	if err != nil {
+		return err
+	}
+	o.logger.Info("CSV found", "name", "odf-csi-addons-operator", "csv", csvName)
+
+	o.logger.Info("patching CSI Addons retry delay", "cluster", o.clusterName, "csv", csvName)
+	if _, err := o.runner.Run(ctx, support.KubeClient,
+		"wait", "--for=jsonpath={.status.phase}=Succeeded", "--timeout=10m",
+		"csv/"+csvName, "-n", "openshift-storage", "--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("wait for CSI Addons CSV %q: %w", csvName, err)
+	}
+
+	// The flag's documented seconds value is interpreted as nanoseconds.
+	retryArg := "--csi-addons-node-retry-delay=5000000000"
+	csvPatch := `[{"op":"test","path":"/spec/install/spec/deployments/0/name","value":"csi-addons-controller-manager"},{"op":"test","path":"/spec/install/spec/deployments/0/spec/template/spec/containers/0/name","value":"manager"},{"op":"add","path":"/spec/install/spec/deployments/0/spec/template/spec/containers/0/args/-","value":"` + retryArg + `"}]`
+	if err := o.ensureCSIRetryArg(ctx, "csv", csvName,
+		"{.spec.install.spec.deployments[0].spec.template.spec.containers[0].args}", csvPatch, retryArg,
+	); err != nil {
+		return err
+	}
+
+	deploymentPatch := `[{"op":"test","path":"/spec/template/spec/containers/0/name","value":"manager"},{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"` + retryArg + `"}]`
+	if err := o.ensureCSIRetryArg(ctx, "deployment", "csi-addons-controller-manager",
+		"{.spec.template.spec.containers[0].args}", deploymentPatch, retryArg,
+	); err != nil {
+		return err
+	}
+
+	if _, err := o.runner.Run(ctx, support.KubeClient,
+		"rollout", "status", "deployment/csi-addons-controller-manager", "-n", "openshift-storage", "--timeout=5m",
+		"--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("wait for CSI Addons deployment rollout: %w", err)
+	}
+	return nil
+}
+
+func (o *odf) ensureCSIRetryArg(ctx context.Context, resource, name, argsPath, patch, retryArg string) error {
+	args, err := o.runner.Run(ctx, support.KubeClient,
+		"get", resource, name, "-n", "openshift-storage", "-o=jsonpath="+argsPath,
+		"--kubeconfig", o.kubeconfig,
+	)
+	if err != nil {
+		return fmt.Errorf("get CSI Addons %s arguments: %w", resource, err)
+	}
+	if strings.Contains(args.Stdout, retryArg) {
+		return nil
+	}
+	if _, err := o.runner.Run(ctx, support.KubeClient,
+		"patch", resource, name, "-n", "openshift-storage", "--type=json", "-p", patch,
+		"--kubeconfig", o.kubeconfig,
+	); err != nil {
+		return fmt.Errorf("patch CSI Addons %s retry delay: %w", resource, err)
+	}
+	return nil
 }
 
 func (o *odf) patchOCSSubscription(ctx context.Context) error {

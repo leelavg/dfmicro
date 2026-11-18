@@ -86,8 +86,10 @@ func (n *NodeMgr) Create(ctx context.Context, spec NodeSpec) error {
 		)
 	}
 
-	for _, mount := range spec.Mounts {
-		args = append(args, "--volume", mount)
+	var err error
+	args, err = mergeVolumeArgs(args, spec.Mounts)
+	if err != nil {
+		return err
 	}
 
 	args = append(args,
@@ -103,6 +105,66 @@ func (n *NodeMgr) Create(ctx context.Context, spec NodeSpec) error {
 		return err
 	}
 	return n.waitAndTrust(ctx, spec.Name, spec.Trust)
+}
+
+func mergeVolumeArgs(args, overrides []string) ([]string, error) {
+	var volumes []string
+	var otherArgs []string
+	volumeIndexes := make(map[string]int)
+
+	for i := 0; i < len(args); i++ {
+		if args[i] != "--volume" {
+			otherArgs = append(otherArgs, args[i])
+			continue
+		}
+		if i+1 == len(args) {
+			return nil, fmt.Errorf("--volume is missing its value")
+		}
+
+		mount := args[i+1]
+		destination, err := volumeDestination(mount)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := volumeIndexes[destination]; exists {
+			return nil, fmt.Errorf("duplicate built-in mount destination %q", destination)
+		}
+		volumeIndexes[destination] = len(volumes)
+		volumes = append(volumes, mount)
+		i++
+	}
+
+	overridden := make(map[string]struct{}, len(overrides))
+	for _, mount := range overrides {
+		destination, err := volumeDestination(mount)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := overridden[destination]; exists {
+			return nil, fmt.Errorf("multiple custom mounts target %q", destination)
+		}
+		overridden[destination] = struct{}{}
+
+		if index, exists := volumeIndexes[destination]; exists {
+			volumes[index] = mount
+			continue
+		}
+		volumeIndexes[destination] = len(volumes)
+		volumes = append(volumes, mount)
+	}
+
+	for _, mount := range volumes {
+		otherArgs = append(otherArgs, "--volume", mount)
+	}
+	return otherArgs, nil
+}
+
+func volumeDestination(mount string) (string, error) {
+	parts := strings.SplitN(mount, ":", 3)
+	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {
+		return "", fmt.Errorf("invalid bind mount %q, expected host-path:container-path[:options]", mount)
+	}
+	return parts[1], nil
 }
 
 func (n *NodeMgr) Stop(ctx context.Context, name string) error {

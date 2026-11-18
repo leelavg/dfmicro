@@ -19,16 +19,18 @@ var defaultRootConfig = rootconfig.Load()
 
 func nameFlag() cli.Flag {
 	return &cli.StringFlag{
-		Name:  "name",
-		Usage: "Cluster name",
-		Value: defaultRootConfig.Name,
-		Validator: func(s string) error {
-			if len(s) > 0 && s[0] == ',' {
-				return fmt.Errorf("cluster name cannot start with ','")
-			}
-			return nil
-		},
+		Name:      "name",
+		Usage:     "Cluster name",
+		Value:     defaultRootConfig.Name,
+		Validator: validateClusterName,
 	}
+}
+
+func validateClusterName(name string) error {
+	if len(name) > 0 && name[0] == ',' {
+		return fmt.Errorf("cluster name cannot start with ','")
+	}
+	return nil
 }
 
 func createFlags() []cli.Flag {
@@ -141,7 +143,7 @@ func createFlags() []cli.Flag {
 		},
 		&cli.StringSliceFlag{
 			Name:     "mount",
-			Usage:    "Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)",
+			Usage:    "Bind mount in Podman format: /host/path:/container/path[:opts] (repeatable, replaces the same container path)",
 			Category: "Mounts (immutable on creation):",
 		},
 	}
@@ -218,9 +220,25 @@ Examples:
 				Aliases:   []string{"rm"},
 				Usage:     "Delete cluster containers, network, and storage",
 				UsageText: "Stops and removes all cluster containers, networking, and storage stack.",
-				Flags:     clusterFlags(),
+				ArgsUsage: "[cluster]",
+				Arguments: []cli.Argument{
+					&cli.StringArg{Name: "cluster", UsageText: "Cluster name"},
+				},
+				Flags: clusterFlags(),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
-					cfg, err := rootconfig.ReadClusterConfig(cmd.String("name"))
+					name := cmd.StringArg("cluster")
+					if name != "" {
+						if cmd.IsSet("name") && name != cmd.String("name") {
+							return fmt.Errorf("positional cluster %q conflicts with --name %q", name, cmd.String("name"))
+						}
+					} else {
+						name = cmd.String("name")
+					}
+					if err := validateClusterName(name); err != nil {
+						return err
+					}
+
+					cfg, err := rootconfig.ReadClusterConfig(name)
 					if err == nil {
 						return newManager(cfg, logger, runner, reconcileDNS).delete(ctx, false)
 					}
@@ -228,7 +246,7 @@ Examples:
 						return err
 					}
 					// Rebuild the paths and node defaults needed for cleanup after the config file is gone.
-					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, cmd.String("name"))
+					cfg = deriveConfig(defaultRootConfig.ClusterDefaults, name)
 					if _, err := os.Stat(cfg.StateDir); errors.Is(err, os.ErrNotExist) {
 						return newManager(cfg, logger, runner, reconcileDNS).delete(ctx, true)
 					}
