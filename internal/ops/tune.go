@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"dfmicro/internal/support"
 )
 
 const tunedMemoryRequest = "128Mi"
@@ -71,22 +73,17 @@ type csvDeployments struct {
 }
 
 func (r *resources) tune(ctx context.Context) error {
-	container, err := r.resolveContainer(ctx)
-	if err != nil {
-		return err
-	}
-
 	for _, target := range subscriptionTuneTargets {
-		if err := r.tuneSubscription(ctx, container, target.namespace, target.packageName, target.requests); err != nil {
+		if err := r.tuneSubscription(ctx, target.namespace, target.packageName, target.requests); err != nil {
 			return err
 		}
 	}
 
-	return r.tuneCSVSubscription(ctx, container)
+	return r.tuneCSVSubscription(ctx)
 }
 
-func (r *resources) tuneSubscription(ctx context.Context, clusterContainer, namespace, packageName string, requests map[string]string) error {
-	result, err := r.oc(ctx, clusterContainer, "get", "subscriptions", "-n", namespace, "-o", "json")
+func (r *resources) tuneSubscription(ctx context.Context, namespace, packageName string, requests map[string]string) error {
+	result, err := r.runner.Run(ctx, support.KubeClient, "get", "subscriptions", "-n", namespace, "-o", "json", "--kubeconfig="+r.kubeconfig)
 	if err != nil {
 		return fmt.Errorf("list subscriptions in %s: %w", namespace, err)
 	}
@@ -126,7 +123,7 @@ func (r *resources) tuneSubscription(ctx context.Context, clusterContainer, name
 	if err != nil {
 		return fmt.Errorf("encode subscription resource patch: %w", err)
 	}
-	if _, err := r.oc(ctx, clusterContainer, "patch", "subscription", found.Metadata.Name, "-n", namespace, "--type=merge", "-p", string(patch)); err != nil {
+	if _, err := r.runner.Run(ctx, support.KubeClient, "patch", "subscription", found.Metadata.Name, "-n", namespace, "--type=merge", "-p", string(patch), "--kubeconfig="+r.kubeconfig); err != nil {
 		return fmt.Errorf("patch subscription %s: %w", found.Metadata.Name, err)
 	}
 	r.logger.Info("set resource requests", "package", packageName, "requests", requests)
@@ -172,8 +169,8 @@ func setResourceRequests(resources *map[string]json.RawMessage, desired map[stri
 	return true, err
 }
 
-func (r *resources) tuneCSVSubscription(ctx context.Context, clusterContainer string) error {
-	result, err := r.oc(ctx, clusterContainer, "get", "subscriptions", "-n", odrClusterNamespace, "-o", "json")
+func (r *resources) tuneCSVSubscription(ctx context.Context) error {
+	result, err := r.runner.Run(ctx, support.KubeClient, "get", "subscriptions", "-n", odrClusterNamespace, "-o", "json", "--kubeconfig="+r.kubeconfig)
 	if err != nil {
 		return fmt.Errorf("list subscriptions in %s: %w", odrClusterNamespace, err)
 	}
@@ -196,7 +193,7 @@ func (r *resources) tuneCSVSubscription(ctx context.Context, clusterContainer st
 		return nil
 	}
 
-	result, err = r.oc(ctx, clusterContainer, "get", "csv", csvName, "-n", odrClusterNamespace, "-o", "json")
+	result, err = r.runner.Run(ctx, support.KubeClient, "get", "csv", csvName, "-n", odrClusterNamespace, "-o", "json", "--kubeconfig="+r.kubeconfig)
 	if err != nil {
 		return fmt.Errorf("get installed CSV %s: %w", csvName, err)
 	}
@@ -220,7 +217,7 @@ func (r *resources) tuneCSVSubscription(ctx context.Context, clusterContainer st
 				r.logger.Info("resource requests already set", "package", odrClusterPackage, "container", odrClusterContainer)
 				return nil
 			}
-			if _, err := r.oc(ctx, clusterContainer, "patch", "csv", csvName, "-n", odrClusterNamespace, "--type=json", "-p", patch); err != nil {
+			if _, err := r.runner.Run(ctx, support.KubeClient, "patch", "csv", csvName, "-n", odrClusterNamespace, "--type=json", "-p", patch, "--kubeconfig="+r.kubeconfig); err != nil {
 				return fmt.Errorf("patch CSV %s: %w", csvName, err)
 			}
 			r.logger.Info("set resource requests in installed CSV", "package", odrClusterPackage, "container", odrClusterContainer, "cpu", odrClusterCPU, "memory", odrClusterMemory)

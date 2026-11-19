@@ -16,10 +16,11 @@ ARGOCD_VERSION ?= 3.6.1
 VELERO_VERSION ?= 1.18.4
 VELERO_CHART_VERSION ?= 12.2.1
 VELERO_AWS_PLUGIN_VERSION ?= 1.14.4
+METRICS_SERVER_VERSION ?= 0.9.1
 MDBOOK_VERSION ?= 0.5.4
 MDBOOK := $(BIN_DIR)/mdbook
 
-.PHONY: vet fmt generate generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero build build-cross build-release build-analyze lint install-mdbook docs docs-serve
+.PHONY: vet fmt generate generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero generate-metrics-server build build-cross build-release build-analyze lint install-mdbook docs docs-serve
 
 vet:
 	go vet ./...
@@ -54,7 +55,7 @@ docs-serve: docs
 fmt:
 	go fmt ./...
 
-generate: generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero
+generate: generate-topolvm generate-ocm-controller generate-volsync generate-argocd generate-velero generate-metrics-server
 	go generate ./internal/docs
 
 generate-topolvm:
@@ -71,6 +72,9 @@ generate-argocd:
 
 generate-velero:
 	VELERO_VERSION=$(VELERO_VERSION) VELERO_CHART_VERSION=$(VELERO_CHART_VERSION) VELERO_AWS_PLUGIN_VERSION=$(VELERO_AWS_PLUGIN_VERSION) ./hack/generate-velero.sh
+
+generate-metrics-server:
+	METRICS_SERVER_VERSION=$(METRICS_SERVER_VERSION) ./hack/generate-metrics-server.sh
 
 fix:
 	go fix ./...

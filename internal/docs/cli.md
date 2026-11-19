@@ -70,6 +70,20 @@ Remove local-s3 and its cluster Services
 
 **--cleanup**: Also delete the local-s3 data volume
 
+### metrics
+
+Manage Kubernetes resource metrics
+
+**--cluster**="": Cluster name (default: "micro")
+
+#### install
+
+Install Metrics Server
+
+#### uninstall
+
+Remove Metrics Server
+
 ### ocm
 
 Manage Open Cluster Management
@@ -532,7 +546,7 @@ Show CPU and memory requests, limits, and live usage per container (experimental
 
 **--node**="": Restrict output to a single node by name (omit for all nodes)
 
-**--tune**: Apply fixed CPU and memory requests to known ODF and Ramen controllers
+**--tune**: Apply fixed CPU and memory requests to known controllers
 
 ### routes
 

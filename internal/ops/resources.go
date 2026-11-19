@@ -71,16 +71,21 @@ Examples:
 			},
 			&cli.BoolFlag{
 				Name:  "tune",
-				Usage: "Apply fixed CPU and memory requests to known ODF and Ramen controllers",
+				Usage: "Apply fixed CPU and memory requests to known controllers",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
+			clusterName := cmd.String("name")
+			kubeconfig, err := rootconfig.Kubeconfig(clusterName)
+			if err != nil {
+				return fmt.Errorf("could not load kubeconfig for cluster %q: %w", clusterName, err)
+			}
 			r := &resources{
-				logger:    logger,
-				runner:    runner,
-				cluster:   cmd.String("name"),
-				namespace: cmd.String("namespace"),
-				node:      cmd.String("node"),
+				logger:     logger,
+				runner:     runner,
+				kubeconfig: kubeconfig,
+				namespace:  cmd.String("namespace"),
+				node:       cmd.String("node"),
 			}
 			if cmd.Bool("tune") {
 				return r.tune(ctx)
@@ -92,11 +97,11 @@ Examples:
 
 type resources struct {
 	formatter
-	logger    *slog.Logger
-	runner    execx.Runner
-	cluster   string
-	namespace string
-	node      string
+	logger     *slog.Logger
+	runner     execx.Runner
+	kubeconfig string
+	namespace  string
+	node       string
 }
 
 type containerRow struct {
@@ -112,29 +117,39 @@ type nsReport struct {
 }
 
 type nodeReport struct {
-	name        string
-	role        string
-	capacity    map[string]string
-	allocatable map[string]string
-	namespaces  []*nsReport
+	name             string
+	role             string
+	capacity         map[string]string
+	allocatable      map[string]string
+	cpuUseNano       string
+	memUseBytes      string
+	systemContainers []systemContainerUsage
+	namespaces       []*nsReport
 }
 
-type criStatsOutput struct {
-	Stats []struct {
-		Attributes struct {
-			Labels map[string]string `json:"labels"`
-		} `json:"attributes"`
-		CPU struct {
-			UsageNanoCores struct {
-				Value string `json:"value"`
-			} `json:"usageNanoCores"`
-		} `json:"cpu"`
-		Memory struct {
-			WorkingSetBytes struct {
-				Value string `json:"value"`
-			} `json:"workingSetBytes"`
-		} `json:"memory"`
-	} `json:"stats"`
+type systemContainerUsage struct {
+	name, cpuUseNano, memUseBytes string
+}
+
+type cpuUsage struct {
+	UsageNanoCores *uint64 `json:"usageNanoCores"`
+}
+
+type memoryUsage struct {
+	WorkingSetBytes *uint64 `json:"workingSetBytes"`
+}
+
+type containerStats struct {
+	Name   string       `json:"name"`
+	CPU    *cpuUsage    `json:"cpu"`
+	Memory *memoryUsage `json:"memory"`
+}
+
+type kubeletStats struct {
+	pods             map[string]containerRow
+	cpuUseNano       string
+	memUseBytes      string
+	systemContainers []systemContainerUsage
 }
 
 type nodeListOutput struct {
@@ -150,34 +165,8 @@ type nodeListOutput struct {
 	} `json:"items"`
 }
 
-// looks for a single container for now
-func (r *resources) resolveContainer(ctx context.Context) (string, error) {
-	result, err := support.RunPodmanPrivileged(ctx, r.runner, "ps",
-		"--filter", "label=part-of="+r.cluster,
-		"--filter", "label=created-by=dfmicro",
-		"--filter", "status=running",
-		"--format", "{{.Names}}",
-	)
-	if err != nil {
-		return "", fmt.Errorf("list containers: %w", err)
-	}
-	name := strings.TrimSpace(result.Stdout)
-	if name == "" {
-		return "", fmt.Errorf("no running container found for cluster %q", r.cluster)
-	}
-	return strings.SplitN(name, "\n", 2)[0], nil
-}
-
-func (r *resources) podman(ctx context.Context, container string, args ...string) (execx.Result, error) {
-	return support.RunPodmanPrivileged(ctx, r.runner, append([]string{"exec", container}, args...)...)
-}
-
-func (r *resources) oc(ctx context.Context, container string, args ...string) (execx.Result, error) {
-	return r.podman(ctx, container, append([]string{"oc", "--kubeconfig", internalKubeconfig}, args...)...)
-}
-
-func (r *resources) nodes(ctx context.Context, container string) (nodeListOutput, error) {
-	result, err := r.oc(ctx, container, "get", "nodes", "-o", "json")
+func (r *resources) nodes(ctx context.Context) (nodeListOutput, error) {
+	result, err := r.runner.Run(ctx, support.KubeClient, "get", "nodes", "-o", "json", "--kubeconfig="+r.kubeconfig)
 	if err != nil {
 		return nodeListOutput{}, fmt.Errorf("oc get nodes: %w", err)
 	}
@@ -193,7 +182,7 @@ type podRow struct {
 	row      containerRow
 }
 
-func (r *resources) podRows(ctx context.Context, container, ns string) ([]podRow, error) {
+func (r *resources) podRows(ctx context.Context, ns string) ([]podRow, error) {
 	args := []string{"get", "pods"}
 	if ns != "" {
 		args = append(args, "-n", ns)
@@ -204,7 +193,8 @@ func (r *resources) podRows(ctx context.Context, container, ns string) ([]podRow
 	if r.node != "" {
 		args = append(args, "--field-selector", "spec.nodeName="+r.node)
 	}
-	result, err := r.oc(ctx, container, args...)
+	args = append(args, "--kubeconfig="+r.kubeconfig)
+	result, err := r.runner.Run(ctx, support.KubeClient, args...)
 	if err != nil {
 		return nil, fmt.Errorf("oc get pods: %w", err)
 	}
@@ -230,47 +220,82 @@ func (r *resources) podRows(ctx context.Context, container, ns string) ([]podRow
 	return rows, nil
 }
 
-// nodeUsageMap fetches stats for all namespaces on a node in parallel via xargs.
-// multi-node: grouped already keys by node, so per-node exec is correct for single-node;
-// for multi-node clusters each node's containers must be queried via that node's container.
-func (r *resources) nodeUsageMap(ctx context.Context, nodeContainer string, namespaces []string) (map[string]containerRow, error) {
-	if len(namespaces) == 0 {
-		return map[string]containerRow{}, nil
-	}
-	script := `printf '` + strings.Join(namespaces, `\n`) + `\n' | xargs -P8 -I{} sh -c 'crictl --timeout 30s stats -o json --label "io.kubernetes.pod.namespace=$1" 2>/dev/null; printf "\n---\n"' -- {}`
-	result, err := r.podman(ctx, nodeContainer, "sh", "-c", script)
+// nodeStats fetches CPU and memory usage from the kubelet on a node.
+func (r *resources) nodeStats(ctx context.Context, nodeName string) (kubeletStats, error) {
+	result, err := r.runner.Run(ctx, support.KubeClient, "get", "--raw", "/api/v1/nodes/"+nodeName+"/proxy/stats/summary", "--kubeconfig="+r.kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("crictl stats: %w", err)
+		return kubeletStats{}, fmt.Errorf("get kubelet stats summary for node %s: %w", nodeName, err)
+	}
+
+	var out struct {
+		Node struct {
+			CPU              *cpuUsage        `json:"cpu"`
+			Memory           *memoryUsage     `json:"memory"`
+			SystemContainers []containerStats `json:"systemContainers"`
+		} `json:"node"`
+		Pods []struct {
+			PodRef struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"podRef"`
+			Containers []containerStats `json:"containers"`
+		} `json:"pods"`
+	}
+	if err := json.Unmarshal([]byte(result.Stdout), &out); err != nil {
+		return kubeletStats{}, fmt.Errorf("parse kubelet stats summary for node %s: %w", nodeName, err)
 	}
 
 	m := map[string]containerRow{}
-	for chunk := range strings.SplitSeq(result.Stdout, "\n---\n") {
-		chunk = strings.TrimSpace(chunk)
-		if chunk == "" {
-			continue
-		}
-		var out criStatsOutput
-		if err := json.Unmarshal([]byte(chunk), &out); err != nil {
-			continue
-		}
-		for _, s := range out.Stats {
-			ns := s.Attributes.Labels["io.kubernetes.pod.namespace"]
-			pod := s.Attributes.Labels["io.kubernetes.pod.name"]
-			ctr := s.Attributes.Labels["io.kubernetes.container.name"]
-			if ns == "" || pod == "" || ctr == "" {
+	for _, pod := range out.Pods {
+		for _, container := range pod.Containers {
+			if pod.PodRef.Namespace == "" || pod.PodRef.Name == "" || container.Name == "" {
 				continue
 			}
-			m[ns+"/"+pod+"/"+ctr] = containerRow{
-				cpuUseNano:  s.CPU.UsageNanoCores.Value,
-				memUseBytes: s.Memory.WorkingSetBytes.Value,
+			row := containerRow{}
+			if container.CPU != nil && container.CPU.UsageNanoCores != nil {
+				row.cpuUseNano = strconv.FormatUint(*container.CPU.UsageNanoCores, 10)
 			}
+			if container.Memory != nil && container.Memory.WorkingSetBytes != nil {
+				row.memUseBytes = strconv.FormatUint(*container.Memory.WorkingSetBytes, 10)
+			}
+			m[pod.PodRef.Namespace+"/"+pod.PodRef.Name+"/"+container.Name] = row
 		}
 	}
-	return m, nil
+
+	cpuUseNano := ""
+	if out.Node.CPU != nil && out.Node.CPU.UsageNanoCores != nil {
+		cpuUseNano = strconv.FormatUint(*out.Node.CPU.UsageNanoCores, 10)
+	}
+	memUseBytes := ""
+	if out.Node.Memory != nil && out.Node.Memory.WorkingSetBytes != nil {
+		memUseBytes = strconv.FormatUint(*out.Node.Memory.WorkingSetBytes, 10)
+	}
+
+	systemContainers := make([]systemContainerUsage, 0, len(out.Node.SystemContainers))
+	for _, container := range out.Node.SystemContainers {
+		usage := systemContainerUsage{name: container.Name}
+		if container.CPU != nil && container.CPU.UsageNanoCores != nil {
+			usage.cpuUseNano = strconv.FormatUint(*container.CPU.UsageNanoCores, 10)
+		}
+		if container.Memory != nil && container.Memory.WorkingSetBytes != nil {
+			usage.memUseBytes = strconv.FormatUint(*container.Memory.WorkingSetBytes, 10)
+		}
+		systemContainers = append(systemContainers, usage)
+	}
+	sort.Slice(systemContainers, func(i, j int) bool {
+		return systemContainers[i].name < systemContainers[j].name
+	})
+
+	return kubeletStats{
+		pods:             m,
+		cpuUseNano:       cpuUseNano,
+		memUseBytes:      memUseBytes,
+		systemContainers: systemContainers,
+	}, nil
 }
 
-func (r *resources) build(ctx context.Context, targetCtr string) ([]nodeReport, error) {
-	nodes, err := r.nodes(ctx, targetCtr)
+func (r *resources) build(ctx context.Context) ([]nodeReport, error) {
+	nodes, err := r.nodes(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +318,7 @@ func (r *resources) build(ctx context.Context, targetCtr string) ([]nodeReport, 
 	type key struct{ node, ns string }
 	grouped := map[key][]containerRow{}
 
-	allRows, err := r.podRows(ctx, targetCtr, r.namespace)
+	allRows, err := r.podRows(ctx, r.namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -302,15 +327,17 @@ func (r *resources) build(ctx context.Context, targetCtr string) ([]nodeReport, 
 		grouped[k] = append(grouped[k], pr.row)
 	}
 
-	nodeNamespaces := map[string][]string{}
-	for k := range grouped {
-		nodeNamespaces[k.node] = append(nodeNamespaces[k.node], k.ns)
-	}
 	nodeUsage := map[string]map[string]containerRow{}
-	for node, nsList := range nodeNamespaces {
-		if usage, err := r.nodeUsageMap(ctx, node, nsList); err == nil {
-			nodeUsage[node] = usage
+	for _, node := range reports {
+		stats, err := r.nodeStats(ctx, node.name)
+		if err != nil {
+			r.logger.Warn("failed to collect kubelet resource usage", "node", node.name, "error", err)
+			continue
 		}
+		nodeUsage[node.name] = stats.pods
+		nodeMap[node.name].cpuUseNano = stats.cpuUseNano
+		nodeMap[node.name].memUseBytes = stats.memUseBytes
+		nodeMap[node.name].systemContainers = stats.systemContainers
 	}
 
 	nsIndex := map[key]int{}
@@ -347,12 +374,7 @@ func (r *resources) print(ctx context.Context) error {
 	stop := make(chan struct{})
 	go support.Spinner(stop, 300*time.Millisecond)
 
-	targetCtr, err := r.resolveContainer(ctx)
-	if err != nil {
-		close(stop)
-		return err
-	}
-	reports, err := r.build(ctx, targetCtr)
+	reports, err := r.build(ctx)
 	close(stop)
 	if err != nil {
 		return err
@@ -375,6 +397,7 @@ func (r *resources) print(ctx context.Context) error {
 			r.fmtMemRaw(node.allocatable["memory"]),
 			r.fmtMemRaw(node.capacity["memory"]),
 		)
+		r.printNodeStats(node)
 
 		var nodeTotalPods int
 		var nodeCPUReqM, nodeMemReqB, nodeCPULimM, nodeMemLimB, nodeCPUUseM, nodeMemUseB int64
@@ -454,7 +477,7 @@ func (r *resources) print(ctx context.Context) error {
 			memUseStr += " " + memUsePct
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			"total", fmt.Sprintf("%d unique pods", nodeTotalPods), "-",
+			"pod total", fmt.Sprintf("%d unique pods", nodeTotalPods), "-",
 			fmt.Sprintf("%dm", nodeCPUReqM), r.fmtBytes(nodeMemReqB),
 			fmt.Sprintf("%dm", nodeCPULimM), r.fmtBytes(nodeMemLimB),
 			cpuUseStr, memUseStr,
@@ -493,13 +516,39 @@ func (r *resources) print(ctx context.Context) error {
 		totalMemUseB += t.memUseB
 	}
 	fmt.Fprintf(w, "%s\t%d\t%dm\t%s\t%dm\t%s\t%dm %s\t%s %s\n",
-		"total", totalPods,
+		"pod total", totalPods,
 		totalCPUReqM, r.fmtBytes(totalMemReqB),
 		totalCPULimM, r.fmtBytes(totalMemLimB),
 		totalCPUUseM, r.pctDiff(totalCPUUseM, totalCPUReqM),
 		r.fmtBytes(totalMemUseB), r.pctDiff(totalMemUseB, totalMemReqB),
 	)
 	return w.Flush()
+}
+
+func (r *resources) printNodeStats(node nodeReport) {
+	cpu := r.fmtCPUUse(node.cpuUseNano, "")
+	mem := r.fmtMemRaw(node.memUseBytes)
+	if cpu != "-" || mem != "-" {
+		fmt.Printf("  node CPU/MEM use: %s/%s\n", cpu, mem)
+	}
+
+	var system []string
+	pods := ""
+	for _, container := range node.systemContainers {
+		containerCPU := r.fmtCPUUse(container.cpuUseNano, "")
+		containerMem := r.fmtMemRaw(container.memUseBytes)
+		if container.name == "pods" {
+			pods = fmt.Sprintf("%s/%s", containerCPU, containerMem)
+		} else if containerCPU != "-" || containerMem != "-" {
+			system = append(system, fmt.Sprintf("%s %s/%s", container.name, containerCPU, containerMem))
+		}
+	}
+	if len(system) > 0 {
+		fmt.Printf("  system CPU/MEM: %s\n", strings.Join(system, ", "))
+	}
+	if pods != "" && pods != "-/-" {
+		fmt.Printf("  pods cgroup aggregate CPU/MEM: %s\n", pods)
+	}
 }
 
 func nodeRole(labels map[string]string) string {

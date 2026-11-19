@@ -1,6 +1,5 @@
 ## Do
 
-- ops resources: flag to choose bulk vs per-ns stats strategy, pluggable transport beyond podman exec
 - replace kubectl/crictl exec chains with podman API and client-go for cluster operations
 - Skip reapply option for resources already present, keyed by GVK + namespaced name
 - force-conflicts flag on server-side apply for configure (needs apply.go refactor)
@@ -24,7 +23,8 @@
 - Kubeconfig port rewrite: server URL updated to match --api-server-port after copy from container
 - docs command: CLI reference, examples, project skill, and hidden devlog
 - embedded examples document via --examples
-- ops resources (experimental): CPU/mem requests limits and live usage per container, per-ns totals, node summary, filterable by ns and node
+- ops resources (experimental): CPU/mem requests and limits plus live kubelet usage per container, per-ns totals, and node summary, filterable by ns and node
+- Metrics Server addon: pinned manifest with MicroShift kubelet CA support for the Kubernetes resource metrics API
 - MicroShift power tuning on create, opt-out via --no-power-tuning
 - ExposeKubeAPI: generate cert with all host IPs and hostname as SANs, merge all kubeconfigs into single file with multiple contexts per client
 - LoadBalancer services: node acting as load balancer working
