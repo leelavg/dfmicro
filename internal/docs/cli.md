@@ -33,7 +33,7 @@ dfmicro [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 
 Manage cluster addons
 
-**--list**: List available addons
+**--list**: List available addons (default: false)
 
 ### local-s3
 
@@ -59,7 +59,7 @@ Start the standalone local-s3 service
     Use configure to publish a Service in a cluster.
     The service allows anonymous access until accounts are configured.
 
-**--image**="": Container image for local-s3 (default: "ghcr.io/leelavg/local-s3:0.1.2")
+**--image**="": Container image for local-s3 (default: ghcr.io/shyim/local-s3:0.1.3)
 
 #### uninstall
 
@@ -68,13 +68,13 @@ Remove local-s3 and its cluster Services
     Configured clusters must be reachable so their Services can be removed.
     The data volume is preserved unless --cleanup is passed.
 
-**--cleanup**: Also delete the local-s3 data volume
+**--cleanup**: Also delete the local-s3 data volume (default: false)
 
 ### metrics
 
 Manage Kubernetes resource metrics
 
-**--cluster**="": Cluster name (default: "micro")
+**--cluster**="": Cluster name (default: micro)
 
 #### install
 
@@ -96,9 +96,9 @@ Manage Open Cluster Management
       dfmicro addon ocm --cluster hub configure --addon application-manager
       dfmicro addon ocm --list-addons
 
-**--cluster**="": Hub cluster for OCM operations (default: "micro")
+**--cluster**="": Hub cluster for OCM operations (default: micro)
 
-**--list-addons**: List supported OCM addon setup for hub and spokes
+**--list-addons**: List supported OCM addon setup for hub and spokes (default: false)
 
 #### configure
 
@@ -128,25 +128,25 @@ Manage OpenShift Data Foundation
 
     Note: --cluster applies to all subcommands and must come before the subcommand name.
 
-**--cluster**="": Cluster name to resolve kubeconfig from (default: "micro")
+**--cluster**="": Cluster name to resolve kubeconfig from (default: micro)
 
 #### configure
 
 Configure ODF to run on MicroShift
 
-**--client**: Client-only mode
+**--client**: Client-only mode (default: false)
 
 **--connect-to**="": Source cluster. With --client, connects to an ODF provider. Otherwise, connects to a Rook Ceph provider
 
-**--external-ceph**: Configure a Rook-managed Ceph provider
+**--external-ceph**: Configure a Rook-managed Ceph provider (default: false)
 
-**--hostnetwork**: Run ODF storage pods on the host network
+**--hostnetwork**: Run ODF storage pods on the host network (default: false)
 
-**--include-cephfs**: Run CephFS and CSI Driver
+**--include-cephfs**: Run CephFS and CSI Driver (default: false)
 
 **--map-from**="": Client cluster whose resource mapping to reuse
 
-**--multi-node**: Configure ODF for a multi-node cluster
+**--multi-node**: Configure ODF for a multi-node cluster (default: false)
 
 #### install
 
@@ -161,7 +161,7 @@ Install ODF and required shim resources
 
 **--channel**="": Subscription channel (e.g. stable-5.0)
 
-**--shims**: Apply only the shim CRDs
+**--shims**: Apply only the shim CRDs (default: false)
 
 **--sub-name**="": Subscription name (repeatable) (default: "odf-operator")
 
@@ -189,7 +189,7 @@ Uninstall ODF and all associated resources
       dfmicro addon odf uninstall            # dry-run: print commands
       dfmicro addon odf uninstall --attempt  # execute cleanup
 
-**--attempt**: Execute the delete commands instead of printing them (best-effort)
+**--attempt**: Execute the delete commands instead of printing them (best-effort) (default: false)
 
 ### odr
 
@@ -199,7 +199,7 @@ Manage OpenShift Data Foundation disaster recovery
 
     Note: --cluster applies to all subcommands and must come before the subcommand name.
 
-**--cluster**="": Cluster name to resolve kubeconfig from (default: "micro")
+**--cluster**="": Cluster name to resolve kubeconfig from (default: micro)
 
 #### configure
 
@@ -235,7 +235,7 @@ Print saved cluster config as JSON
 
 >Config is recorded at creation time and reflects the flags used.
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
 ### create
 
@@ -253,37 +253,37 @@ Create a cluster, wait until ready, and print connection info
 
 **--api-server-port**="": Host port to expose the Kubernetes API server on (1024-65535) (default: 6443)
 
-**--bridge-subnet**="": Network subnet in CIDR notation (default: "172.20.0.0/24")
+**--bridge-subnet**="": Network subnet in CIDR notation (default: 172.20.0.0/24)
 
-**--cluster-cidr**="": Pod CIDR for the cluster (default: "10.42.0.0/16")
+**--cluster-cidr**="": Pod CIDR for the cluster (default: 10.42.0.0/16)
 
-**--etcd**: Use etcd storage backend (default: SQLite)
+**--etcd**: Use etcd storage backend (default: SQLite) (default: false)
 
 **--idms**="": Path to an ImageDigestMirrorSet YAML file for mirror registries (repeatable, merged in order)
 
-**--image**="": MicroShift container image to run (OKD / SCOS build) (default: "ghcr.io/leelavg/microshift:5.1.0_202611161345_g68a5f5e9e_5.1.0_okd_scos.ec.3")
+**--image**="": MicroShift container image to run (OKD / SCOS build) (default: ghcr.io/leelavg/microshift:5.1.0_202611161345_g68a5f5e9e_5.1.0_okd_scos.ec.3)
 
-**--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: "10G")
+**--lvm-volsize**="": Size of the sparse loop-device image backing the LVM thin pool for TopoLVM (e.g. 10G, 50G) (default: 10G)
 
 **--mount**="": Bind mount in Podman format: /host/path:/container/path[:opts] (repeatable, replaces the same container path)
 
-**--name**="": Cluster name, used to identify containers and stored config (default: "micro")
+**--name**="": Cluster name, used to identify containers and stored config (default: micro)
 
-**--no-expose-kubeapi**: Do not bind the API server port on the host (cluster-internal access only)
+**--no-expose-kubeapi**: Do not bind the API server port on the host (cluster-internal access only) (default: false)
 
-**--no-power-tuning**: Do not apply MicroShift power tuning on create
+**--no-power-tuning**: Do not apply MicroShift power tuning on create (default: false)
 
-**--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted)
+**--no-share-host-containers**: Do not bind-mount /var/lib/containers from the host (use if the shared containers store gets corrupted) (default: false)
 
-**--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage
+**--no-thinpool**: Skip thin pool creation and configuration for TopoLVM storage (default: false)
 
-**--no-topolvm**: Disable TopoLVM storage provisioner (all other topolvm flags are disregarded)
+**--no-topolvm**: Disable TopoLVM storage provisioner (all other topolvm flags are disregarded) (default: false)
 
 **--overprovision-ratio**="": TopoLVM thin pool overprovision ratio (default: 20)
 
 **--pull-secret**="": Path to a pull secret JSON file for accessing private image registries
 
-**--service-cidr**="": Service CIDR for the cluster (default: "10.43.0.0/16")
+**--service-cidr**="": Service CIDR for the cluster (default: 10.43.0.0/16)
 
 ### delete, rm
 
@@ -291,7 +291,7 @@ Delete cluster containers, network, and storage
 
 >Stops and removes all cluster containers, networking, and storage stack.
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
 ### exec
 
@@ -301,7 +301,7 @@ Open an interactive shell inside the cluster container
 
 **--container**="": Container name (defaults to first running container for the cluster)
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
 ### kubeconfig
 
@@ -312,7 +312,7 @@ Print kubeconfig for a cluster
       dfmicro cluster kubeconfig > ~/.kube/config
       dfmicro cluster kubeconfig | KUBECONFIG=~/.kube/config:- kubectl config view --merge --flatten > merged.yaml
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
 ### list, ls
 
@@ -324,9 +324,9 @@ Start a stopped cluster
 
 >Use after a host reboot or with --unpause to resume containers paused with 'cluster stop --pause'.
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
-**--unpause**: Resume paused containers without changing their IP addresses
+**--unpause**: Resume paused containers without changing their IP addresses (default: false)
 
 ### stop
 
@@ -334,9 +334,9 @@ Stop or pause cluster containers without removing them
 
 >Use --pause to retain container IP addresses. Resume with 'cluster start --unpause'.
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
-**--pause**: Pause containers and retain their IP addresses
+**--pause**: Pause containers and retain their IP addresses (default: false)
 
 ## config
 
@@ -351,9 +351,9 @@ Print full command reference as markdown
 
 >dfmicro docs > cli.md
 
-**--examples**: Print command examples
+**--examples**: Print command examples (default: false)
 
-**--skill**: Print agent guidance for operating dfmicro
+**--skill**: Print agent guidance for operating dfmicro (default: false)
 
 ## network
 
@@ -370,7 +370,7 @@ Attach clusters to a network
 
 **--cluster**="": Cluster name with optional groups (name[:group1[/group2,...]]). Without group, cluster joins 'default'
 
-**--namespace**="": Namespace for NAD creation (default: "default")
+**--namespace**="": Namespace for NAD creation (default: default)
 
 **--to**="": Network name to attach to
 
@@ -441,7 +441,7 @@ Detach clusters from a network
 
 **--from**="": Network name to detach from
 
-**--namespace**="": Namespace of the NAD to delete (default: "default")
+**--namespace**="": Namespace of the NAD to delete (default: default)
 
 ### disconnect
 
@@ -492,9 +492,9 @@ Manage cluster nodes
 
 add worker node to existing cluster
 
-**--cluster**="": cluster name (default: "micro")
+**--cluster**="": cluster name (default: micro)
 
-**--force**: skip control plane readiness checks
+**--force**: skip control plane readiness checks (default: false)
 
 **--mount**="": Extra bind mount in Podman format: /host/path:/container/path[:opts] (repeatable)
 
@@ -502,13 +502,13 @@ add worker node to existing cluster
 
 Print cluster node configuration
 
-**--cluster**="": cluster name (default: "micro")
+**--cluster**="": cluster name (default: micro)
 
 ### remove, rm, delete
 
 remove worker node from cluster
 
-**--cluster**="": cluster name (default: "micro")
+**--cluster**="": cluster name (default: micro)
 
 **--name**="": worker node name
 
@@ -540,13 +540,13 @@ Show CPU and memory requests, limits, and live usage per container (experimental
       dfmicro ops resources --namespace openshift-operator-lifecycle-manager
       dfmicro ops resources --name dev --node microshift-node-1
 
-**--name**="": Cluster name (default: "micro")
+**--name**="": Cluster name (default: micro)
 
 **--namespace**="": Restrict output to a single namespace (omit for all namespaces)
 
 **--node**="": Restrict output to a single node by name (omit for all nodes)
 
-**--tune**: Apply fixed CPU and memory requests to known controllers
+**--tune**: Apply fixed CPU and memory requests to known controllers (default: false)
 
 ### routes
 
