@@ -26,6 +26,10 @@ func (o *odr) applyTrustedCABundle(ctx context.Context, clusterName, namespace, 
 			"--kubeconfig", kubeconfig,
 		)
 		if err != nil {
+			message := strings.ToLower(err.Error())
+			if strings.Contains(message, "connection refused") || strings.Contains(message, "was refused") || strings.Contains(message, "unexpected eof") {
+				return false, nil
+			}
 			return false, fmt.Errorf("get ODR trusted CA ConfigMap: %w", err)
 		}
 		return strings.HasPrefix(strings.TrimSpace(result.Stdout), operator+"."), nil
